@@ -1,28 +1,45 @@
-# CVS default ignores begin
-tags
-TAGS
-.make.state
-.nse_depinfo
-*~
-\#*
-.#*
-,*
-_$*
-*$
-*.old
-*.bak
-*.BAK
-*.orig
-*.rej
-.del-*
-*.a
-*.olb
-*.o
-*.obj
-*.so
+# Compiled output
+*.class
+*.jar
+*.war
+*.ear
+
+# Build directories
+build/
+out/
+dist/
+target/
+
+# IDE — IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IDE — Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# IDE — NetBeans
+nbproject/private/
+nbbuild/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+
+# IDE — VS Code
+.vscode/
+
+# Game data (copyrighted — must never be committed)
+*.DAT
+*.dat
+GP.EXE
 *.exe
-*.Z
-*.elc
-*.ln
-core
-# CVS default ignores end
+*.EXE
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
