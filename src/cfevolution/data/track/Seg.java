@@ -109,4 +109,7 @@ public class Seg {
         public int getCCLineRAngle()
         { return wCCLineRAngle; }
 
+        public int getAngleZChangeMulHalfPI()
+        { return wAngleZChangeMulHalfPI; }
+
 }

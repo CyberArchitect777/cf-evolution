@@ -281,6 +281,10 @@ public class Track {
         return m_Objects;
     }
 
+    public int getCCLineTlu() { return m_CCLine.getCumTlu(); }
+    public int getTrackTlu()  { return m_TrackSegments.getTotalTlu(); }
+    public boolean isTluBalanced() { return getCCLineTlu() == getTrackTlu(); }
+
     public boolean getLayoutMode()
     {
         return m_fLayoutMode;

@@ -708,6 +708,16 @@ public class TrackSegments extends Vector {
         return nSegNumber - 1;
     }
 
+    public int getTotalTlu()
+    {
+        int total = 0;
+        for (int i = 1; i <= size(); i++) {
+            TrackSegment seg = getAt(i);
+            if (seg != null) total += seg.getTlu();
+        }
+        return total;
+    }
+
     /** gets the track segment at position i in the vector (1-based) */
     public TrackSegment getAt(int i)
     {

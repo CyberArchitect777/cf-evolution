@@ -485,24 +485,24 @@ public class TrackPanel extends javax.swing.JPanel {
 
             if ( !m_track.getLayoutMode() )
             {
-                // Draw CCLine
-                dXDiff = Math.cos( seg.getAngleZ() * ANGLE_SCALE_RAD ) * seg.getCCLine();
-                dYDiff = Math.sin( seg.getAngleZ() * ANGLE_SCALE_RAD ) * seg.getCCLine();
-                aXPoints[ 0 ] = scale( seg.getPosX() + dXDiff );
-                aYPoints[ 0 ] = scale( seg.getPosY() - dYDiff );
-                dXDiffNext = Math.cos( segNext.getAngleZ() * ANGLE_SCALE_RAD ) * segNext.getCCLine();
-                dYDiffNext = Math.sin( segNext.getAngleZ() * ANGLE_SCALE_RAD ) * segNext.getCCLine();
-                aXPoints[ 1 ] = scale( segNext.getPosX() + dXDiffNext );
-                aYPoints[ 1 ] = scale( segNext.getPosY() - dYDiffNext );
+                // Draw CCLine using game-accurate lateral offset formula
+                double[] ccPos     = ccLineWorldPos(seg);
+                double[] ccPosNext = ccLineWorldPos(segNext);
+                aXPoints[ 0 ] = scale( ccPos[0] );
+                aYPoints[ 0 ] = scale( ccPos[1] );
+                aXPoints[ 1 ] = scale( ccPosNext[0] );
+                aYPoints[ 1 ] = scale( ccPosNext[1] );
 
                 if ( seg.m_nCCLineSector == m_nSelectedCCLineSegment )
                 {
-                    // paint selected segment
                     g2d.setColor(Color.GREEN);
+                }
+                else if ( isCCLineOutOfBounds(seg) )
+                {
+                    g2d.setColor(Color.ORANGE);
                 }
                 else
                 {
-                    // default color is red.
                     g2d.setColor(Color.RED);
                 }
                 g2d.drawLine(aXPoints[ 0 ], aYPoints[ 0 ], aXPoints[ 1 ], aYPoints[ 1 ] );
@@ -1100,6 +1100,34 @@ public class TrackPanel extends javax.swing.JPanel {
         }
         // reset painting color of context
         g2d.setColor( oldColor );
+    }
+
+    /**
+        Compute the world-space position of the CCLine point for a given Seg.
+        Accounts for the lateral curvature correction (wAngleZChangeMulHalfPI)
+        that the original formula omitted.
+        Returns [x, y] in track coordinates.
+    */
+    private double[] ccLineWorldPos(Seg seg) {
+        double wCCLineVal = seg.getCCLine();
+        double wSegPosY   = (double)((long)(wCCLineVal * seg.getAngleZChangeMulHalfPI()) >> 15);
+        double cosA = Math.cos(seg.getAngleZ() * ANGLE_SCALE_RAD);
+        double sinA = Math.sin(seg.getAngleZ() * ANGLE_SCALE_RAD);
+        return new double[] {
+            seg.getPosX() + wCCLineVal * cosA + wSegPosY * sinA,
+            seg.getPosY() + wSegPosY   * cosA - wCCLineVal * sinA
+        };
+    }
+
+    /**
+        Returns true if the CCLine point for a Seg is outside the drivable track
+        boundary. Uses the game's track width formula and 0x340 car-width margin.
+    */
+    private boolean isCCLineOutOfBounds(Seg seg) {
+        double wx = seg.getTrackWidthX() + seg.getExtraSideX();
+        double wy = seg.getTrackWidthY() + seg.getExtraSideY();
+        double trackWidth = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0) * 8.0;
+        return Math.abs(seg.getCCLine()) >= (trackWidth - 0x340);
     }
 
     /**

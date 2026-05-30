@@ -131,6 +131,13 @@ public class CCLine extends Vector {
         }
     }
 
+    public int getCumTlu() {
+        int total = 0;
+        for (Enumeration e = elements(); e.hasMoreElements(); )
+            total += ((CCLineSegment) e.nextElement()).getTlu();
+        return total;
+    }
+
     /** instance data members */
     protected int m_nCumTlu;
 }
