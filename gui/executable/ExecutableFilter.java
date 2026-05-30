@@ -26,7 +26,7 @@
  * and open the template in the editor.
  */
 
-package chequeredflag.gui.executable;
+package cfevolution.gui.executable;
 
 import javax.swing.filechooser.FileFilter;
 import java.io.*;

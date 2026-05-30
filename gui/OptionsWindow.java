@@ -23,13 +23,13 @@
  * Created on 10 December 2006, 21:30
  */
 
-package chequeredflag.gui;
+package cfevolution.gui;
 
 import java.util.prefs.Preferences;
-import chequeredflag.data.executable.Executable;
+import cfevolution.data.executable.Executable;
 import java.io.*;
 import javax.swing.*;
-import chequeredflag.data.gui.RecentFiles;
+import cfevolution.data.gui.RecentFiles;
 
 /**
  *
@@ -58,7 +58,7 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         }
         interfaceModeSelector.addItem("Motif");
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         String interfaceSetting = cheqFlagData.get("CFUIMode", "");
         if (interfaceSetting.compareTo("") != 0)
         {
@@ -208,7 +208,7 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         // Saves all changes and applies chosen settings to the editor
         
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         String selectedMode = (String)interfaceModeSelector.getSelectedItem();
         cheqFlagData.put("CFUIMode", selectedMode);
         ThemeManager userInterfaceTheme = new ThemeManager();

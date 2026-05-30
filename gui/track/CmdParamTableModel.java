@@ -23,10 +23,10 @@
  * Created on 13 May 2005, 23:55
  */
 
-package chequeredflag.gui.track;
-import chequeredflag.data.track.*;
-import chequeredflag.gui.*;
-import chequeredflag.gui.table.StandardTableModel;
+package cfevolution.gui.track;
+import cfevolution.data.track.*;
+import cfevolution.gui.*;
+import cfevolution.gui.table.StandardTableModel;
 
 /**
  *

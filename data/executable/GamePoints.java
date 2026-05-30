@@ -27,7 +27,7 @@
  * and open the template in the editor.
  */
 
-package chequeredflag.data.executable;
+package cfevolution.data.executable;
 
 import java.io.*;
 

@@ -23,11 +23,11 @@
  * Created on 31 December 2006, 20:03
  */
 
-package chequeredflag.gui.executable;
+package cfevolution.gui.executable;
 
-import chequeredflag.data.track.*;
+import cfevolution.data.track.*;
 import javax.swing.*;
-import chequeredflag.data.executable.*;
+import cfevolution.data.executable.*;
 import javax.swing.tree.*;
 
 /**

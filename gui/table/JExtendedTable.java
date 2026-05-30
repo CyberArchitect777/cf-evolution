@@ -23,7 +23,7 @@
  * Created on 14 May 2005, 02:53
  */
 
-package chequeredflag.gui.table;
+package cfevolution.gui.table;
 
 import javax.swing.table.*;
 import java.io.*;

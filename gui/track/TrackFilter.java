@@ -23,7 +23,7 @@
  * Created on 18 March 2005, 23:36
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
 import javax.swing.filechooser.FileFilter;
 import java.io.*;

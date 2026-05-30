@@ -4,10 +4,10 @@
  * Created on 06 October 2007, 19:17
  */
 
-package chequeredflag.gui.executable.panels;
+package cfevolution.gui.executable.panels;
 
-import chequeredflag.data.executable.GameTeams;
-import chequeredflag.data.executable.GameDrivers;
+import cfevolution.data.executable.GameTeams;
+import cfevolution.data.executable.GameDrivers;
 
 /**
  *

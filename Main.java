@@ -23,9 +23,9 @@
  * Created on 22 February 2005, 22:23
  */
 
-package chequeredflag;
+package cfevolution;
 
-import chequeredflag.gui.*;
+import cfevolution.gui.*;
 
 import javax.swing.*;
 import java.util.prefs.Preferences;
@@ -43,7 +43,7 @@ public class Main
     public Main() 
     {
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         String interfaceType = cheqFlagData.get("CFUIMode", "System Default");
         mainScreen = new MainGUI();
         ThemeManager userInterfaceTheme = new ThemeManager();

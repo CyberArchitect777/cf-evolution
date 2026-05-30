@@ -23,7 +23,7 @@
  * Created on 9. Februar 2005, 23:12
  */
 
-package chequeredflag.data.track;
+package cfevolution.data.track;
 
 import java.io.*;
 import java.nio.channels.*;
@@ -31,8 +31,8 @@ import java.util.*;
 import java.awt.*;
 
 
-import chequeredflag.data.f1gp.CosLookupTable;
-import chequeredflag.data.f1gp.F1GPMath;
+import cfevolution.data.f1gp.CosLookupTable;
+import cfevolution.data.f1gp.F1GPMath;
 
 /**
  *

@@ -23,10 +23,10 @@
  * Created on 18 March 2005, 22:44
  */
 
-package chequeredflag.gui;
+package cfevolution.gui;
 
-import chequeredflag.gui.executable.ExecutableFilter;
-import chequeredflag.gui.track.TrackFilter;
+import cfevolution.gui.executable.ExecutableFilter;
+import cfevolution.gui.track.TrackFilter;
 import java.io.File;
 
 /**

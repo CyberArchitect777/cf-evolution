@@ -26,7 +26,7 @@
  * Provides services for reading and writing of 16 and 32bit values (int, long).
  */
 
-package chequeredflag.data;
+package cfevolution.data;
 
 import java.io.*;
 

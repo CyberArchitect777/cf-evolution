@@ -23,9 +23,9 @@
  * Created on 30 March 2005, 23:13
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
-import chequeredflag.data.track.*;
+import cfevolution.data.track.*;
 
 import javax.swing.*;
 import java.awt.*;

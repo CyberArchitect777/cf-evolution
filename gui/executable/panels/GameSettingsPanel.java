@@ -23,9 +23,9 @@
  * Created on 11 February 2007, 21:11
  */
 
-package chequeredflag.gui.executable.panels;
+package cfevolution.gui.executable.panels;
 
-import chequeredflag.data.executable.GameSettings;
+import cfevolution.data.executable.GameSettings;
 
 /**
  *

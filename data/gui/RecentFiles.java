@@ -23,7 +23,7 @@
  * Created on 10 December 2006, 15:04
  */
 
-package chequeredflag.data.gui;
+package cfevolution.data.gui;
 
 //import java.util.ArrayList;
 import java.io.*;
@@ -88,7 +88,7 @@ public class RecentFiles
     public void saveRecentFiles()
     {
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         for (int x=0;x<4;x++)
         {
             cheqFlagData.put("CFRecentFile" + (x+1), recentFileList[x]);
@@ -98,7 +98,7 @@ public class RecentFiles
     public void loadRecentFiles()
     {
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         for (int x=0;x<4;x++)
         {
             recentFileList[x] = cheqFlagData.get("CFRecentFile" + (x+1), "");

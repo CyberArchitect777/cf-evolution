@@ -24,9 +24,9 @@
  * Created on 11 February 2007, 18:03
  */
 
-package chequeredflag.gui.executable.panels;
+package cfevolution.gui.executable.panels;
 
-import chequeredflag.data.executable.GamePoints;
+import cfevolution.data.executable.GamePoints;
 import javax.swing.*;
 import java.awt.*;
 

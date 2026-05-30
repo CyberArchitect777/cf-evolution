@@ -23,11 +23,11 @@
  * Created on 14 June 2005, 01:50
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
-import chequeredflag.data.track.*;
-import chequeredflag.gui.*;
-import chequeredflag.gui.table.StandardTableModel;
+import cfevolution.data.track.*;
+import cfevolution.gui.*;
+import cfevolution.gui.table.StandardTableModel;
 import java.util.Vector;
 import javax.swing.JComboBox;
 

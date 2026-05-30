@@ -23,15 +23,15 @@
  * Created on 31 December 2006, 04:21
  */
 
-package chequeredflag.gui.executable;
+package cfevolution.gui.executable;
 
-import chequeredflag.gui.*;
-import chequeredflag.gui.executable.panels.*;
+import cfevolution.gui.*;
+import cfevolution.gui.executable.panels.*;
 import javax.swing.event.InternalFrameListener;
 import javax.swing.event.InternalFrameEvent;
 import javax.swing.*;
 import java.awt.*;
-import chequeredflag.data.executable.*;
+import cfevolution.data.executable.*;
 
 /**
  *

@@ -23,15 +23,15 @@
  * Created on 22 February 2005, 22:28
  */
 
-package chequeredflag.gui;
+package cfevolution.gui;
 
-import chequeredflag.gui.executable.ExecutableWindow;
-import chequeredflag.gui.track.TrackWindow;
+import cfevolution.gui.executable.ExecutableWindow;
+import cfevolution.gui.track.TrackWindow;
 import javax.swing.*;
 import java.io.*;
-import chequeredflag.data.track.*;
-import chequeredflag.data.gui.*;
-import chequeredflag.data.executable.*;
+import cfevolution.data.track.*;
+import cfevolution.data.gui.*;
+import cfevolution.data.executable.*;
 import java.util.prefs.Preferences;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowListener;
@@ -225,7 +225,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
         // Handles the load executable menu item and passes processing onto another method after prompting for a filename
         
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         String fileName = cheqFlagData.get("EXELocation", "-1");
         if (fileName.compareTo("-1") == 0)
         {
@@ -457,7 +457,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
         
         File trackFile = new File(fileName);
         Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("chequeredflag");
+        Preferences cheqFlagData = userData.node("cfevolution");
         cheqFlagData.put("LastLoadedTrackDir", trackFile.getParent());
         currentTrack = new Track();
         boolean loadSuccess = currentTrack.load(trackFile);
@@ -499,7 +499,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
         try
         {
             Preferences userData = Preferences.userRoot();
-            Preferences cheqFlagData = userData.node("chequeredflag");
+            Preferences cheqFlagData = userData.node("cfevolution");
             fileDialog.setInitialDirectory(cheqFlagData.get("LastLoadedTrackDir", ""));
             fileName = fileDialog.showOpenDialog();
         }

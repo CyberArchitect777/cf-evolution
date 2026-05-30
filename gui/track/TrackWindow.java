@@ -23,11 +23,11 @@
  * Created on 07 April 2005, 03:43
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
-import chequeredflag.gui.*;
+import cfevolution.gui.*;
 import java.io.*;
-import chequeredflag.data.track.*;
+import cfevolution.data.track.*;
 import javax.swing.*;
 import javax.swing.event.InternalFrameListener;
 import javax.swing.event.InternalFrameEvent;

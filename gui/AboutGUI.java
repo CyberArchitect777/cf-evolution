@@ -23,7 +23,7 @@
  * Created on 01 October 2006, 00:50
  */
 
-package chequeredflag.gui;
+package cfevolution.gui;
 
 /**
  *

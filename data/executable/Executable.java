@@ -23,7 +23,7 @@
  * Created on 30 December 2006, 20:25
  */
 
-package chequeredflag.data.executable;
+package cfevolution.data.executable;
 
 import java.io.*;
 

@@ -23,7 +23,7 @@
  * Created on 17. Februar 2005, 23:46
  */
 
-package chequeredflag.data.track;
+package cfevolution.data.track;
 
 import java.io.*;
 import java.util.*;

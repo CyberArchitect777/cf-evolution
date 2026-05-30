@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-package chequeredflag.data.f1gp;
+package cfevolution.data.f1gp;
 
 /*
  * User: Rene

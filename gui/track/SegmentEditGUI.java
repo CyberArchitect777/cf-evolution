@@ -23,14 +23,14 @@
  * Created on 22 May 2005, 22:40
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
-import chequeredflag.data.track.*;
-import chequeredflag.gui.*;
-import chequeredflag.gui.table.SelectionTableCellEditor;
-import chequeredflag.gui.table.SelectionTableCellRenderer;
-import chequeredflag.gui.table.TextTableCellEditor;
-import chequeredflag.gui.table.TextTableCellRenderer;
+import cfevolution.data.track.*;
+import cfevolution.gui.*;
+import cfevolution.gui.table.SelectionTableCellEditor;
+import cfevolution.gui.table.SelectionTableCellRenderer;
+import cfevolution.gui.table.TextTableCellEditor;
+import cfevolution.gui.table.TextTableCellRenderer;
 import java.util.*;
 import javax.swing.*;
 
@@ -102,7 +102,7 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
      */
     private void initComponents() {//GEN-BEGIN:initComponents
         tableScroll = new javax.swing.JScrollPane();
-        segmentTable = new chequeredflag.gui.table.JExtendedTable();
+        segmentTable = new cfevolution.gui.table.JExtendedTable();
         buttonPanel = new javax.swing.JPanel();
         updateButton = new javax.swing.JButton();
         applyButton = new javax.swing.JButton();
@@ -268,7 +268,7 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
     private javax.swing.JButton applyButton;
     private javax.swing.JPanel buttonPanel;
     private javax.swing.JButton cancelButton;
-    private chequeredflag.gui.table.JExtendedTable segmentTable;
+    private cfevolution.gui.table.JExtendedTable segmentTable;
     private javax.swing.JScrollPane tableScroll;
     private javax.swing.JButton updateButton;
     // End of variables declaration//GEN-END:variables

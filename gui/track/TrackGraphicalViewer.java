@@ -23,10 +23,10 @@
  * Created on 24 March 2005, 01:27
  */
 
-package chequeredflag.gui.track;
+package cfevolution.gui.track;
 
-import chequeredflag.data.track.Track;
-import chequeredflag.gui.*;
+import cfevolution.data.track.Track;
+import cfevolution.gui.*;
 
 import javax.swing.*;
 import java.awt.event.ActionEvent;

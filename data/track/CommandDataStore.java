@@ -23,7 +23,7 @@
  * Created on 14 August 2006, 04:31
  */
 
-package chequeredflag.data.track;
+package cfevolution.data.track;
 
 import java.util.ArrayList;
 
