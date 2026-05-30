@@ -39,6 +39,9 @@ GP.EXE
 *.exe
 *.EXE
 
+# Build script temp file
+.sources.txt
+
 # OS noise
 .DS_Store
 Thumbs.db
