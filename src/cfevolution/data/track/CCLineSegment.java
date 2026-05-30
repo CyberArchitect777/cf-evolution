@@ -313,7 +313,7 @@ public class CCLineSegment extends CFDataObject {
             if ( nLower < 0 )
                 // make it an unsigned 16 bit value
                 nLower = nLower & 0x0FFFF;
-            dRadius = getParam( 1 ) << 16 + nLower;
+            dRadius = ((long) getParam( 1 ) << 16) | nLower;
         }
         else if ( ( getType() & 0x80 ) != 0 )
         {

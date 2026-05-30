@@ -761,7 +761,7 @@ public class Track {
 
                             nTrackSegNum++;
                             if (nTrackSegNum >= m_TrackSegments.nSegNumber)
-                                    nTrackSegNum = 1;	// cyclic (should restart at 0??)
+                                    nTrackSegNum = 0;
 
                             seg = m_TrackSegments.getSegAt( nTrackSegNum );
                             ProcessCCLineSegment(seg);

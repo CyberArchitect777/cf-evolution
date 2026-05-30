@@ -99,8 +99,8 @@ public class Seg {
 
         public byte getExtraSideX() { return bExtraSideX; };
         public byte getExtraSideY() { return bExtraSideY; };
-        public void setExtraSideX( byte bExtraSideX ) { bExtraSideX = bExtraSideX; };
-        public void setExtraSideY( byte bExtraSideY ) { bExtraSideX = bExtraSideX; };
+        public void setExtraSideX( byte bExtraSideX ) { this.bExtraSideX = bExtraSideX; };
+        public void setExtraSideY( byte bExtraSideY ) { this.bExtraSideY = bExtraSideY; };
 
 
         public int getCCLine()
