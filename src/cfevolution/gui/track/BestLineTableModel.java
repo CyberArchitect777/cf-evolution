@@ -102,31 +102,27 @@ public class BestLineTableModel extends StandardTableModel
     {
         super.setValueAt(aValue, row, column);
         if (row == 1 && column == 1)
-        {
-            try {
-                int tlu = Integer.parseInt(aValue.toString().trim());
-                int infoRow = getRowCount() - 1;
-                tableData[infoRow][1] = "0  or  |r| > " + (tlu * 128);
-                fireTableCellUpdated(infoRow, 1);
-            } catch (NumberFormatException e) {}
-        }
+            fireTableCellUpdated(row, column);
     }
 
-    public boolean isCellEditable(int row, int column)
+    public String getSafeRadiusText()
     {
-        if (row == getRowCount() - 1)
-            return false;
-        return super.isCellEditable(row, column);
+        try {
+            int tlu = Integer.parseInt(getValueAt(1, 1).toString().trim());
+            return "Safe radius:  0  or  |r| > " + (tlu * 128);
+        } catch (NumberFormatException e) {
+            return "Safe radius:  —";
+        }
     }
 
     public void getInfoForType(int segmentType)
     {
         switch (segmentType)
         {
-            case 0: tableDimension(5,2); break;
-            case 1: tableDimension(6,2); break;
-            case 2: tableDimension(6,2); break;
-            case 3: tableDimension(7,2); break;
+            case 0: tableDimension(4,2); break;
+            case 1: tableDimension(5,2); break;
+            case 2: tableDimension(5,2); break;
+            case 3: tableDimension(6,2); break;
         }
         setValueAt("Best Line Type",0,0);
         setValueAt(typeList,0,1);
@@ -169,10 +165,6 @@ public class BestLineTableModel extends StandardTableModel
                 setValueAt(new String(new Integer(currentLineSegment.getParam(3)).toString()),5,1);
             }
         }
-        int infoRow = getRowCount() - 1;
-        setValueAt("Safe radius", infoRow, 0);
-        setValueAt("0  or  |r| > " + (currentLineSegment.getTlu() * 128), infoRow, 1);
-
         this.fireTableDataChanged();
     }
     

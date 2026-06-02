@@ -31,8 +31,11 @@ import cfevolution.gui.table.SelectionTableCellEditor;
 import cfevolution.gui.table.SelectionTableCellRenderer;
 import cfevolution.gui.table.TextTableCellEditor;
 import cfevolution.gui.table.TextTableCellRenderer;
+import java.awt.*;
 import java.util.*;
 import javax.swing.*;
+import javax.swing.event.TableModelListener;
+import javax.swing.event.TableModelEvent;
 
 /**
  *
@@ -44,13 +47,29 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
     private TrackWindow parentTrackWindow;
     private TrackTreeSelector parentObjectWindow;
     
+    private JLabel statusLabel;
+
     /** Creates new form TrackSegmentEditGUI */
-    public SegmentEditGUI(TrackWindow currentTrackWindow, TrackTreeSelector currentObjectWindow) 
+    public SegmentEditGUI(TrackWindow currentTrackWindow, TrackTreeSelector currentObjectWindow)
     {
         initComponents();
         parentTrackWindow = currentTrackWindow;
         parentObjectWindow = currentObjectWindow;
         applyButton.setEnabled(false);
+
+        statusLabel = new JLabel(" ", JLabel.CENTER);
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.ITALIC));
+        statusLabel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY),
+            BorderFactory.createEmptyBorder(2, 6, 2, 4)));
+        statusLabel.setVisible(false);
+
+        Container content = getContentPane();
+        content.remove(buttonPanel);
+        JPanel southWrapper = new JPanel(new BorderLayout());
+        southWrapper.add(statusLabel, BorderLayout.NORTH);
+        southWrapper.add(buttonPanel, BorderLayout.CENTER);
+        content.add(southWrapper, BorderLayout.SOUTH);
     }
     
     public void editTrackSegment(TrackSegment trackSegment)
@@ -60,8 +79,9 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
         segmentTable.setDefaultRenderer(String.class, new TextTableCellRenderer());
         segmentTable.setDefaultEditor(String.class, new TextTableCellEditor());
         segmentTable.setModel(trackData);
+        statusLabel.setVisible(false);
     }
-    
+
     public void editDataHeaders(TrackDataHeader trackHeaders)
     {
         HeaderTableModel headerData = new HeaderTableModel(trackHeaders);
@@ -71,8 +91,9 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
         segmentTable.setDefaultEditor(String.class, new TextTableCellEditor());
         segmentTable.setDefaultEditor(JComboBox.class, new SelectionTableCellEditor());
         segmentTable.setModel(headerData);
+        statusLabel.setVisible(false);
     }
-    
+
     public void editBestLineSegment(CCLineSegment lineSegment)
     {
         BestLineTableModel lineData = new BestLineTableModel(lineSegment);
@@ -82,8 +103,16 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
         segmentTable.setDefaultEditor(String.class, new TextTableCellEditor());
         segmentTable.setDefaultEditor(JComboBox.class, new SelectionTableCellEditor());
         segmentTable.setModel(lineData);
+        statusLabel.setText(lineData.getSafeRadiusText());
+        statusLabel.setVisible(true);
+        lineData.addTableModelListener(new TableModelListener() {
+            public void tableChanged(TableModelEvent e) {
+                if (segmentTable.getModel() instanceof BestLineTableModel)
+                    statusLabel.setText(((BestLineTableModel) segmentTable.getModel()).getSafeRadiusText());
+            }
+        });
     }
-    
+
     public void editCmdParams(Command currentCommand, String[] paramText)
     {
         CmdParamTableModel commandData = new CmdParamTableModel(currentCommand, paramText);
@@ -92,7 +121,8 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
         //segmentTable.setDefaultRenderer(JComboBox.class, new SelectionTableCellRenderer());
         segmentTable.setDefaultEditor(String.class, new TextTableCellEditor());
         //segmentTable.setDefaultEditor(JComboBox.class, new SelectionTableCellEditor());
-        segmentTable.setModel(commandData);        
+        segmentTable.setModel(commandData);
+        statusLabel.setVisible(false);
     }
     
     /** This method is called from within the constructor to
