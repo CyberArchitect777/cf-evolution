@@ -46,14 +46,8 @@ public class TrackPanel extends javax.swing.JPanel {
 
 		public void mouseDragged(MouseEvent e) {
 			if (dragPoint != null) {
-				if ((e.getModifiers() & (MouseEvent.SHIFT_MASK | MouseEvent.CTRL_MASK)) != 0) {
-					if (e.isShiftDown())
-						pan(e.getX() - dragPoint.x, e.getY() - dragPoint.y);
-					else
-						zoom(1.0 + (e.getY() - dragPoint.y + e.getX() - dragPoint.x) / 100.0);
-					dragPoint = e.getPoint();
-				} else
-					dragPoint = null;
+				pan(e.getX() - dragPoint.x, e.getY() - dragPoint.y);
+				dragPoint = e.getPoint();
 			}
 		}
 
@@ -61,8 +55,7 @@ public class TrackPanel extends javax.swing.JPanel {
 		}
 
 		public void mousePressed(MouseEvent e) {
-			if (e.getClickCount() == 1 && e.getButton() == MouseEvent.BUTTON1 &&
-					(e.getModifiers() & (MouseEvent.SHIFT_MASK | MouseEvent.CTRL_MASK)) != 0)
+			if (e.getClickCount() == 1 && e.getButton() == MouseEvent.BUTTON1)
 				dragPoint = e.getPoint();
 		}
 
@@ -72,16 +65,8 @@ public class TrackPanel extends javax.swing.JPanel {
 		}
 
 		public void mouseWheelMoved(MouseWheelEvent e) {
-			double dFactor;
-			int nUnitsToScroll = e.getUnitsToScroll();
-			if ( nUnitsToScroll > 0 ) {
-				// zoom in
-				dFactor = 1.1;
-			} else {
-				// zoom out
-				dFactor = 0.9;
-			}
-			zoom( dFactor );
+			double dFactor = e.getUnitsToScroll() > 0 ? 1.1 : 0.9;
+			zoom(dFactor, e.getX(), e.getY());
 		}
 	}
 
@@ -598,18 +583,20 @@ public class TrackPanel extends javax.swing.JPanel {
     protected void zoom(double dFactor)
     {
         Dimension d = getSize();
-        double dTransX, dTransY;
-        dTransX = standardTrans.getTranslateX();
-        dTransY = standardTrans.getTranslateY();
+        zoom(dFactor, d.width / 2, d.height / 2);
+    }
+
+    protected void zoom(double dFactor, int pivotX, int pivotY)
+    {
+        double dTransX = standardTrans.getTranslateX();
+        double dTransY = standardTrans.getTranslateY();
 
         m_scale = m_scale * dFactor;
 
-        dTransX = dTransX * dFactor + (1 - dFactor) * d.width / 2;
-        dTransY = dTransY * dFactor + (1 - dFactor) * d.height / 2;
+        dTransX = dTransX * dFactor + (1 - dFactor) * pivotX;
+        dTransY = dTransY * dFactor + (1 - dFactor) * pivotY;
 
         standardTrans.setToIdentity();
-        // Negative Y scale effectively changes Y direction (ascending
-        // values from botton to top)
         standardTrans.scale( 1.0, -1.0 );
         standardTrans.translate( dTransX, -dTransY );
         repaint();
