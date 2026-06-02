@@ -127,6 +127,7 @@ public class Track {
         }
         else
         {
+            m_fLayoutMode = false;
             calculateTrackLayout();
             calculateCCLine();
             return true;
@@ -773,7 +774,7 @@ public class Track {
                 }
                 catch( Exception exc )
                 {
-                    exc.printStackTrace();                    
+                    exc.printStackTrace();
                 }
         }
     }
@@ -872,8 +873,11 @@ public class Track {
         }
         else
         {
-            // Pythagoras
+            // Pythagoras: radius^2 - tmp6^2. Can go negative for very small radii
+            // (arc subtends > 90 deg in one TLU), which causes sqrt64 to produce
+            // garbage. Clamp to 0 so the result degrades gracefully instead.
             long ll = (((long) radius * (long) radius) - ((long) tmp6 * (long) tmp6));
+            if (ll < 0) ll = 0;
             tmp1 = (int) F1GPMath.sqrt64(ll);
 
             if (radius < 0)
