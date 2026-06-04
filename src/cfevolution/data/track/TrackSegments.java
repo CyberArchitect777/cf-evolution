@@ -537,7 +537,18 @@ public class TrackSegments extends Vector {
 
         TCLoadKerbColours(wTCNumKerbColours);
 
-        bCreatingPitlaneSegments = false;
+        if (m_pendingCreatingPitlane)
+        {
+            bCreatingPitlaneSegments = true;
+            dTCOffsetPitLanePosX = m_pendingOffsetPitX;
+            dTCOffsetPitLanePosY = m_pendingOffsetPitY;
+            dTCOffsetPitLanePosZ = m_pendingOffsetPitZ;
+            m_pendingCreatingPitlane = false;
+        }
+        else
+        {
+            bCreatingPitlaneSegments = false;
+        }
         bDefaultTextureFlagsPlus1 = 3;
         byte_1E8AF = (byte) 0xaa;
         byte_1E8AE = 0x3d;
@@ -640,41 +651,80 @@ public class TrackSegments extends Vector {
     */
     public void calculatePitlaneLayout(TrackSegments trackSegments, boolean fPitSide, boolean fLayoutMode)
     {
-        // Find track segment that contains pit lane entry.
-        TrackSegment tsPitlaneEntry = trackSegments.findPitlaneEntry();
-        if ( tsPitlaneEntry == null )
-            return;
-        // Pit lane width in width scales (defined by F1GP)
-        int nPITWIDTH=1344;
-        double dPitStartX, dPitStartY;
-        if ( fPitSide )
+        // Find 0x86 (pit entry) and 0x87 (pit exit) commands in the main track.
+        // Each command's getParam(0) is the Seg offset within its sector (from the second pass).
+        int nEntrySector = 0, nEntrySegOffset = 0;
+        int nExitSector = 0, nExitSegOffset = 0;
+        int idx = 0;
+        for (Enumeration e = trackSegments.elements(); e.hasMoreElements(); )
         {
-            /*pits on the left*/
-	    dPitStartX = tsPitlaneEntry.getPosXStart()
-                         - Math.cos(tsPitlaneEntry.getAngleStart())
-                           * ((double)((tsPitlaneEntry.getWidthStart() - nPITWIDTH/2)) / 1024.0);
-	    dPitStartY = tsPitlaneEntry.getPosYStart()
-                         - Math.sin(tsPitlaneEntry.getAngleStart())
-                           * ((double)((tsPitlaneEntry.getWidthStart() - nPITWIDTH/2)) / 1024.0);
+            idx++;
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            Command cmd86 = ts.findCommand(0x86);
+            Command cmd87 = ts.findCommand(0x87);
+            if (cmd86 != null && nEntrySector == 0)
+            {
+                nEntrySector = idx;
+                nEntrySegOffset = cmd86.getParam(0);
+            }
+            if (cmd87 != null && nExitSector == 0)
+            {
+                nExitSector = idx;
+                nExitSegOffset = cmd87.getParam(0);
+            }
         }
-	else
-	{
-            /*pits on the right*/
-            dPitStartX = tsPitlaneEntry.getPosXStart()
-                         + Math.cos(tsPitlaneEntry.getAngleStart())
-                           * ((double)((tsPitlaneEntry.getWidthStart() - nPITWIDTH/2)) / 1024.0);
-            dPitStartY = tsPitlaneEntry.getPosYStart()
-                         + Math.sin(tsPitlaneEntry.getAngleStart())
-                           * ((double)((tsPitlaneEntry.getWidthStart() - nPITWIDTH/2)) / 1024.0);
-	}
-        // Calculate pit lane
-        // convert position to int
-        int nPitStartX = new Double( dPitStartX ).intValue();
-        int nPitStartY = new Double( dPitStartY ).intValue();
-        calculateTrackLayout(nPITWIDTH,
-                             tsPitlaneEntry.getAngleStart(),
-                             nPitStartX,
-                             nPitStartY, fLayoutMode);
+        if (nEntrySector == 0)
+            return;
+
+        Seg entrySeg = findPitCommandSeg(trackSegments, nEntrySector, nEntrySegOffset);
+        if (entrySeg == null)
+            return;
+
+        int nPITWIDTH = 1344;
+        int angle = entrySeg.getAngleZ();
+
+        // Start the pit lane at the main track centre at the entry Seg.
+        // The pit lane geometry itself encodes the divergence away from the track;
+        // it should overlap the main track at entry and exit (the connection points).
+        int nPitStartX = entrySeg.getPosX();
+        int nPitStartY = entrySeg.getPosY();
+
+        // If the pit exit (0x87) is found, wire up bCreatingPitlaneSegments so that
+        // TCRecalcPosToFit forces the pit lane path to end at the exit track centre.
+        boolean fHaveExit = false;
+        if (nExitSector != 0)
+        {
+            Seg exitSeg = findPitCommandSeg(trackSegments, nExitSector, nExitSegOffset);
+            if (exitSeg != null)
+            {
+                m_pendingCreatingPitlane = true;
+                m_pendingOffsetPitX = exitSeg.getPosX() - nPitStartX;
+                m_pendingOffsetPitY = exitSeg.getPosY() - nPitStartY;
+                m_pendingOffsetPitZ = 0;
+                fHaveExit = true;
+            }
+        }
+
+        // fLayoutMode=false when we have the exit offset: TCRecalcPosToFit uses the entry→exit
+        // vector to force the pit lane path to connect. true if no exit found (run free).
+        calculateTrackLayout(nPITWIDTH, angle, nPitStartX, nPitStartY, !fHaveExit);
+    }
+
+    // Returns the Seg at `segOffset` TLUs into the given sector on the given TrackSegments.
+    private Seg findPitCommandSeg(TrackSegments trackSegments, int sectorIdx, int segOffset)
+    {
+        int count = 0;
+        for (int i = 0; i <= trackSegments.getMaxTrackSegIndex(); i++)
+        {
+            Seg s = trackSegments.getSegAt(i);
+            if (s != null && s.m_nTrackSector == sectorIdx)
+            {
+                if (count == segOffset)
+                    return s;
+                count++;
+            }
+        }
+        return null;
     }
 
     /**
@@ -893,6 +943,8 @@ public class TrackSegments extends Vector {
 
     short wTCNumKerbColours = 0;
     boolean bCreatingPitlaneSegments = false;
+    boolean m_pendingCreatingPitlane = false;
+    int m_pendingOffsetPitX = 0, m_pendingOffsetPitY = 0, m_pendingOffsetPitZ = 0;
     byte bDefaultTextureFlagsPlus1 = 3;
     byte byte_1E8AF = (byte) 0xaa;
     byte byte_1E8AE = 0x3d;

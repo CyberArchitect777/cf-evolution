@@ -494,6 +494,38 @@ public class TrackPanel extends javax.swing.JPanel {
             }
         }
 
+        // Draw pit lane segments
+        TrackSegments pitlaneSegments = m_track.getPitlaneSegments();
+        if (pitlaneSegments.getMaxTrackSegIndex() > 0)
+        {
+            for (int i = 0; i <= pitlaneSegments.getMaxTrackSegIndex() - 1; i++)
+            {
+                seg     = pitlaneSegments.getSegAt(i);
+                segNext = pitlaneSegments.getSegAt(i + 1);
+
+                if (seg.m_nTrackSector == m_nSelectedPitLaneSegment)
+                    g2d.setColor(Color.pink);
+                else
+                    g2d.setColor(Color.blue);
+
+                int[] aXPoints = new int[4];
+                int[] aYPoints = new int[4];
+                double dXDiff     = seg.getTrackWidthX()     >> 3;
+                double dYDiff     = seg.getTrackWidthY()     >> 3;
+                double dXDiffNext = segNext.getTrackWidthX() >> 3;
+                double dYDiffNext = segNext.getTrackWidthY() >> 3;
+                aXPoints[0] = scale(seg.getPosX()     + dXDiff);
+                aYPoints[0] = scale(seg.getPosY()     - dYDiff);
+                aXPoints[1] = scale(segNext.getPosX() + dXDiffNext);
+                aYPoints[1] = scale(segNext.getPosY() - dYDiffNext);
+                aXPoints[2] = scale(segNext.getPosX() - dXDiffNext);
+                aYPoints[2] = scale(segNext.getPosY() + dYDiffNext);
+                aXPoints[3] = scale(seg.getPosX()     - dXDiff);
+                aYPoints[3] = scale(seg.getPosY()     + dYDiff);
+                g2d.drawPolygon(aXPoints, aYPoints, 4);
+            }
+        }
+
         // reset transformations
         g2d.setTransform( oldTrans );
     }
