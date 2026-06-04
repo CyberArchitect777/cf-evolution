@@ -1,5 +1,5 @@
 /*
- * Chequered Flag: An editor for Formula One Grand Prix/World Circuit
+ * CF Evolution: An editor for Formula One Grand Prix/World Circuit
  * Copyright (C) 2005-2007  The Chequered Flag Development Team
  *
  * This program is free software; you can redistribute it and/or modify
@@ -53,7 +53,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
     {
         // Setting main frame information
         // The first three commands should appear in this order before any other.
-        super("Chequered Flag - An open-source F1GP/WC editor");
+        super("CF Evolution - An open-source F1GP/WC editor");
         initComponents();
         
         // Setting global variables
@@ -229,7 +229,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
         String fileName = cheqFlagData.get("EXELocation", "-1");
         if (fileName.compareTo("-1") == 0)
         {
-            int optionSelected = JOptionPane.showConfirmDialog(this, "No F1GP/WC executable file has yet been identified for use with Chequered Flag. \nDo you want to open the configuration dialog?", "No F1GP/WC Executable Selected", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            int optionSelected = JOptionPane.showConfirmDialog(this, "No F1GP/WC executable file has yet been identified for use with CF Evolution. \nDo you want to open the configuration dialog?", "No F1GP/WC Executable Selected", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
             if (optionSelected == JOptionPane.YES_OPTION)
             {
                 openOptionsWindow();
@@ -280,7 +280,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
             {
                 case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. \nThis may be because you have selected the wrong file, or \nbecause this executable has not been updated to version \n1.05. In the latter case, upgrading your copy of F1GP/WC to \n1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
                 case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this \nexecutable file. It is likely that this is either not a \nF1GP/WC executable file, or that the executable itself is \ncorrupt.Please try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
-                case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version \nof F1GP/WC. An unpacked version of this file is required for \nediting in Chequered Flag. Please see the documentation \nfor more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
+                case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version \nof F1GP/WC. An unpacked version of this file is required for \nediting in CF Evolution. Please see the documentation \nfor more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
             }                
         }
     }
@@ -289,7 +289,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
     {
         // Handles window closing event
                 
-        quitChequeredFlag();
+        quitCFEvolution();
     }
 	
     public void windowOpened(WindowEvent wetEvent) 
@@ -320,7 +320,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
     {
         OptionsWindow programOptions = new OptionsWindow(this);
         programOptions.setVisible(true);
-        programOptions.setTitle("Chequered Flag Options");
+        programOptions.setTitle("CF Evolution Options");
         mainEditorWindow.add(programOptions);
         programOptions.toFront();
         try
@@ -381,7 +381,7 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
         
         AboutGUI aboutWindow = new AboutGUI();
         aboutWindow.setVisible(true);
-        aboutWindow.setTitle("About Chequered Flag");
+        aboutWindow.setTitle("About CF Evolution");
         mainEditorWindow.add(aboutWindow);
         aboutWindow.toFront();
         try
@@ -517,17 +517,17 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
     private void exitProgram(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_exitProgram
         // Handles the file menu's exit program function. 
         
-        quitChequeredFlag();
+        quitCFEvolution();
         
     }//GEN-LAST:event_exitProgram
 
-    public void quitChequeredFlag()
+    public void quitCFEvolution()
     {
         // Immediately exits the program after user confirmation
         
         if (closingProgram == false)
         {
-            int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to quit?", "Quit Chequered Flag", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to quit?", "Quit CF Evolution", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if (selectionOption == JOptionPane.YES_OPTION)
             {
                 closingProgram = true;

@@ -1,5 +1,5 @@
 /*
- * Chequered Flag: An editor for Formula One Grand Prix/World Circuit
+ * CF Evolution: An editor for Formula One Grand Prix/World Circuit
  * Copyright (C) 2005-2007  The Chequered Flag Development Team
  *
  * This program is free software; you can redistribute it and/or modify
@@ -57,7 +57,7 @@ public class AboutGUI extends javax.swing.JInternalFrame {
         titleText.setFont(new java.awt.Font("Dialog", 1, 36));
         titleText.setForeground(new java.awt.Color(255, 51, 51));
         titleText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        titleText.setText("Chequered Flag");
+        titleText.setText("CF Evolution");
         getContentPane().add(titleText);
 
         descText.setForeground(new java.awt.Color(51, 51, 255));

@@ -1,5 +1,5 @@
 /*
- * Chequered Flag: An editor for Formula One Grand Prix/World Circuit
+ * CF Evolution: An editor for Formula One Grand Prix/World Circuit
  * Copyright (C) 2005-2007  The Chequered Flag Development Team
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,7 +22,7 @@
  *
  * Created on 19. Februar 2005, 22:11
  *
- * Serves as a base class for ChequeredFlag (CF) data classes.
+ * Serves as a base class for CF Evolution data classes.
  * Provides services for reading and writing of 16 and 32bit values (int, long).
  */
 
