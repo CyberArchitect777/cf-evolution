@@ -69,7 +69,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         trackEditorPane.setRightComponent(mapWindow);
         treeWindow.setVisible(true);
         mapWindow.setVisible(true);
-        updateTluStatus();
         addInternalFrameListener(this); // Listener for internal frame closing events
         closingWindow = false; // Boolean value for detecting if closing occurs and then blocks any further events
         this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE); // Handle close operations manually
@@ -285,18 +284,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         // Should really use interfaces for this, but this involves less thinking for now.
 
         mapWindow.redrawTrackMap();
-        updateTluStatus();
 
-    }
-
-    public void updateTluStatus()
-    {
-        int ccTlu    = currentTrack.getCCLineTlu();
-        int trackTlu = currentTrack.getTrackTlu();
-        String status = ccTlu == trackTlu
-            ? "  [TLU OK: " + ccTlu + "]"
-            : "  [TLU MISMATCH — CCLine: " + ccTlu + "  Track: " + trackTlu + "]";
-        setTitle("Track File: " + fileName + status);
     }
     
     public void highlightSection(int sectionType, int segmentNo)
