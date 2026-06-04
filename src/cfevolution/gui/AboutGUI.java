@@ -45,48 +45,70 @@ public class AboutGUI extends javax.swing.JInternalFrame {
     // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
     private void initComponents() {
         titleText = new javax.swing.JLabel();
+        successorText = new javax.swing.JLabel();
         descText = new javax.swing.JLabel();
         f1gpText = new javax.swing.JLabel();
         byText = new javax.swing.JLabel();
         versionText = new javax.swing.JLabel();
         okButton = new javax.swing.JButton();
 
-        getContentPane().setLayout(new java.awt.GridLayout(6, 1));
+        getContentPane().setLayout(new javax.swing.BoxLayout(getContentPane(), javax.swing.BoxLayout.Y_AXIS));
 
-        setPreferredSize(new java.awt.Dimension(433, 289));
+        setPreferredSize(new java.awt.Dimension(433, 320));
+
         titleText.setFont(new java.awt.Font("Dialog", 1, 36));
         titleText.setForeground(new java.awt.Color(255, 51, 51));
         titleText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        titleText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         titleText.setText("CF Evolution");
-        getContentPane().add(titleText);
+
+        successorText.setForeground(new java.awt.Color(51, 51, 255));
+        successorText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        successorText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        successorText.setText("Successor project to Chequered Flag");
 
         descText.setForeground(new java.awt.Color(51, 51, 255));
         descText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        descText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         descText.setText("A general purpose open-source editor for");
-        getContentPane().add(descText);
 
         f1gpText.setFont(new java.awt.Font("Dialog", 1, 18));
         f1gpText.setForeground(new java.awt.Color(255, 51, 51));
         f1gpText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        f1gpText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         f1gpText.setText("Formula One Grand Prix / World Circuit");
-        getContentPane().add(f1gpText);
 
         byText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        byText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         byText.setText("Development by Klaus Six, Barrie Millar and Rene Smit");
-        getContentPane().add(byText);
 
         versionText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        versionText.setText("Version 0.1.1");
-        getContentPane().add(versionText);
+        versionText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        versionText.setText("Version 0.2.0");
 
         okButton.setText("OK");
+        okButton.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         okButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 okButtonActionPerformed(evt);
             }
         });
 
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(titleText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(descText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(f1gpText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(successorText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(byText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(versionText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
         getContentPane().add(okButton);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
@@ -108,6 +130,7 @@ public class AboutGUI extends javax.swing.JInternalFrame {
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel byText;
+    private javax.swing.JLabel successorText;
     private javax.swing.JLabel descText;
     private javax.swing.JLabel f1gpText;
     private javax.swing.JButton okButton;
