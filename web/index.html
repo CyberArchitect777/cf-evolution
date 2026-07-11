@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CF Evolution — F1GP / World Circuit Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="checker"></div>
+
+<header>
+    <h1>CF Evolution</h1>
+    <p>An open-source editor for Formula One Grand Prix / World Circuit</p>
+</header>
+
+<div class="layout">
+
+    <nav>
+        <span class="nav-section">Site</span>
+        <a href="index.html" class="active">About</a>
+        <a href="screenshots.html">Screenshots</a>
+        <span class="nav-section">Project</span>
+        <a href="https://github.com/CyberArchitect777/cf-evolution/releases">Downloads</a>
+        <a href="https://github.com/CyberArchitect777/cf-evolution/releases">Changelog</a>
+        <a href="https://github.com/CyberArchitect777/cf-evolution">GitHub</a>
+    </nav>
+
+    <main>
+
+        <section>
+            <h2>Welcome to CF Evolution</h2>
+            <p>
+                CF Evolution is an open-source editor for Geoff Crammond's
+                <strong>Formula One Grand Prix</strong> and <strong>World Circuit</strong> —
+                the classic 1991 MicroProse racing simulation. It allows you to edit track
+                layouts, best line data, car and team settings, and more, all from a
+                cross-platform Java application.
+            </p>
+            <p>
+                CF Evolution is the successor to the Chequered Flag project. It builds on
+                the Chequered Flag 0.1.1 codebase with significant bug fixes, new features,
+                and ongoing development. The project is free and open-source software,
+                licensed under the <strong>GNU General Public License v2</strong>.
+            </p>
+        </section>
+
+        <section>
+            <h2>Download</h2>
+            <p>CF Evolution requires Java 8 or later.</p>
+            <a class="download-box" href="https://github.com/CyberArchitect777/cf-evolution/releases">
+                Download CF Evolution 0.2.0
+                <small>cf-evolution.jar &mdash; GitHub Releases</small>
+            </a>
+        </section>
+
+        <section>
+            <h2>What&rsquo;s New in 0.2.0</h2>
+            <p>
+                Version 0.2.0 brings a substantial update over the ChequeredFlag 0.1.x baseline,
+                with improvements to visualization, usability, and correctness:
+            </p>
+            <ul>
+                <li>
+                    <strong>Game-accurate best line (CCLine) visualization</strong> —
+                    the CCLine overlay now uses the same lateral curvature formula as the game
+                    engine, giving a faithful representation of where the AI will drive.
+                </li>
+                <li>
+                    <strong>Out-of-bounds CCLine indicator</strong> —
+                    segments where the best line falls outside the drivable track boundary
+                    are highlighted in orange, using the game&rsquo;s own track width formula
+                    and car-width margin.
+                </li>
+                <li>
+                    <strong>Pit lane display</strong> —
+                    the pit lane is now rendered on the track map, connecting entry to exit,
+                    with the selected pit segment highlighted.
+                </li>
+                <li>
+                    <strong>Safe radius guidance</strong> —
+                    the CCLine segment editor shows a live safe radius indicator, warning
+                    when a curved sector&rsquo;s radius is too small for its length.
+                </li>
+                <li>
+                    <strong>Improved mouse navigation</strong> —
+                    plain left-button drag pans the map; scroll wheel zooms centred on the
+                    cursor position.
+                </li>
+                <li>
+                    <strong>Bug fixes</strong> —
+                    wide-radius CCLine operator precedence error; ExtraSideX/Y self-assignment;
+                    CCLine wrap-around off-by-one; pit lane leaf/teardrop shape;
+                    Pythagorean overflow on very small CCLine radii.
+                </li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>About the Game</h2>
+            <p>
+                Formula One Grand Prix (known as World Circuit in North America) was released
+                by MicroProse in 1991 and designed by Geoff Crammond. It set a new standard
+                for racing simulation at the time, featuring all 16 circuits of the 1991 F1
+                season, accurate car physics, and detailed AI behaviour. Despite its age, the
+                game retains a dedicated community of enthusiasts who continue to develop new
+                tracks, car sets, and tools.
+            </p>
+        </section>
+
+        <section>
+            <h2>Getting Involved</h2>
+            <p>
+                CF Evolution is open source and welcomes contributions. If you are interested
+                in helping with development, visit the project on
+                <a href="https://github.com/CyberArchitect777/cf-evolution">GitHub</a>.
+            </p>
+        </section>
+
+    </main>
+</div>
+
+<footer>
+    CF Evolution is hosted on <a href="https://github.com/CyberArchitect777/cf-evolution">GitHub</a>
+    &nbsp;&middot;&nbsp; Licensed under the GNU General Public License v2
+</footer>
+
+</body>
+</html>
