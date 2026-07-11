@@ -3,11 +3,76 @@
 
 ## Introduction
 
-CF-Evolution is an open-source Formula One Grand Prix/World Circuit editor built on the efforts undertaken in [Chequered Flag](https://github.com/CyberArchitect777/chequeredflag). The base code for further development in this repository is the 0.1.1 tagged codebase.
+CF-Evolution is a Java-based open source editor for Geoff Crammond's Formula One Grand Prix / World Circuit. It is built on the efforts undertaken in [Chequered Flag](https://github.com/CyberArchitect777/chequeredflag) which last saw an update in 2008. The original starting code for this successor project is the 0.1.1 tagged codebase from Chequered Flag.
+
+## Features
+
+CF-Evolution supports editing two types of F1GP/WC data:
+
+- Track files
+    - Full editing capability is provided up to our knowledge and understanding of the game data. It is possible to create playable tracks with full computer car lines.
+- Game executable
+    - A limited editing capability is provided to date. There are existing game editors available that offer more features at the moment.
+    - The settings that can be edited include the following
+        - Driver names, qualifying grip, and race grip values
+        - Team names, BHP settings, and driver assignments
+        - Points system configuration
+        - Game settings (e.g. unlimited qualifying tyres)
+
+## Getting Started / Installation
+
+### Requirements
+
+- Java 8 or later
+- A copy of Formula One Grand Prix or World Circuit patched to version 1.05 (unpacked executable required for executable editing)
+
+### Building from source
+
+#### Windows
+
+```bat
+build.bat
+```
+
+#### Linux
+
+```bash
+./build.sh
+```
+
+Both scripts compile all sources and produce `dist/cf-evolution.jar`.
+
+### Running
+
+After building, the following command will run the editor on each system.
+
+#### Windows
+
+```bat
+run.bat
+```
+
+#### Linux
+
+```bash
+./run.sh
+```
+
+Before opening the executable editor for the first time, go to **File > Options** and set the path to your F1GP/WC executable.
 
 ## Repository
 
 The CF-Evolution codebase is hosted on Github at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
+
+## Credits
+
+As noted earlier, this project is based on the research and development undertaken for Chequered Flag by the following people:
+
+* Klaus Six
+* Barrie Millar
+* Rene Smit
+
+Thanks also to Fredrik Meyer for his excellent work on the ArgTools project which is aiding further development here.
 
 ## License
 
