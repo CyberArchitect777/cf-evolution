@@ -122,11 +122,14 @@ public class BestLineTableModel extends StandardTableModel
 
     public String getSafeRadiusText()
     {
+        // |r| > length * 128 is the worst case (a curved line over straight
+        // track). Smaller radii can be valid where the track curves with
+        // the line — original tracks use them freely.
         try {
             int tlu = Integer.parseInt(getValueAt(1, 1).toString().trim());
-            return "Safe radius:  0  or  |r| > " + (tlu * 128);
+            return "Always-safe radius:  0  or  |r| > " + (tlu * 128) + "  (smaller can be valid on curved track)";
         } catch (NumberFormatException e) {
-            return "Safe radius:  —";
+            return "Always-safe radius:  —";
         }
     }
 

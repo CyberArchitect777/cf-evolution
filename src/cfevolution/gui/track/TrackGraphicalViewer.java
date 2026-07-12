@@ -53,6 +53,17 @@ public class TrackGraphicalViewer extends javax.swing.JInternalFrame {
         m_parentTrackWindow = trackWindow;
     }
 
+    public void setPreviewProfile(double[] adOffsets)
+    {
+        // Passes on a generated best line preview to the track panel
+        m_trackPanel.setPreviewProfile(adOffsets);
+    }
+
+    public void clearPreview()
+    {
+        m_trackPanel.clearPreview();
+    }
+
     public void mapSegmentClicked(int sectionType, int segmentNo)
     {
         // Passes on a click on a map object.

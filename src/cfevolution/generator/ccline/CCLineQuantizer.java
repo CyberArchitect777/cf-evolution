@@ -1,0 +1,350 @@
+/*
+ * CF Evolution: An editor for Formula One Grand Prix/World Circuit
+ * Copyright (C) 2005-2007  The Chequered Flag Development Team
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
+package cfevolution.generator.ccline;
+
+import cfevolution.data.track.CCLine;
+import cfevolution.data.track.CCLineSegment;
+
+/**
+    Turns a continuous lateral offset profile into integer CCLine segments.
+
+    Works sequentially, mirroring how the game walks the line: at each
+    point it tries candidate sector lengths and both sector types —
+    straight (radius 0 + heading correction) and tangent arc (radius) —
+    seeds the parameters analytically from the profile geometry, refines
+    them by local search, and scores every candidate by actually
+    simulating it with CCLineSimulator from a snapshot of the walk state.
+    The candidate with the lowest per-TLU tracking error is emitted.
+
+    Guarantees on output segments: lengths 1-255 (save-safe), radii never
+    trigger the game's Pythagoras failure (verified by simulation — the
+    static rule |raw| > length * 128 is only the worst case), wide (0x40)
+    type used only when a radius does not fit 16 bits, never combined with
+    the first (0x80) type, and total TLU = track TLU + seamOvershoot.
+*/
+public class CCLineQuantizer {
+
+    private static final double HUGE_ERROR = 1.0e12;
+    private static final int[] CANDIDATE_LENGTHS = { 255, 192, 128, 96, 64, 48, 32, 24, 16, 12, 8 };
+    private static final double[] RADIUS_VARIANTS = { 1.0, 0.85, 1.2, 0.7, 1.5 };
+    private static final int[] CORRECTION_VARIANTS = { 0, -32, 32, -96, 96 };
+    /** Error added per unit of straight-sector heading kick (see bestForLength).
+        Value chosen by parameter sweep over all 16 original tracks
+        (2026-07-12): (0.05, 0.1) was the only combination passing both the
+        round-trip gate and geometric validity on every track. */
+    private static final double KICK_PENALTY = 0.05;
+    /** Weight of the end-heading mismatch term (angle units → error units). */
+    private static final double HEADING_WEIGHT = 0.1;
+
+    private final CCLineTrackGeometry geo;
+    private final CCLineSimulator simulator;
+    private final double[] profile;      // target offset per Seg
+    private final double[] profileHeading; // profile chord heading per Seg (game angle units)
+    private final int seamOvershoot;
+
+    // Scratch stamping area shared by all candidate simulations
+    private final CCLineSimulator.Result scratch;
+
+    public CCLineQuantizer(CCLineTrackGeometry geometry, CCLineLateralProfile lateralProfile,
+                           int seamOvershoot) {
+        geo = geometry;
+        simulator = new CCLineSimulator(geometry);
+        profile = lateralProfile.offset;
+        this.seamOvershoot = seamOvershoot;
+        scratch = new CCLineSimulator.Result(geometry.segCount);
+
+        // Local chord heading of the profile at every Seg (over a +-4 Seg
+        // window) — used to keep candidate sectors heading-continuous with
+        // where the profile is going, which damps tracking oscillation.
+        int n = geo.segCount;
+        profileHeading = new double[n];
+        for (int i = 0; i < n; i++) {
+            int a = (i + n - 4) % n, b = (i + 4) % n;
+            double[] pa = worldPoint(a, profile[a]);
+            double[] pb = worldPoint(b, profile[b]);
+            profileHeading[i] = Math.atan2(pb[0] - pa[0], pb[1] - pa[1]) * 65536.0 / (2.0 * Math.PI);
+        }
+    }
+
+    /** Builds the quantised CCLine. */
+    public CCLine quantize() {
+        CCLine ccLine = new CCLine();
+        CCLineSimulator.State st = simulator.initialState();
+        int nTargetTlu = geo.segCount + seamOvershoot;
+        boolean fFirst = true;
+
+        while (st.walkedTlu < nTargetTlu) {
+            int nRemaining = nTargetTlu - st.walkedTlu;
+            Candidate best = null;
+
+            for (int li = 0; li < CANDIDATE_LENGTHS.length; li++) {
+                int nLen = CANDIDATE_LENGTHS[li];
+                if (nLen > nRemaining)
+                    continue;
+                Candidate c = bestForLength(st, nLen, fFirst);
+                if (best == null || c.errorPerTlu < best.errorPerTlu)
+                    best = c;
+                // A long sector that tracks well is always preferable;
+                // stop scanning shorter ones once a good long fit exists.
+                if (best.errorPerTlu < 64.0 && best.length >= 64)
+                    break;
+            }
+            if (nRemaining < 8 || best == null) {
+                // Tail shorter than the smallest candidate: emit directly.
+                Candidate tail = bestForLength(st, nRemaining, fFirst);
+                if (best == null || tail.length == nRemaining)
+                    best = tail;
+            }
+
+            for (int si = 0; si < best.segments.length; si++) {
+                ccLine.add(best.segments[si]);
+                simulator.runSegment(best.segments[si], st, scratch);
+            }
+            fFirst = false;
+        }
+        return ccLine;
+    }
+
+    /** Extracts the per-Seg offsets of an existing simulation as a profile
+        (used for round-trip testing and to seed refinement). */
+    public static CCLineLateralProfile profileFromSimulation(CCLineSimulator.Result r) {
+        CCLineLateralProfile p = new CCLineLateralProfile(r.ccLine.length);
+        for (int i = 0; i < r.ccLine.length; i++)
+            p.offset[i] = r.ccLine[i];
+        return p;
+    }
+
+    // ------------------------------------------------------------------
+
+    private static class Candidate {
+        CCLineSegment[] segments;  // 1 (plain) or 2 (align-kick + arc)
+        int length;
+        double errorPerTlu;
+    }
+
+    /** Best straight/arc candidate of the given length from the given state. */
+    private Candidate bestForLength(CCLineSimulator.State st, int nLen, boolean fFirst) {
+        int nStartTlu = st.walkedTlu;
+
+        // World geometry of the current position and the profile target
+        double[] p0 = worldPoint(st.segIndex, st.wSegPosX);
+        int nEndSeg = segAt(nStartTlu + nLen);
+        double[] pT = worldPoint(nEndSeg, profile[nEndSeg]);
+        double dx = pT[0] - p0[0];
+        double dy = pT[1] - p0[1];
+
+        Candidate best = new Candidate();
+        best.errorPerTlu = HUGE_ERROR;
+
+        // --- Straight candidates: heading kicks towards two aim points.
+        // Direct aim (sector end) corrects the whole lateral error in one
+        // sector — essential for recovery, but oscillates when tracking.
+        // Look-ahead aim (pure pursuit, beyond the end) converges smoothly
+        // but cannot recover from large errors. Seed kicks from both and
+        // let the simulated error metric choose. Kicks are instant heading
+        // jumps the AI has to absorb, so they carry a mild size penalty —
+        // arcs (tangent-continuous) win unless a straight genuinely fits.
+        int nLookAhead = Math.max(32, nLen / 2);
+        int nAimSeg = segAt(nStartTlu + nLen + nLookAhead);
+        double[] pAim = worldPoint(nAimSeg, profile[nAimSeg]);
+        double dDirectAngle = Math.atan2(dx, dy) * 65536.0 / (2.0 * Math.PI);
+        double dAheadAngle = Math.atan2(pAim[0] - p0[0], pAim[1] - p0[1]) * 65536.0 / (2.0 * Math.PI);
+        int nKickDirect = (int) (short) (int) Math.round(dDirectAngle - st.wTmpAngleZ);
+        int nKickAhead = (int) (short) (int) Math.round(dAheadAngle - st.wTmpAngleZ);
+        for (int ci = 0; ci < CORRECTION_VARIANTS.length; ci++) {
+            int nCorr = (short) (nKickDirect + CORRECTION_VARIANTS[ci]);
+            trySegments(best, st, single(makeSegment(fFirst, nLen, nCorr, 0)), nLen,
+                        Math.abs(nCorr) * KICK_PENALTY);
+            if (nKickAhead != nKickDirect) {
+                nCorr = (short) (nKickAhead + CORRECTION_VARIANTS[ci]);
+                trySegments(best, st, single(makeSegment(fFirst, nLen, nCorr, 0)), nLen,
+                            Math.abs(nCorr) * KICK_PENALTY);
+            }
+        }
+
+        // --- Arc candidates: tangent circle through the target point ---
+        // Direction of current heading in world units (X advances by sin, Y by cos)
+        addArcCandidates(best, st, fFirst, nLen, 0, st.wTmpAngleZ, dx, dy);
+
+        // --- Composite candidates: 1-TLU align kick + tangent arc.
+        // Arcs alone cannot correct a heading error (they are tangent-
+        // continuous), which otherwise forces the fit into kicky straights.
+        // Hand-tuned lines use exactly this move: a small heading
+        // correction, then a curve.
+        if (nLen >= 12) {
+            int nAlign = (int) (short) (int) Math.round(
+                wrapAngle(profileHeading[st.segIndex] - st.wTmpAngleZ));
+            if (nAlign != 0) {
+                short wAligned = (short) (st.wTmpAngleZ + nAlign);
+                addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy);
+            }
+        }
+
+        // Fallback so a candidate always exists: keep current heading
+        if (best.errorPerTlu >= HUGE_ERROR)
+            trySegments(best, st, single(makeSegment(fFirst, nLen, 0, 0)), nLen, 0.0);
+        if (best.segments == null) {
+            best.segments = single(makeSegment(fFirst, nLen, 0, 0));
+            best.length = nLen;
+            best.errorPerTlu = HUGE_ERROR;
+        }
+        return best;
+    }
+
+    /** Adds tangent-arc candidates for the given start heading. When
+        nAlignKick is nonzero the arc is preceded by a 1-TLU straight that
+        kicks the heading, and the arc covers the remaining length. */
+    private void addArcCandidates(Candidate best, CCLineSimulator.State st, boolean fFirst,
+                                  int nLen, int nAlignKick, short wHeading,
+                                  double dx, double dy) {
+        int nArcLen = (nAlignKick != 0) ? nLen - 1 : nLen;
+        double dRad = wHeading * 2.0 * Math.PI / 65536.0;
+        double dirX = Math.sin(dRad), dirY = Math.cos(dRad);
+        double cross = dirX * dy - dirY * dx;
+        if (Math.abs(cross) <= 1.0e-6)
+            return;
+        double dWorldRadius = (dx * dx + dy * dy) / (2.0 * cross);
+        long lRawSeed = Math.round(dWorldRadius / 8.0);
+        double dPenalty = Math.abs(nAlignKick) * KICK_PENALTY;
+        for (int ri = 0; ri < RADIUS_VARIANTS.length; ri++) {
+            long lRaw = Math.round(lRawSeed * RADIUS_VARIANTS[ri]);
+            for (int sign = 0; sign < 2; sign++) {
+                long r = (sign == 0) ? lRaw : -lRaw;
+                // Radii too small for their arc are rejected by simulation
+                // (Pythagoras clamp check in trySegments), not statically —
+                // original tracks use radii below the static worst-case rule.
+                if (r == 0 || Math.abs(r) > 0x3FFFFFFFL)
+                    continue;
+                if (nAlignKick == 0) {
+                    if (fFirst && (r > Short.MAX_VALUE || r < Short.MIN_VALUE))
+                        continue; // first segment carries only a 16-bit radius
+                    trySegments(best, st, single(makeSegment(fFirst, nLen, 0, r)), nLen, dPenalty);
+                }
+                else {
+                    CCLineSegment[] pair = new CCLineSegment[] {
+                        makeSegment(fFirst, 1, nAlignKick, 0),
+                        makeSegment(false, nArcLen, 0, r)
+                    };
+                    trySegments(best, st, pair, nLen, dPenalty);
+                }
+            }
+            if (lRawSeed == 0)
+                break;
+        }
+    }
+
+    private static CCLineSegment[] single(CCLineSegment seg) {
+        return new CCLineSegment[] { seg };
+    }
+
+    /** Simulates a candidate (one or two sectors) from a state copy and
+        records it if better. */
+    private void trySegments(Candidate best, CCLineSimulator.State st,
+                             CCLineSegment[] segs, int nLen, double dPenalty) {
+        CCLineSimulator.State trial = st.copy();
+        int nClampsBefore = scratch.clampCount;
+        for (int si = 0; si < segs.length; si++)
+            simulator.runSegment(segs[si], trial, scratch);
+
+        double dSumSq = 0.0;
+        // A fired Pythagoras clamp means this radius breaks the game's
+        // math at this point — reject regardless of tracking error.
+        boolean fInvalid = scratch.clampCount > nClampsBefore;
+        for (int t = st.walkedTlu; t < st.walkedTlu + nLen; t++) {
+            int i = segAt(t);
+            double dErr = scratch.ccLine[i] - profile[i];
+            dSumSq += dErr * dErr;
+            if (Math.abs(scratch.ccLine[i]) >= geo.usableBound[i])
+                fInvalid = true;
+        }
+        // Anchor the sector end so state stays on the profile
+        int iEnd = segAt(st.walkedTlu + nLen - 1);
+        double dEndErr = scratch.ccLine[iEnd] - profile[iEnd];
+        dSumSq += 3.0 * dEndErr * dEndErr;
+
+        // Heading continuity at the sector end: ending aligned with where
+        // the profile is going keeps the next sector's kick small.
+        double dHeadErr = wrapAngle(trial.wTmpAngleZ - profileHeading[iEnd]) * HEADING_WEIGHT;
+        dSumSq += dHeadErr * dHeadErr;
+
+        double dError = fInvalid ? HUGE_ERROR + dSumSq
+                                 : Math.sqrt(dSumSq / (nLen + 4)) + dPenalty;
+        if (dError < best.errorPerTlu) {
+            best.errorPerTlu = dError;
+            best.segments = segs;
+            best.length = nLen;
+        }
+    }
+
+    /** Builds a segment of the right type for the given parameters. */
+    private CCLineSegment makeSegment(boolean fFirst, int nLen, int nCorrection, long lRawRadius) {
+        CCLineSegment seg;
+        if (fFirst) {
+            seg = new CCLineSegment(0x80);
+            seg.setParam(0, clampShort(Math.round(profile[0])));
+            seg.setParam(1, clampShort(nCorrection));
+            seg.setParam(2, clampShort(lRawRadius));
+        }
+        else if (lRawRadius > Short.MAX_VALUE || lRawRadius < Short.MIN_VALUE) {
+            // wide radius segment
+            seg = new CCLineSegment(0x40);
+            seg.setParam(0, clampShort(nCorrection));
+            seg.setParam(1, (int) (lRawRadius >> 16));
+            seg.setParam(2, (int) (short) (lRawRadius & 0xFFFF));
+        }
+        else {
+            seg = new CCLineSegment(0x00);
+            seg.setParam(0, clampShort(nCorrection));
+            seg.setParam(1, (int) lRawRadius);
+        }
+        seg.setTlu(nLen);
+        return seg;
+    }
+
+    private int segAt(int nTlu) {
+        return nTlu % geo.segCount;
+    }
+
+    /** World position of a lateral offset at a Seg — same rotation as the
+        game's ProcessCCLineSector / TrackPanel.ccLineWorldPos. */
+    private double[] worldPoint(int nSeg, double dOffset) {
+        double dSegPosY = ((long) (dOffset * geo.angleZChangeMulHalfPI[nSeg])) >> 15;
+        double dRad = geo.angleZ[nSeg] * 2.0 * Math.PI / 65536.0;
+        double cosA = Math.cos(dRad), sinA = Math.sin(dRad);
+        return new double[] {
+            geo.posX[nSeg] + dOffset * cosA + dSegPosY * sinA,
+            geo.posY[nSeg] + dSegPosY * cosA - dOffset * sinA
+        };
+    }
+
+    private static int clampShort(long v) {
+        if (v > Short.MAX_VALUE) return Short.MAX_VALUE;
+        if (v < Short.MIN_VALUE) return Short.MIN_VALUE;
+        return (int) v;
+    }
+
+    /** Wraps an angle difference into -32768..32767 (16-bit game angle). */
+    private static double wrapAngle(double d) {
+        d = d % 65536.0;
+        if (d > 32768.0) d -= 65536.0;
+        if (d < -32768.0) d += 65536.0;
+        return d;
+    }
+}

@@ -157,6 +157,9 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         removeTrack = new javax.swing.JMenuItem();
         removePit = new javax.swing.JMenuItem();
         removeLine = new javax.swing.JMenuItem();
+        generateLineGeometric = new javax.swing.JMenuItem();
+        generateLineDataFit = new javax.swing.JMenuItem();
+        generateLineRefine = new javax.swing.JMenuItem();
 
         getContentPane().setLayout(new java.awt.FlowLayout());
 
@@ -232,6 +235,32 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         });
 
         toolsMenu.add(removeLine);
+
+        toolsMenu.addSeparator();
+
+        generateLineGeometric.setText("Generate Best Line (Geometric)...");
+        generateLineGeometric.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                openGenerateDialog(new cfevolution.generator.ccline.geometric.MinCurvatureCCLineGenerator());
+            }
+        });
+        toolsMenu.add(generateLineGeometric);
+
+        generateLineDataFit.setText("Generate Best Line (Learned from Original Tracks)...");
+        generateLineDataFit.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                openGenerateDialog(new cfevolution.generator.ccline.datafit.DataFitCCLineGenerator());
+            }
+        });
+        toolsMenu.add(generateLineDataFit);
+
+        generateLineRefine.setText("Generate Best Line (Iterative Refinement)...");
+        generateLineRefine.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                openGenerateDialog(new cfevolution.generator.ccline.refine.RefinementCCLineGenerator());
+            }
+        });
+        toolsMenu.add(generateLineRefine);
 
         trackMenuBar.add(toolsMenu);
 
@@ -323,6 +352,38 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
 
         treeWindow.selectSegmentNode(sectionType, segmentNo);
     }
+
+    private void openGenerateDialog(cfevolution.generator.ccline.CCLineGenerator generator)
+    {
+        // Opens the shared best line generation dialog preset to a method
+        GenerateCCLineDialog dialog = new GenerateCCLineDialog(this, currentTrack, generator);
+        dialog.setVisible(true);
+    }
+
+    public void showBestLinePreview(double[] adOffsets)
+    {
+        mapWindow.setPreviewProfile(adOffsets);
+    }
+
+    public void clearBestLinePreview()
+    {
+        mapWindow.clearPreview();
+    }
+
+    /** Replaces the whole best line with a generated one and refreshes
+        every view that shows it. */
+    public void replaceBestLine(CCLine newLine)
+    {
+        CCLine current = currentTrack.getCCLine();
+        current.clear();
+        for (int i = 1; i <= newLine.size(); i++)
+            current.add(newLine.getAt(i));
+        currentTrack.calculateCCLine();
+        treeWindow.rebuildBestLineNodes();
+        highlightSection(3, -1); // nothing selected any more
+        updateTrackMap();
+        updateCCLineCoverageStatus();
+    }
     
     private void saveTrackItem(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveTrackItem
         // Saves the current track file to the same file it was loaded from
@@ -378,6 +439,9 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JMenuItem closeTrackItem;
     private javax.swing.JMenu fileMenu;
+    private javax.swing.JMenuItem generateLineGeometric;
+    private javax.swing.JMenuItem generateLineDataFit;
+    private javax.swing.JMenuItem generateLineRefine;
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;
     private javax.swing.JMenuItem removeTrack;

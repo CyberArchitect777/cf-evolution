@@ -533,6 +533,22 @@ public class TrackPanel extends javax.swing.JPanel {
             }
         }
 
+        // Draw the generated best line preview, if one is being decided on
+        if ( m_previewOffsets != null )
+        {
+            g2d.setColor(Color.MAGENTA);
+            int nCount = Math.min(m_previewOffsets.length, trackSegments.getMaxTrackSegIndex());
+            for (int i = 0; i < nCount - 1; i++)
+            {
+                seg     = trackSegments.getSegAt(i);
+                segNext = trackSegments.getSegAt(i + 1);
+                double[] pos     = ccLineWorldPos(seg,     m_previewOffsets[i]);
+                double[] posNext = ccLineWorldPos(segNext, m_previewOffsets[i + 1]);
+                g2d.drawLine(scale(pos[0]), scale(pos[1]),
+                             scale(posNext[0]), scale(posNext[1]));
+            }
+        }
+
         // reset transformations
         g2d.setTransform( oldTrans );
     }
@@ -1231,14 +1247,32 @@ public class TrackPanel extends javax.swing.JPanel {
         Returns [x, y] in track coordinates.
     */
     private double[] ccLineWorldPos(Seg seg) {
-        double wCCLineVal = seg.getCCLine();
-        double wSegPosY   = (double)((long)(wCCLineVal * seg.getAngleZChangeMulHalfPI()) >> 15);
+        return ccLineWorldPos(seg, seg.getCCLine());
+    }
+
+    private double[] ccLineWorldPos(Seg seg, double dOffset) {
+        double wSegPosY   = (double)((long)(dOffset * seg.getAngleZChangeMulHalfPI()) >> 15);
         double cosA = Math.cos(seg.getAngleZ() * ANGLE_SCALE_RAD);
         double sinA = Math.sin(seg.getAngleZ() * ANGLE_SCALE_RAD);
         return new double[] {
-            seg.getPosX() + wCCLineVal * cosA + wSegPosY * sinA,
-            seg.getPosY() + wSegPosY   * cosA - wCCLineVal * sinA
+            seg.getPosX() + dOffset  * cosA + wSegPosY * sinA,
+            seg.getPosY() + wSegPosY * cosA - dOffset  * sinA
         };
+    }
+
+    /** Candidate best line preview (lateral offset per Seg), drawn in
+        magenta by newPaintComponent until cleared. Set by the generation
+        dialog while the user decides whether to apply a generated line. */
+    private double[] m_previewOffsets;
+
+    public void setPreviewProfile(double[] adOffsets) {
+        m_previewOffsets = adOffsets;
+        repaint();
+    }
+
+    public void clearPreview() {
+        m_previewOffsets = null;
+        repaint();
     }
 
     /**

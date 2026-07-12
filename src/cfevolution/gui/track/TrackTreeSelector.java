@@ -778,6 +778,23 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         trackDetails.setVisible(true);
     }
     
+    public void rebuildBestLineNodes()
+    {
+        // Rebuilds the best line branch of the tree from the current track
+        // data, e.g. after a generated line replaced the whole CCLine.
+        // Mirrors the best line loop of populateTree().
+
+        mainLineSegmentNode.removeAllChildren();
+        CCLine currentLineSegments = currentTrack.getCCLine();
+        for (int x = 0; x < currentLineSegments.size(); x++)
+        {
+            CCLineSegment selectedLineSegment = currentLineSegments.getAt(x + 1);
+            mainLineSegmentNode.add(new DefaultMutableTreeNode(
+                new Integer(x + 1).toString() + " " + getBestLineDirection(selectedLineSegment)));
+        }
+        ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainLineSegmentNode);
+    }
+
     public void selectSegmentNode(int sectionType, int segmentNo)
     {
         // Selects the given segment node (1-based) in the tree, e.g. after
