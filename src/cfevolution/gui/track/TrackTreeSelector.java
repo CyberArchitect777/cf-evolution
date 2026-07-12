@@ -778,6 +778,23 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         trackDetails.setVisible(true);
     }
     
+    public void rebuildTrackNodes()
+    {
+        // Rebuilds the track segment branch of the tree from the current
+        // track data, e.g. after a generated layout replaced all segments.
+        // Mirrors the track segment loop of populateTree().
+
+        mainTrackSegmentNode.removeAllChildren();
+        TrackSegments currentTrackSegments = currentTrack.getTrackSegments();
+        for (int x = 0; x < currentTrackSegments.size(); x++)
+        {
+            TrackSegment selectedTrackSegment = currentTrackSegments.getAt(x + 1);
+            mainTrackSegmentNode.add(new DefaultMutableTreeNode(
+                new Integer(x + 1).toString() + " " + getSegmentDirection(selectedTrackSegment)));
+        }
+        ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainTrackSegmentNode);
+    }
+
     public void rebuildBestLineNodes()
     {
         // Rebuilds the best line branch of the tree from the current track

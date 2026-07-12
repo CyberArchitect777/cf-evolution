@@ -71,6 +71,20 @@ public class Footer {
         return m_nDataSize;
     }
 
+    // Raw data access (used by the track generator to rewrite the camera
+    // adjustment block that lives at the start of the footer)
+    public byte[] getData()
+    { return m_baData; }
+
+    public int getDataSize()
+    { return m_nDataSize; }
+
+    public void setData( byte[] baData, int nSize )
+    {
+        m_baData = baData;
+        m_nDataSize = nSize;
+    }
+
     public void setChecksum( long lChecksum )
     {
         // Checksum is stored in the last 4 bytes

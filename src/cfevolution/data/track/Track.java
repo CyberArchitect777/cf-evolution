@@ -252,6 +252,9 @@ public class Track {
     }
 
     /** Methods to get several parts of the track object */
+    public Footer getFooter()
+    { return m_Footer; }
+
     public TrackDataHeader getTrackDataHeader()
     {
         return m_DataHeader;

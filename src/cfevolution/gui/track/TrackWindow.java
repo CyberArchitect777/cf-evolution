@@ -160,6 +160,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateLineGeometric = new javax.swing.JMenuItem();
         generateLineDataFit = new javax.swing.JMenuItem();
         generateLineRefine = new javax.swing.JMenuItem();
+        generateRandomTrack = new javax.swing.JMenuItem();
 
         getContentPane().setLayout(new java.awt.FlowLayout());
 
@@ -262,6 +263,16 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         });
         toolsMenu.add(generateLineRefine);
 
+        toolsMenu.addSeparator();
+
+        generateRandomTrack.setText("Generate Random Track...");
+        generateRandomTrack.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                openGenerateTrackDialog();
+            }
+        });
+        toolsMenu.add(generateRandomTrack);
+
         trackMenuBar.add(toolsMenu);
 
         setJMenuBar(trackMenuBar);
@@ -360,6 +371,27 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         dialog.setVisible(true);
     }
 
+    private void openGenerateTrackDialog()
+    {
+        GenerateTrackDialog dialog = new GenerateTrackDialog(this, fileName);
+        dialog.setVisible(true);
+    }
+
+    /** Applies a generated random layout plus its best line to the open
+        track and refreshes every view. Called on the EDT by the dialog. */
+    public void applyGeneratedTrack(cfevolution.generator.track.RandomTrackGenerator.Result layout,
+                                    CCLine newLine)
+    {
+        GenerateTrackDialog.applySegments(currentTrack, layout);
+        cfevolution.generator.track.TrackCameraSection.emptyCameraAdjustments(currentTrack.getFooter());
+        currentTrack.setLayoutMode(false);
+        currentTrack.calculateTrackLayout();
+        treeWindow.rebuildTrackNodes();
+        highlightSection(1, -1); // no track segment selected any more
+        highlightSection(2, -1); // pit selection also stale
+        replaceBestLine(newLine); // recalculates, rebuilds line nodes, map + title
+    }
+
     public void showBestLinePreview(double[] adOffsets)
     {
         mapWindow.setPreviewProfile(adOffsets);
@@ -442,6 +474,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem generateLineGeometric;
     private javax.swing.JMenuItem generateLineDataFit;
     private javax.swing.JMenuItem generateLineRefine;
+    private javax.swing.JMenuItem generateRandomTrack;
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;
     private javax.swing.JMenuItem removeTrack;
