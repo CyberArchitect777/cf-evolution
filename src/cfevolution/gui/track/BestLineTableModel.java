@@ -30,6 +30,7 @@ import cfevolution.gui.*;
 import cfevolution.gui.table.StandardTableModel;
 import java.util.Vector;
 import javax.swing.JComboBox;
+import javax.swing.JOptionPane;
 
 /**
  *
@@ -67,7 +68,21 @@ public class BestLineTableModel extends StandardTableModel
             case 2: currentLineSegment.setType(128); break;
         }
         
-        currentLineSegment.setTlu(new Integer((String)getValueAt(1,1)).intValue());
+        // The file stores the length as a single byte; save() would silently
+        // truncate anything larger, so keep the value within 1-255 here.
+        int nLength = new Integer((String)getValueAt(1,1)).intValue();
+        if (nLength < 1 || nLength > 255)
+        {
+            int nClamped = Math.min(255, Math.max(1, nLength));
+            JOptionPane.showMessageDialog(null,
+                "Best line segment length must be between 1 and 255\n"
+                + "(the track file stores the length as a single byte).\n"
+                + "The value " + nLength + " has been changed to " + nClamped + ".",
+                "Best Line Length", JOptionPane.WARNING_MESSAGE);
+            setValueAt(String.valueOf(nClamped), 1, 1);
+            nLength = nClamped;
+        }
+        currentLineSegment.setTlu(nLength);
                 
         if (currentList.getSelectedIndex() == 0 || currentList.getSelectedIndex() == 1)
         {

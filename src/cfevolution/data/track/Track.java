@@ -282,9 +282,11 @@ public class Track {
         return m_Objects;
     }
 
+    // Note: CCLine TLU exceeding track TLU is normal (the game wraps and
+    // re-stamps the first Segs; original tracks deliberately overrun).
+    // Only CCLine TLU < track TLU indicates a problem. See docs/BESTLINE.md.
     public int getCCLineTlu() { return m_CCLine.getCumTlu(); }
     public int getTrackTlu()  { return m_TrackSegments.getTotalTlu(); }
-    public boolean isTluBalanced() { return getCCLineTlu() == getTrackTlu(); }
 
     public boolean getLayoutMode()
     {

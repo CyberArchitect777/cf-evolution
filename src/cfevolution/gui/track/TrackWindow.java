@@ -69,6 +69,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         trackEditorPane.setRightComponent(mapWindow);
         treeWindow.setVisible(true);
         mapWindow.setVisible(true);
+        updateCCLineCoverageStatus();
         addInternalFrameListener(this); // Listener for internal frame closing events
         closingWindow = false; // Boolean value for detecting if closing occurs and then blocks any further events
         this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE); // Handle close operations manually
@@ -284,9 +285,25 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         // Should really use interfaces for this, but this involves less thinking for now.
 
         mapWindow.redrawTrackMap();
+        updateCCLineCoverageStatus();
 
     }
-    
+
+    public void updateCCLineCoverageStatus()
+    {
+        // Warn only when the best line covers fewer Segs than the track has:
+        // uncovered Segs keep stale AI line values in the game. Overshoot is
+        // normal — 14 of the 16 original tracks deliberately overrun so the
+        // line wraps smoothly across the start/finish seam (see BESTLINE.md).
+        int ccTlu    = currentTrack.getCCLineTlu();
+        int trackTlu = currentTrack.getTrackTlu();
+        if ( ccTlu > 0 && ccTlu < trackTlu )
+            setTitle("Track File: " + fileName + "  [WARNING: best line " + (trackTlu - ccTlu)
+                     + " TLU short of track end — AI line incomplete]");
+        else
+            setTitle("Track File: " + fileName);
+    }
+
     public void highlightSection(int sectionType, int segmentNo)
     {
         // Sends a command through the object model to highlight a section of the track map
