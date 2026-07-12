@@ -62,6 +62,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         appFrame = origContainer;
         treeWindow = new TrackTreeSelector(trackEditorWindow, this);
         mapWindow = new TrackGraphicalViewer();
+        mapWindow.setParentTrackWindow(this);
         mapWindow.setTrack(currentTrack);
         treeWindow.setTrack(currentTrack);
         treeWindow.populateTree();
@@ -308,9 +309,19 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     {
         // Sends a command through the object model to highlight a section of the track map
         // Should really use interfaces for this, but this involves less thinking for now.
-        
+
         mapWindow.selectedSegment(sectionType, segmentNo);
-        
+
+    }
+
+    public void selectSegmentFromMap(int sectionType, int segmentNo)
+    {
+        // Called when the user clicks on a segment in the track map.
+        // sectionType: 1 - Track, 2 - Pit, 3 - CCLine.
+        // Selecting the tree node fires the normal selection listener,
+        // which highlights the sector on the map in turn.
+
+        treeWindow.selectSegmentNode(sectionType, segmentNo);
     }
     
     private void saveTrackItem(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveTrackItem

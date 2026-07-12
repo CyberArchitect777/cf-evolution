@@ -778,6 +778,47 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         trackDetails.setVisible(true);
     }
     
+    public void selectSegmentNode(int sectionType, int segmentNo)
+    {
+        // Selects the given segment node (1-based) in the tree, e.g. after
+        // the user clicks on an object in the track map.
+        // sectionType: 1 - Track, 2 - Pit, 3 - CCLine.
+        // Setting the selection fires the normal selection listener, which
+        // highlights the sector on the track map.
+        // Nodes are matched on their leading number rather than child index
+        // so this stays correct if node text and order ever drift apart.
+
+        DefaultMutableTreeNode parentNode;
+        switch (sectionType)
+        {
+            case 1: parentNode = mainTrackSegmentNode; break;
+            case 2: parentNode = mainPitSegmentNode; break;
+            case 3: parentNode = mainLineSegmentNode; break;
+            default: return;
+        }
+
+        for (int x = 0; x < parentNode.getChildCount(); x++)
+        {
+            DefaultMutableTreeNode segmentNode = (DefaultMutableTreeNode)parentNode.getChildAt(x);
+            String nodeText = segmentNode.toString();
+            try
+            {
+                int spaceIndex = nodeText.indexOf(" ");
+                if (new Integer(nodeText.substring(0, spaceIndex)).intValue() == segmentNo)
+                {
+                    TreePath segmentPath = new TreePath(segmentNode.getPath());
+                    trackDetails.setSelectionPath(segmentPath);
+                    trackDetails.scrollPathToVisible(segmentPath);
+                    return;
+                }
+            }
+            catch (Exception exceptionError)
+            {
+                // Node text was not in the expected "<number> <direction>" form; skip it
+            }
+        }
+    }
+
     private void currentTreePath()
     {
         // Calculates the current tree node selected.

@@ -64,6 +64,13 @@ public class TrackPanel extends javax.swing.JPanel {
 				dragPoint = null;
 		}
 
+		public void mouseClicked(MouseEvent e) {
+			// Fires only when press and release happen at the same point,
+			// so map panning does not trigger a selection.
+			if (e.getButton() == MouseEvent.BUTTON1 && e.getClickCount() == 1)
+				selectSegmentAt(e.getX(), e.getY());
+		}
+
 		public void mouseWheelMoved(MouseWheelEvent e) {
 			double dFactor = e.getUnitsToScroll() > 0 ? 1.1 : 0.9;
 			zoom(dFactor, e.getX(), e.getY());
@@ -655,6 +662,102 @@ public class TrackPanel extends javax.swing.JPanel {
         repaint();
     }
     
+    /**
+        Finds the map object at a clicked pixel and asks the viewer to select
+        it (tree selection then drives the map highlight through the normal
+        path). Priority: best line (most precise target), then pit lane,
+        then track segment. Uses the sector numbers stamped on each Seg.
+    */
+    private void selectSegmentAt(int nPixelX, int nPixelY)
+    {
+        if ( m_track == null || m_viewer == null )
+            return;
+
+        // Convert the click into the panel's drawing space. standardTrans is
+        // translation plus y-flip only, so pixel distances are preserved.
+        double[] adPoint = new double[] { nPixelX, nPixelY };
+        try {
+            standardTrans.inverseTransform(adPoint, 0, adPoint, 0, 1);
+        }
+        catch ( java.awt.geom.NoninvertibleTransformException e ) {
+            return;
+        }
+
+        // 1. Best line: nearest CCLine point (not drawn in layout mode)
+        if ( !m_track.getLayoutMode() )
+        {
+            final double dMAX_DIST = 8.0; // pixels
+            TrackSegments trackSegments = m_track.getTrackSegments();
+            double dBestDist = dMAX_DIST * dMAX_DIST;
+            int nBestSector = -1;
+            for ( int i = 0; i <= trackSegments.getMaxTrackSegIndex() - 1; i++ )
+            {
+                Seg seg = trackSegments.getSegAt( i );
+                double[] ccPos = ccLineWorldPos( seg );
+                double dXDist = ccPos[0] * m_scale - adPoint[0];
+                double dYDist = ccPos[1] * m_scale - adPoint[1];
+                double dDist = dXDist * dXDist + dYDist * dYDist;
+                if ( dDist < dBestDist )
+                {
+                    dBestDist = dDist;
+                    nBestSector = seg.m_nCCLineSector;
+                }
+            }
+            if ( nBestSector > 0 )
+            {
+                m_viewer.mapSegmentClicked( 3, nBestSector );
+                return;
+            }
+        }
+
+        // 2. Pit lane segment polygons (narrower than the track, so tested first)
+        int nSector = findSegmentPolygonAt( m_track.getPitlaneSegments(), adPoint );
+        if ( nSector > 0 )
+        {
+            m_viewer.mapSegmentClicked( 2, nSector );
+            return;
+        }
+
+        // 3. Track segment polygons
+        nSector = findSegmentPolygonAt( m_track.getTrackSegments(), adPoint );
+        if ( nSector > 0 )
+            m_viewer.mapSegmentClicked( 1, nSector );
+    }
+
+    /**
+        Tests the click point (in drawing space) against the same
+        quadrilaterals the map draws for each Seg. Returns the 1-based
+        sector number hit, or 0 for no hit.
+    */
+    private int findSegmentPolygonAt( TrackSegments trackSegments, double[] adPoint )
+    {
+        Seg seg, segNext;
+        java.awt.geom.Path2D.Double poly = new java.awt.geom.Path2D.Double();
+        for ( int i = 0; i <= trackSegments.getMaxTrackSegIndex() - 1; i++ )
+        {
+            seg     = trackSegments.getSegAt( i );
+            segNext = trackSegments.getSegAt( i + 1 );
+            double dXDiff     = seg.getTrackWidthX() >> 3;
+            double dYDiff     = seg.getTrackWidthY() >> 3;
+            double dXDiffNext = segNext.getTrackWidthX() >> 3;
+            double dYDiffNext = segNext.getTrackWidthY() >> 3;
+            poly.reset();
+            poly.moveTo( (seg.getPosX()     + dXDiff)     * m_scale, (seg.getPosY()     - dYDiff)     * m_scale );
+            poly.lineTo( (segNext.getPosX() + dXDiffNext) * m_scale, (segNext.getPosY() - dYDiffNext) * m_scale );
+            poly.lineTo( (segNext.getPosX() - dXDiffNext) * m_scale, (segNext.getPosY() + dYDiffNext) * m_scale );
+            poly.lineTo( (seg.getPosX()     - dXDiff)     * m_scale, (seg.getPosY()     + dYDiff)     * m_scale );
+            poly.closePath();
+            if ( poly.contains( adPoint[0], adPoint[1] ) )
+                return seg.m_nTrackSector;
+        }
+        return 0;
+    }
+
+    public void setViewer( TrackGraphicalViewer viewer )
+    { m_viewer = viewer; }
+
+    private TrackGraphicalViewer m_viewer;
+
     /**
         sectionType: 1 - Track, 2 - Pit, 3 - CCLine
         segmentNo: 1-based number of the segment (-1 if nothing is selected).

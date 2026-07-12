@@ -44,7 +44,23 @@ public class TrackGraphicalViewer extends javax.swing.JInternalFrame {
         initComponents();
 		initActions();
         m_trackPanel = new TrackPanel();
+        m_trackPanel.setViewer(this);
         getContentPane().add(m_trackPanel,  java.awt.BorderLayout.CENTER);
+    }
+
+    public void setParentTrackWindow(TrackWindow trackWindow)
+    {
+        m_parentTrackWindow = trackWindow;
+    }
+
+    public void mapSegmentClicked(int sectionType, int segmentNo)
+    {
+        // Passes on a click on a map object.
+        // sectionType: 1 - Track, 2 - Pit, 3 - CCLine (as in selectedSegment).
+        // Should really use interfaces for this, but this involves less thinking for now.
+
+        if (m_parentTrackWindow != null)
+            m_parentTrackWindow.selectSegmentFromMap(sectionType, segmentNo);
     }
 
     public void setTrack(Track track) {
@@ -72,6 +88,8 @@ public class TrackGraphicalViewer extends javax.swing.JInternalFrame {
     private Track m_track;
 
     private TrackPanel m_trackPanel;
+
+    private TrackWindow m_parentTrackWindow;
 
     /** This method is called from within the constructor to
      * initialize the form.
