@@ -64,19 +64,23 @@ public class CCLineEvaluator {
             return uncovered == 0 && unsafeRadius == 0;
         }
 
+        // Weights copied from the evaluator that produced this score
+        double wOutOfBounds, wSmoothness, wCurvature;
+
         public double total() {
             return (uncovered + unsafeRadius) * HARD_PENALTY
-                 + outOfBounds * OUT_OF_BOUNDS_WEIGHT
-                 + boundaryJumps * SMOOTHNESS_WEIGHT
-                 + curvatureRms * CURVATURE_WEIGHT;
+                 + outOfBounds * wOutOfBounds
+                 + boundaryJumps * wSmoothness
+                 + curvatureRms * wCurvature;
         }
     }
 
-    // Soft term weights. Relative comparison is what matters for the
-    // optimisers; absolute values are only reported to the user.
-    static final double OUT_OF_BOUNDS_WEIGHT = 2000.0;
-    static final double SMOOTHNESS_WEIGHT = 1.0;
-    static final double CURVATURE_WEIGHT = 10.0;
+    // Soft term weights (defaults). Instance-configurable so the polish
+    // pass can weight smoothness heavily. Relative comparison is what
+    // matters for the optimisers; absolute values are only reported.
+    public double outOfBoundsWeight = 2000.0;
+    public double smoothnessWeight = 1.0;
+    public double curvatureWeight = 10.0;
 
     private final CCLineTrackGeometry geo;
     private final CCLineSimulator simulator;
@@ -88,6 +92,9 @@ public class CCLineEvaluator {
 
     public Score score(CCLine candidate) {
         Score s = new Score();
+        s.wOutOfBounds = outOfBoundsWeight;
+        s.wSmoothness = smoothnessWeight;
+        s.wCurvature = curvatureWeight;
         CCLineSimulator.Result r = simulator.run(candidate);
         s.simulation = r;
 

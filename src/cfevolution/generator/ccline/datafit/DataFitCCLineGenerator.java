@@ -119,15 +119,34 @@ public class DataFitCCLineGenerator implements CCLineGenerator {
             profile.offset[i] = (dSum / dSumW) * geo.usableBound[i];
         }
 
-        // Smooth the k-NN prediction (it is noisy Seg-to-Seg) and keep a
-        // margin for the quantizer's tracking error.
+        // Smooth the k-NN prediction. Straightness-weighted: on straights
+        // the neighbours disagree and the raw prediction wobbles, which
+        // reads as slalom in-game (2026-07-15 testing) — so straights get
+        // a strong wide-window pull while corners keep the k-NN detail.
+        double[] straightness = new double[n]; // 1 = dead straight
+        for (int i = 0; i < n; i++) {
+            double dCurvSum = 0;
+            for (int d = -16; d <= 16; d++) {
+                int j = (i + d + n) % n;
+                dCurvSum += Math.abs((short) (geo.angleZ[(j + 1) % n] - geo.angleZ[j]));
+            }
+            straightness[i] = Math.max(0.0, 1.0 - dCurvSum / 2048.0);
+        }
+
         double[] o = profile.offset;
         double[] smoothed = new double[n];
-        for (int pass = 0; pass < 6; pass++) {
+        for (int pass = 0; pass < 8; pass++) {
             for (int i = 0; i < n; i++) {
                 int p2 = (i + n - 2) % n, p1 = (i + n - 1) % n;
                 int n1 = (i + 1) % n, n2 = (i + 2) % n;
-                smoothed[i] = (o[p2] + 2.0 * o[p1] + 3.0 * o[i] + 2.0 * o[n1] + o[n2]) / 9.0;
+                double dNarrow = (o[p2] + 2.0 * o[p1] + 3.0 * o[i] + 2.0 * o[n1] + o[n2]) / 9.0;
+                // wide flat average kills long-wave wobble on straights
+                double dWide = 0;
+                for (int d = -20; d <= 20; d++)
+                    dWide += o[(i + d + n) % n];
+                dWide /= 41.0;
+                double w = straightness[i] * 0.85;
+                smoothed[i] = dNarrow * (1.0 - w) + dWide * w;
             }
             System.arraycopy(smoothed, 0, o, 0, n);
         }
@@ -146,6 +165,15 @@ public class DataFitCCLineGenerator implements CCLineGenerator {
         }
 
         CCLine ccLine = new CCLineQuantizer(geo, profile, context.seamOvershoot).quantize();
+
+        // Smoothness polish: anneal out the quantizer's heading kicks and
+        // any residual prediction wobble (see CCLinePolisher).
+        CCLine polished = CCLinePolisher.polish(context, ccLine,
+            Math.max(context.iterations * 4, 10000), listener, 88, 98);
+        if (polished == null)
+            return null; // cancelled
+        ccLine = polished;
+
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 
         if (listener != null)

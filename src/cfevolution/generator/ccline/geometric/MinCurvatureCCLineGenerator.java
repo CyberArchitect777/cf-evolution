@@ -39,8 +39,8 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         (~200 units RMS) or the rebuilt line pokes outside the corridor.
         On narrow tracks (Monaco) a fixed margin would eat the whole
         corridor, so it is capped at a fraction of the local bound. */
-    private static final double BOUND_MARGIN = 512.0;
-    private static final double BOUND_MARGIN_FRACTION = 0.35;
+    private static final double BOUND_MARGIN = 768.0;
+    private static final double BOUND_MARGIN_FRACTION = 0.40;
 
     private static double margin(double dUsableBound) {
         return Math.min(BOUND_MARGIN, dUsableBound * BOUND_MARGIN_FRACTION);
@@ -132,6 +132,15 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         }
 
         CCLine ccLine = new CCLineQuantizer(geo, profile, context.seamOvershoot).quantize();
+
+        // Smoothness polish: the greedy quantizer steers with heading
+        // kicks that destabilise the AI in-game; anneal them out.
+        CCLine polished = CCLinePolisher.polish(context, ccLine,
+            Math.max(context.iterations * 4, 10000), listener, 88, 98);
+        if (polished == null)
+            return null; // cancelled
+        ccLine = polished;
+
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 
         if (listener != null)

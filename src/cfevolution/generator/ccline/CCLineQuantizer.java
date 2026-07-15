@@ -50,6 +50,9 @@ public class CCLineQuantizer {
         (2026-07-12): (0.05, 0.1) was the only combination passing both the
         round-trip gate and geometric validity on every track. */
     private static final double KICK_PENALTY = 0.05;
+    private static double kickPenalty(int nCorr) {
+        return Math.abs(nCorr) * KICK_PENALTY;
+    }
     /** Weight of the end-heading mismatch term (angle units → error units). */
     private static final double HEADING_WEIGHT = 0.1;
 
@@ -171,17 +174,32 @@ public class CCLineQuantizer {
         for (int ci = 0; ci < CORRECTION_VARIANTS.length; ci++) {
             int nCorr = (short) (nKickDirect + CORRECTION_VARIANTS[ci]);
             trySegments(best, st, single(makeSegment(fFirst, nLen, nCorr, 0)), nLen,
-                        Math.abs(nCorr) * KICK_PENALTY);
+                        kickPenalty(nCorr));
             if (nKickAhead != nKickDirect) {
                 nCorr = (short) (nKickAhead + CORRECTION_VARIANTS[ci]);
                 trySegments(best, st, single(makeSegment(fFirst, nLen, nCorr, 0)), nLen,
-                            Math.abs(nCorr) * KICK_PENALTY);
+                            kickPenalty(nCorr));
             }
         }
 
         // --- Arc candidates: tangent circle through the target point ---
         // Direction of current heading in world units (X advances by sin, Y by cos)
-        addArcCandidates(best, st, fFirst, nLen, 0, st.wTmpAngleZ, dx, dy);
+        addArcCandidates(best, st, fFirst, nLen, 0, st.wTmpAngleZ, dx, dy, 0);
+
+        // --- Arc candidates seeded from the profile's own turn rate.
+        // The chord seed degenerates for turns beyond ~120 degrees (a
+        // hairpin's chord is short), which previously left corners to be
+        // "turned" by straights with huge instant heading kicks — the
+        // in-game car-thrown-wide behaviour (2026-07-15). Radius from the
+        // profile heading change over the sector covers exactly that case.
+        double dTurn = wrapAngle(profileHeading[nEndSeg] - profileHeading[st.segIndex]);
+        long lCurvSeed = 0;
+        if (Math.abs(dTurn) > 256.0) {
+            double dThetaRad = Math.abs(dTurn) * 2.0 * Math.PI / 65536.0;
+            lCurvSeed = Math.round((nLen * 1024.0 / dThetaRad) / 8.0);
+            if (lCurvSeed != 0)
+                addArcCandidates(best, st, fFirst, nLen, 0, st.wTmpAngleZ, dx, dy, lCurvSeed);
+        }
 
         // --- Composite candidates: 1-TLU align kick + tangent arc.
         // Arcs alone cannot correct a heading error (they are tangent-
@@ -193,7 +211,9 @@ public class CCLineQuantizer {
                 wrapAngle(profileHeading[st.segIndex] - st.wTmpAngleZ));
             if (nAlign != 0) {
                 short wAligned = (short) (st.wTmpAngleZ + nAlign);
-                addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy);
+                addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy, 0);
+                if (lCurvSeed != 0)
+                    addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy, lCurvSeed);
             }
         }
 
@@ -210,19 +230,27 @@ public class CCLineQuantizer {
 
     /** Adds tangent-arc candidates for the given start heading. When
         nAlignKick is nonzero the arc is preceded by a 1-TLU straight that
-        kicks the heading, and the arc covers the remaining length. */
+        kicks the heading, and the arc covers the remaining length. The
+        radius seed comes from the chord to the target point, or from
+        lSeedOverride (profile turn rate) when nonzero. */
     private void addArcCandidates(Candidate best, CCLineSimulator.State st, boolean fFirst,
                                   int nLen, int nAlignKick, short wHeading,
-                                  double dx, double dy) {
+                                  double dx, double dy, long lSeedOverride) {
         int nArcLen = (nAlignKick != 0) ? nLen - 1 : nLen;
-        double dRad = wHeading * 2.0 * Math.PI / 65536.0;
-        double dirX = Math.sin(dRad), dirY = Math.cos(dRad);
-        double cross = dirX * dy - dirY * dx;
-        if (Math.abs(cross) <= 1.0e-6)
-            return;
-        double dWorldRadius = (dx * dx + dy * dy) / (2.0 * cross);
-        long lRawSeed = Math.round(dWorldRadius / 8.0);
-        double dPenalty = Math.abs(nAlignKick) * KICK_PENALTY;
+        long lRawSeed;
+        if (lSeedOverride != 0) {
+            lRawSeed = lSeedOverride;
+        }
+        else {
+            double dRad = wHeading * 2.0 * Math.PI / 65536.0;
+            double dirX = Math.sin(dRad), dirY = Math.cos(dRad);
+            double cross = dirX * dy - dirY * dx;
+            if (Math.abs(cross) <= 1.0e-6)
+                return;
+            double dWorldRadius = (dx * dx + dy * dy) / (2.0 * cross);
+            lRawSeed = Math.round(dWorldRadius / 8.0);
+        }
+        double dPenalty = kickPenalty(nAlignKick);
         for (int ri = 0; ri < RADIUS_VARIANTS.length; ri++) {
             long lRaw = Math.round(lRawSeed * RADIUS_VARIANTS[ri]);
             for (int sign = 0; sign < 2; sign++) {

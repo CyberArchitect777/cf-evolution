@@ -124,7 +124,7 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
 
     /** Applies one random mutation. Returns false when the drawn move was
         not applicable (caller just draws again next iteration). */
-    private boolean mutate(CCLine line, Random rand) {
+    public static boolean mutate(CCLine line, Random rand) {
         int nCount = line.size();
         if (nCount == 0)
             return false;
@@ -184,7 +184,7 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
     /** Writes a raw radius back into the segment's parameters, keeping the
         segment type consistent (16-bit vs wide). Type changes between
         0x00 and 0x40 are allowed; a first (0x80) segment stays 16-bit. */
-    private boolean setRadius(CCLineSegment seg, long lRaw) {
+    static boolean setRadius(CCLineSegment seg, long lRaw) {
         int nType = seg.getType();
         if ((nType & 0x80) != 0) {
             if (lRaw > Short.MAX_VALUE || lRaw < Short.MIN_VALUE)
@@ -204,14 +204,14 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
         return true;
     }
 
-    private CCLine copyLine(CCLine line) {
+    public static CCLine copyLine(CCLine line) {
         CCLine copy = new CCLine();
         for (int i = 1; i <= line.size(); i++)
             copy.add(copySegment(line.getAt(i)));
         return copy;
     }
 
-    private CCLineSegment copySegment(CCLineSegment seg) {
+    static CCLineSegment copySegment(CCLineSegment seg) {
         CCLineSegment copy = new CCLineSegment(seg.getType());
         copy.setTlu(seg.getTlu());
         for (int p = 0; p < 4; p++)
