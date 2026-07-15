@@ -53,6 +53,12 @@ public class TrackGraphicalViewer extends javax.swing.JInternalFrame {
         m_parentTrackWindow = trackWindow;
     }
 
+    public java.awt.image.BufferedImage renderMapImage(int nWidth, int nHeight, boolean fWholeTrack)
+    {
+        // Passes on a map image export request to the track panel
+        return m_trackPanel.renderMapImage(nWidth, nHeight, fWholeTrack);
+    }
+
     public void setPreviewProfile(double[] adOffsets)
     {
         // Passes on a generated best line preview to the track panel

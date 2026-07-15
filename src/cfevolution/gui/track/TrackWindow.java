@@ -152,6 +152,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         fileMenu = new javax.swing.JMenu();
         saveTrackItem = new javax.swing.JMenuItem();
         saveTrackAsItem = new javax.swing.JMenuItem();
+        exportMapItem = new javax.swing.JMenuItem();
         closeTrackItem = new javax.swing.JMenuItem();
         toolsMenu = new javax.swing.JMenu();
         removeTrack = new javax.swing.JMenuItem();
@@ -197,6 +198,15 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         });
 
         fileMenu.add(saveTrackAsItem);
+
+        exportMapItem.setText("Export Track Map as Image...");
+        exportMapItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                new ExportMapImageDialog(TrackWindow.this, mapWindow).setVisible(true);
+            }
+        });
+
+        fileMenu.add(exportMapItem);
 
         closeTrackItem.setText("Close Track");
         closeTrackItem.addActionListener(new java.awt.event.ActionListener() {
@@ -470,6 +480,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JMenuItem closeTrackItem;
+    private javax.swing.JMenuItem exportMapItem;
     private javax.swing.JMenu fileMenu;
     private javax.swing.JMenuItem generateLineGeometric;
     private javax.swing.JMenuItem generateLineDataFit;

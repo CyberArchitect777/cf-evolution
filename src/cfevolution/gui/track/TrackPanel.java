@@ -425,6 +425,20 @@ public class TrackPanel extends javax.swing.JPanel {
         AffineTransform oldTrans = g2d.getTransform();
         g2d.transform( standardTrans );
 
+        renderMapContent( g2d );
+
+        // reset transformations
+        g2d.setTransform( oldTrans );
+    }
+
+    /**
+        Draws the map content (track Segs, best line, pit lane, preview)
+        using the current m_scale. The caller has already applied the
+        world-to-pixel transform. Shared by on-screen painting and image
+        export (renderMapImage).
+    */
+    private void renderMapContent( Graphics2D g2d )
+    {
         // draw all track segments
         TrackSegments trackSegments = m_track.getTrackSegments();
         Seg seg, segNext;
@@ -548,9 +562,61 @@ public class TrackPanel extends javax.swing.JPanel {
                              scale(posNext[0]), scale(posNext[1]));
             }
         }
+    }
 
-        // reset transformations
-        g2d.setTransform( oldTrans );
+    /**
+        Renders the map into an image, without disturbing the on-screen
+        view. fWholeTrack true fits the complete track into the image with
+        a 10 percent border (same math as the first-time auto-fit);
+        false reproduces the current pan/zoom view scaled to the image.
+    */
+    public java.awt.image.BufferedImage renderMapImage( int nWidth, int nHeight, boolean fWholeTrack )
+    {
+        java.awt.image.BufferedImage image =
+            new java.awt.image.BufferedImage( nWidth, nHeight,
+                                              java.awt.image.BufferedImage.TYPE_INT_RGB );
+        Graphics2D g2d = image.createGraphics();
+        double dOldScale = m_scale;
+        AffineTransform oldTrans = new AffineTransform( standardTrans );
+        try {
+            g2d.setRenderingHint( RenderingHints.KEY_ANTIALIASING,
+                                  RenderingHints.VALUE_ANTIALIAS_ON );
+            g2d.setColor( Color.white );
+            g2d.fillRect( 0, 0, nWidth, nHeight );
+
+            if ( fWholeTrack )
+            {
+                Rectangle r = m_track.getF1GPBoundingRectangle();
+                double dScaleX = nWidth / (r.getWidth() * 1.2);
+                double dScaleY = nHeight / (r.getHeight() * 1.2);
+                m_scale = Math.min( dScaleX, dScaleY );
+                standardTrans.setToIdentity();
+                standardTrans.scale( 1.0, -1.0 );
+                standardTrans.translate( (nWidth / 2.0) - m_scale * r.getCenterX(),
+                                         -(nHeight / 2.0) - m_scale * r.getCenterY() );
+            }
+            else
+            {
+                // reproduce the current view at export resolution
+                Dimension d = getSize();
+                double dPanelW = d.width > 0 ? d.width : nWidth;
+                double dPanelH = d.height > 0 ? d.height : nHeight;
+                double dFactor = Math.min( nWidth / dPanelW, nHeight / dPanelH );
+                AffineTransform export = AffineTransform.getScaleInstance( dFactor, dFactor );
+                export.concatenate( oldTrans );
+                standardTrans = export;
+            }
+
+            g2d.transform( standardTrans );
+            renderMapContent( g2d );
+        }
+        finally
+        {
+            m_scale = dOldScale;
+            standardTrans = oldTrans;
+            g2d.dispose();
+        }
+        return image;
     }
 
     /**
