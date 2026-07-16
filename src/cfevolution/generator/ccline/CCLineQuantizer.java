@@ -65,6 +65,12 @@ public class CCLineQuantizer {
     // Scratch stamping area shared by all candidate simulations
     private final CCLineSimulator.Result scratch;
 
+    /** Diagnostic hook: when DEBUG_OUT is set, every candidate evaluated
+        while the walk is inside [DEBUG_FROM, DEBUG_TO] (TLU) is logged
+        with its error components. Harness use only. */
+    public static java.io.PrintStream DEBUG_OUT = null;
+    public static int DEBUG_FROM = -1, DEBUG_TO = -1;
+
     public CCLineQuantizer(CCLineTrackGeometry geometry, CCLineLateralProfile lateralProfile,
                            int seamOvershoot) {
         geo = geometry;
@@ -314,6 +320,23 @@ public class CCLineQuantizer {
 
         double dError = fInvalid ? HUGE_ERROR + dSumSq
                                  : Math.sqrt(dSumSq / (nLen + 4)) + dPenalty;
+
+        if (DEBUG_OUT != null && st.walkedTlu >= DEBUG_FROM && st.walkedTlu <= DEBUG_TO) {
+            StringBuffer sb = new StringBuffer();
+            for (int si = 0; si < segs.length; si++) {
+                CCLineSegment sg = segs[si];
+                long r = CCLineEvaluator.rawRadius(sg);
+                int ci = ((sg.getType() & 0x80) != 0) ? 1 : 0;
+                sb.append(r == 0 ? "STR" : "ARC").append("[l=").append(sg.getTlu())
+                  .append(" c=").append(sg.getParam(ci)).append(" r=").append(r).append("] ");
+            }
+            double dTrackRms = Math.sqrt((dSumSq - 3.0 * dEndErr * dEndErr - dHeadErr * dHeadErr)
+                                          / Math.max(nLen, 1));
+            DEBUG_OUT.printf("tlu=%d len=%d %-46s rms=%7.0f end=%7.0f head=%7.0f pen=%6.0f inv=%b total=%.0f%n",
+                st.walkedTlu, nLen, sb.toString(), dTrackRms, dEndErr,
+                dHeadErr / HEADING_WEIGHT, dPenalty, fInvalid, dError);
+        }
+
         if (dError < best.errorPerTlu) {
             best.errorPerTlu = dError;
             best.segments = segs;
