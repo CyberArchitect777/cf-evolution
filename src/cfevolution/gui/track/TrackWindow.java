@@ -161,6 +161,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateLineGeometric = new javax.swing.JMenuItem();
         generateLineDataFit = new javax.swing.JMenuItem();
         generateLineRefine = new javax.swing.JMenuItem();
+        repairLineItem = new javax.swing.JMenuItem();
         generateRandomTrack = new javax.swing.JMenuItem();
 
         getContentPane().setLayout(new java.awt.FlowLayout());
@@ -272,6 +273,15 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateLineRefine);
+
+        repairLineItem.setText("Repair Best Line After Edit");
+        repairLineItem.setEnabled(false);
+        repairLineItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                repairBestLine();
+            }
+        });
+        toolsMenu.add(repairLineItem);
 
         toolsMenu.addSeparator();
 
@@ -425,6 +435,105 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         highlightSection(3, -1); // nothing selected any more
         updateTrackMap();
         updateCCLineCoverageStatus();
+        // The old line (and any edited-segment reference) is gone
+        m_adLineSnapshot = null;
+        m_EditedLineSegment = null;
+        repairLineItem.setEnabled(false);
+    }
+
+    // --- Repair after a manual best line edit -------------------------
+    // Editing one sector shifts every sector after it (the line is
+    // stateful). The snapshot taken just before an edit applies lets
+    // Tools > Repair refit a bounded window of following sectors back
+    // onto the old line via CCLineWindowRepair.
+
+    private double[] m_adLineSnapshot = null;
+    private double[] m_adPendingSnapshot = null;
+    private cfevolution.data.track.CCLineSegment m_EditedLineSegment = null;
+    private cfevolution.data.track.CCLineSegment m_PendingLineSegment = null;
+
+    /** Called by the segment editor just BEFORE a best line edit is
+        applied: captures the current (pre-edit) per-Seg line stamps. */
+    public void prepareBestLineRepair(cfevolution.data.track.CCLineSegment lineSegment)
+    {
+        cfevolution.data.track.TrackSegments segs = currentTrack.getTrackSegments();
+        int n = segs.getMaxTrackSegIndex() + 1;
+        m_adPendingSnapshot = new double[n];
+        for (int i = 0; i < n; i++)
+            m_adPendingSnapshot[i] = segs.getSegAt(i).getCCLine();
+        m_PendingLineSegment = lineSegment;
+    }
+
+    /** Called just after the edit is applied. Promotes the snapshot only
+        when the segment actually changed, so re-applying identical values
+        keeps the original pre-edit target. */
+    public void confirmBestLineRepair(boolean fChanged)
+    {
+        if (fChanged && m_adPendingSnapshot != null)
+        {
+            m_adLineSnapshot = m_adPendingSnapshot;
+            m_EditedLineSegment = m_PendingLineSegment;
+            repairLineItem.setEnabled(true);
+        }
+        m_adPendingSnapshot = null;
+        m_PendingLineSegment = null;
+    }
+
+    private void repairBestLine()
+    {
+        if (m_adLineSnapshot == null || m_EditedLineSegment == null)
+            return;
+        CCLine line = currentTrack.getCCLine();
+        int nIndex = -1;
+        for (int i = 1; i <= line.size(); i++)
+            if (line.getAt(i) == m_EditedLineSegment)
+            {
+                nIndex = i;
+                break;
+            }
+        if (nIndex < 0)
+        {
+            JOptionPane.showMessageDialog(this,
+                "The edited best line segment no longer exists.",
+                "Repair Best Line", JOptionPane.WARNING_MESSAGE);
+            m_adLineSnapshot = null;
+            m_EditedLineSegment = null;
+            repairLineItem.setEnabled(false);
+            return;
+        }
+
+        cfevolution.generator.ccline.CCLineTrackGeometry geo =
+            new cfevolution.generator.ccline.CCLineTrackGeometry(currentTrack);
+        double[] adTarget = new double[geo.segCount];
+        for (int i = 0; i < geo.segCount; i++)
+            adTarget[i] = (i < m_adLineSnapshot.length) ? m_adLineSnapshot[i] : 0.0;
+
+        cfevolution.data.track.CCLineSegment replacement =
+            new cfevolution.data.track.CCLineSegment(m_EditedLineSegment.getType());
+        replacement.setTlu(m_EditedLineSegment.getTlu());
+        for (int p = 0; p < 4; p++)
+            replacement.setParam(p, m_EditedLineSegment.getParam(p));
+
+        CCLine repaired = cfevolution.generator.ccline.CCLineWindowRepair.replaceAndRepair(
+            geo, line, nIndex,
+            new cfevolution.data.track.CCLineSegment[] { replacement },
+            cfevolution.generator.ccline.CCLineWindowRepair.DEFAULT_WINDOW_TLU,
+            adTarget);
+        if (repaired == null)
+        {
+            JOptionPane.showMessageDialog(this,
+                "Could not repair: there is no room after the edited segment\n"
+                + "(it is at the very end of the best line).",
+                "Repair Best Line", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int nOldCount = line.size();
+        replaceBestLine(repaired); // also clears the snapshot
+        JOptionPane.showMessageDialog(this,
+            "The sectors following your edit were refitted onto the previous\n"
+            + "line so the rest of the lap is unaffected ("
+            + nOldCount + " > " + repaired.size() + " sectors).",
+            "Repair Best Line", JOptionPane.INFORMATION_MESSAGE);
     }
     
     private void saveTrackItem(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveTrackItem
@@ -485,6 +594,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem generateLineGeometric;
     private javax.swing.JMenuItem generateLineDataFit;
     private javax.swing.JMenuItem generateLineRefine;
+    private javax.swing.JMenuItem repairLineItem;
     private javax.swing.JMenuItem generateRandomTrack;
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;

@@ -56,6 +56,11 @@ public class BestLineTableModel extends StandardTableModel
         populateTable(); 
     }
     
+    public CCLineSegment getLineSegment()
+    {
+        return currentLineSegment;
+    }
+
     public void updateTrackData()
     {
         // Updates the track data held in memory with the information currently displayed in the table

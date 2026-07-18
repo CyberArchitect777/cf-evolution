@@ -254,7 +254,21 @@ public class SegmentEditGUI extends javax.swing.JInternalFrame
                 if (segmentTable.getModel() instanceof BestLineTableModel)
                 {
                     BestLineTableModel currentTable = (BestLineTableModel)segmentTable.getModel();
+                    // Snapshot the pre-edit line stamps so Tools > Repair
+                    // can refit the following sectors onto the old line
+                    cfevolution.data.track.CCLineSegment lineSegment = currentTable.getLineSegment();
+                    int[] before = { lineSegment.getType(), lineSegment.getTlu(),
+                                     lineSegment.getParam(0), lineSegment.getParam(1),
+                                     lineSegment.getParam(2), lineSegment.getParam(3) };
+                    parentTrackWindow.prepareBestLineRepair(lineSegment);
                     currentTable.updateTrackData();
+                    boolean changed = lineSegment.getType() != before[0]
+                        || lineSegment.getTlu() != before[1]
+                        || lineSegment.getParam(0) != before[2]
+                        || lineSegment.getParam(1) != before[3]
+                        || lineSegment.getParam(2) != before[4]
+                        || lineSegment.getParam(3) != before[5];
+                    parentTrackWindow.confirmBestLineRepair(changed);
                     parentTrackWindow.updateTrackMap();
                     parentObjectWindow.updateCurrentNode();
                 }
