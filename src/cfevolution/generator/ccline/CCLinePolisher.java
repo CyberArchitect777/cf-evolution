@@ -36,6 +36,10 @@ import cfevolution.data.track.CCLine;
 */
 public class CCLinePolisher {
 
+    /** Diagnostic counters (harness use only): tried, null, accepted,
+        rejected-invalid, rejected-score for the conversion move. */
+    public static long[] DEBUG_STATS = null;
+
     /** Weight of profile drift (RMS world units) in the polish score. */
     private static final double DRIFT_WEIGHT = 30.0;
     /** Smoothness weighting during polish (default evaluator uses 1.0). */
@@ -68,24 +72,41 @@ public class CCLinePolisher {
                     + iter * (nProgressTo - nProgressFrom) / nIterations,
                     "Smoothing line... ");
             }
-            CCLine candidate =
-                cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(current);
-            boolean fMutated;
+            CCLine candidate;
+            boolean fConversion = false;
             switch (rand.nextInt(3)) {
             case 0:
-                fMutated = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.mutate(candidate, rand);
+                candidate = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(current);
+                if (!cfevolution.generator.ccline.refine.RefinementCCLineGenerator.mutate(candidate, rand))
+                    candidate = null;
                 break;
             case 1:
-                fMutated = transferCorrection(candidate, rand);
+                candidate = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(current);
+                if (!transferCorrection(candidate, rand))
+                    candidate = null;
                 break;
             default:
-                fMutated = convertKickToArc(candidate, rand);
+                candidate = convertKickToArc(context.geometry, current, rand);
+                fConversion = true;
+                if (DEBUG_STATS != null)
+                    DEBUG_STATS[0]++;
+                if (candidate == null && DEBUG_STATS != null)
+                    DEBUG_STATS[1]++;
                 break;
             }
-            if (!fMutated)
+            if (candidate == null)
                 continue;
             CCLineEvaluator.Score s = ev.score(candidate);
             double dCand = polishTotal(ev, s, reference);
+            if (fConversion && DEBUG_STATS != null) {
+                if (dCand <= dCurrent) DEBUG_STATS[2]++;
+                else if (!s.isValid()) DEBUG_STATS[3]++;
+                else DEBUG_STATS[4]++;
+                if (DEBUG_STATS.length > 6) {
+                    if (s.uncovered > 0) DEBUG_STATS[5]++;
+                    if (s.unsafeRadius > 0) DEBUG_STATS[6]++;
+                }
+            }
             if (dCand <= dCurrent) { // hill climb; plateau moves allowed
                 current = candidate;
                 dCurrent = dCand;
@@ -125,16 +146,20 @@ public class CCLinePolisher {
         return true;
     }
 
-    /** Converts (part of) a large heading kick into a tangent arc: a
-        straight sector STR(L, K) becomes STR(1, K·f) + ARC(L−1, r) where
-        the arc supplies the remaining (1−f)·K of rotation gradually over
-        L−1 TLU. This is the corner move hand-tuned lines use, and the one
-        structure that perturbation/transfer can never reach — big kicks
-        are exactly what throws the AI cars in-game (Sessions 8/9/11). */
-    private static boolean convertKickToArc(CCLine line, Random rand) {
+    /** Converts (part of) a large heading kick into a tangent arc — a
+        straight sector STR(L, K) becomes STR(1, K·f) + ARC(L−1, r), the
+        corner move hand-tuned lines use — and repairs the downstream
+        window via requantization. The repair is what makes the move
+        viable at all: no kick+arc replacement can preserve both end
+        position and end heading of a kick-straight (its chord lies along
+        the post-kick heading), so without the window re-fit every
+        conversion de-anchors the rest of the stateful lap and is
+        rejected by the drift guard (Session 12 finding). */
+    private static CCLine convertKickToArc(CCLineTrackGeometry geo, CCLine line,
+                                           Random rand) {
         int nCount = line.size();
         if (nCount < 2)
-            return false;
+            return null;
         // Straight sectors long enough to split, ranked by kick size
         java.util.Vector big = new java.util.Vector();
         for (int i = 1; i <= nCount; i++) {
@@ -147,7 +172,7 @@ public class CCLinePolisher {
             big.add(new int[] { i, Math.abs(sg.getParam(ci)) });
         }
         if (big.isEmpty())
-            return false;
+            return null;
         for (int a = 0; a < big.size(); a++) // selection sort, descending
             for (int b = a + 1; b < big.size(); b++)
                 if (((int[]) big.get(b))[1] > ((int[]) big.get(a))[1]) {
@@ -161,37 +186,49 @@ public class CCLinePolisher {
         int nKick = sg.getParam(ci);
         int nLen = sg.getTlu();
         double[] adKeep = { 0.0, 0.25, 0.5 };
-        int nKeep = (int) Math.round(nKick * adKeep[rand.nextInt(3)]);
-        int nTheta = nKick - nKeep;
+        int nTheta = nKick - (int) Math.round(nKick * adKeep[rand.nextInt(3)]);
         if (nTheta == 0)
-            return false;
+            return null;
+        // A single arc can deliver at most ~1 radian on straight track:
+        // theta = L*1024/(8*|raw|) with the Pythagoras-safe worst case
+        // |raw| >= L*128. Cap the arc's rotation there and leave the rest
+        // in the lead kick — radii below the safe bound made nearly every
+        // conversion clamp-invalid before this cap (measured 2026-07-18:
+        // 2989 of 3300 attempts on F1CT01).
         double dThetaRad = Math.abs(nTheta) * 2.0 * Math.PI / 65536.0;
+        if (dThetaRad > 1.0)
+            dThetaRad = 1.0;
         long lRaw = Math.round(((nLen - 1) * 1024.0 / dThetaRad) / 8.0);
-        if (lRaw < 16)
-            return false;
+        int nDelivered = (int) Math.round(dThetaRad * 65536.0 / (2.0 * Math.PI));
+        if (nTheta < 0)
+            nDelivered = -nDelivered;
         long r = (nTheta >= 0) ? lRaw : -lRaw;
-        if (rand.nextInt(4) == 0)
-            r = -r; // occasional flip; simulation scoring rejects wrong turns
 
-        // Shrink the straight to a 1-TLU kick of the kept size...
-        sg.setTlu(1);
-        sg.setParam(ci, nKeep);
-        // ...and insert the arc carrying the remaining rotation after it
-        cfevolution.data.track.CCLineSegment arc = line.insertAt(nIndex + 1);
-        if (arc == null)
-            return false;
+        // Replacement pair: 1-TLU kick of the remainder + the arc
+        cfevolution.data.track.CCLineSegment lead =
+            new cfevolution.data.track.CCLineSegment(sg.getType());
+        lead.setTlu(1);
+        for (int p = 0; p < 4; p++)
+            lead.setParam(p, sg.getParam(p));
+        lead.setParam(ci, nKick - nDelivered);
+
+        cfevolution.data.track.CCLineSegment arc;
         if (r > Short.MAX_VALUE || r < Short.MIN_VALUE) {
-            arc.setType(0x40);
+            arc = new cfevolution.data.track.CCLineSegment(0x40);
             arc.setParam(0, 0);
             arc.setParam(1, (int) (r >> 16));
             arc.setParam(2, (int) (short) (r & 0xFFFF));
         }
         else {
+            arc = new cfevolution.data.track.CCLineSegment(0x00);
             arc.setParam(0, 0);
             arc.setParam(1, (int) r);
         }
         arc.setTlu(nLen - 1);
-        return true;
+
+        return CCLineWindowRepair.replaceAndRepair(geo, line, nIndex,
+            new cfevolution.data.track.CCLineSegment[] { lead, arc },
+            CCLineWindowRepair.DEFAULT_WINDOW_TLU, null);
     }
 
     /** Polish score: smoothness-weighted evaluator total plus drift from

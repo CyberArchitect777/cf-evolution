@@ -90,6 +90,14 @@ public class CCLineQuantizer {
     // Scratch stamping area shared by all candidate simulations
     private final CCLineSimulator.Result scratch;
 
+    // Seam targeting during windowed repair (see quantizeFrom overload)
+    private CCLineSimulator.State seamTarget = null;
+    private int nSeamTlu = -1;
+    /** Weight of the seam position error (world units → error units). */
+    private static final double SEAM_POS_WEIGHT = 3.0;
+    /** Weight of the seam heading error (angle units → error units). */
+    private static final double SEAM_HEADING_WEIGHT = 2.0;
+
     /** Diagnostic hook: when DEBUG_OUT is set, every candidate evaluated
         while the walk is inside [DEBUG_FROM, DEBUG_TO] (TLU) is logged
         with its error components. Harness use only. */
@@ -193,8 +201,31 @@ public class CCLineQuantizer {
     public CCLine quantize() {
         CCLine ccLine = new CCLine();
         CCLineSimulator.State st = simulator.initialState();
-        int nTargetTlu = geo.segCount + seamOvershoot;
-        boolean fFirst = true;
+        quantizeFrom(st, geo.segCount + seamOvershoot, true, ccLine);
+        return ccLine;
+    }
+
+    /** Greedy-quantizes nWindowTlu more TLU from the given walk state,
+        appending the emitted sectors to out and advancing the state.
+        Used by quantize() for the whole lap and by CCLineWindowRepair to
+        rebuild a bounded downstream window after an edit. */
+    public void quantizeFrom(CCLineSimulator.State st, int nWindowTlu,
+                             boolean fFirst, CCLine out) {
+        quantizeFrom(st, nWindowTlu, fFirst, out, null);
+    }
+
+    /** As above, additionally steering the window's final sector to end
+        as close as possible to seamState (the walk state the sectors
+        after the window originally started from). Without this the
+        untouched suffix runs from a slightly shifted state and arcs near
+        their Pythagoras margin clamp — the repair seam must close in
+        position AND heading, not just track the profile. */
+    public void quantizeFrom(CCLineSimulator.State st, int nWindowTlu,
+                             boolean fFirst, CCLine out,
+                             CCLineSimulator.State seamState) {
+        int nTargetTlu = st.walkedTlu + nWindowTlu;
+        seamTarget = seamState;
+        nSeamTlu = nTargetTlu;
 
         while (st.walkedTlu < nTargetTlu) {
             int nRemaining = nTargetTlu - st.walkedTlu;
@@ -230,12 +261,12 @@ public class CCLineQuantizer {
             }
 
             for (int si = 0; si < best.segments.length; si++) {
-                ccLine.add(best.segments[si]);
+                out.add(best.segments[si]);
                 simulator.runSegment(best.segments[si], st, scratch);
             }
             fFirst = false;
         }
-        return ccLine;
+        seamTarget = null;
     }
 
     /** Extracts the per-Seg offsets of an existing simulation as a profile
@@ -433,6 +464,15 @@ public class CCLineQuantizer {
         // the profile is going keeps the next sector's kick small.
         double dHeadErr = wrapAngle(trial.wTmpAngleZ - profileHeading[iEnd]) * HEADING_WEIGHT;
         dSumSq += dHeadErr * dHeadErr;
+
+        // Seam closure during windowed repair: the candidate reaching the
+        // splice point must restore the original walk state there
+        if (seamTarget != null && trial.walkedTlu == nSeamTlu) {
+            double dSeamPos = (trial.wSegPosX - seamTarget.wSegPosX) * SEAM_POS_WEIGHT;
+            double dSeamHead = wrapAngle((short) (trial.wTmpAngleZ - seamTarget.wTmpAngleZ))
+                               * SEAM_HEADING_WEIGHT;
+            dSumSq += dSeamPos * dSeamPos + dSeamHead * dSeamHead;
+        }
 
         double dError = fInvalid ? HUGE_ERROR + dSumSq
                                  : Math.sqrt(dSumSq / (nLen + 4)) + dPenalty;
