@@ -39,9 +39,13 @@ import cfevolution.data.track.TrackSegments;
     touched from the background thread.
 
     The donor's required commands (pit connection, fence joins, marshal,
-    grid markings, view distances, palette) are harvested with their
-    original arguments and re-attached around the new start/finish
-    straight. Pit lane sections themselves are kept from the donor —
+    view distances, palette) are harvested with their original arguments
+    and re-attached around the new start/finish straight; the grid/S-F
+    marking group (0x8A/0x8B) is re-attached at its donor distance before
+    the S/F line, and scenery (0x80/0x81/0x82) at proportional lap
+    positions. Countdown boards come from section flags on corner
+    sections (bit 3 = 300/200/100, bit 6 = arrow), the originals'
+    mechanism. Pit lane sections themselves are kept from the donor —
     the game computes pit placement from the sector carrying the entry
     command, so a donor pit on the guaranteed-long S/F straight stays
     valid. See docs/BESTLINE.md and DEVELOPMENT.md Session 3/5.
@@ -63,7 +67,6 @@ public class RandomTrackGenerator {
     private static final int[] SF_COMMANDS = {
         0x87,       // pit lane exit connect
         0xA3, 0xA4, // pit exit fence joins
-        0x8B,       // starting grid markings
         0x81, 0x82, // view distances
         0xAA,       // pit lane connect lengths / speed
         0xAB,       // required, purpose unknown
@@ -76,6 +79,10 @@ public class RandomTrackGenerator {
     };
 
     private static final int SEG_BUDGET = 1300; // hard engine budget is ~1420
+
+    /** Donor lap-end window scanned for the grid/S-F marking group (the
+        originals paint the grid ~40 TLU before the line). */
+    private static final int SF_MARKING_WINDOW = 60;
 
     private final Track scratch;
 
@@ -97,6 +104,10 @@ public class RandomTrackGenerator {
 
         // Harvest donor properties BEFORE the scratch segments are replaced
         Vector donorCommands = harvestCommands(scratch.getTrackSegments());
+        Vector donorScenery = harvestPositionedCommands(scratch.getTrackSegments());
+        int nDonorTotalTlu = donorTotalTlu(scratch.getTrackSegments());
+        Vector donorSfMarkings = harvestSfMarkings(scratch.getTrackSegments(),
+                                                   nDonorTotalTlu);
         TrackSegment donorFirst = scratch.getTrackSegments().getAt(1);
         int nFenceR = donorFirst != null ? donorFirst.getFenceDistR() : 2;
         int nFenceL = donorFirst != null ? donorFirst.getFenceDistL() : 2;
@@ -105,13 +116,14 @@ public class RandomTrackGenerator {
         TrackLayoutClosure closure = new TrackLayoutClosure(scratch);
 
         Vector prims = null;
+        boolean fAccepted = false;
         double dGap = Double.MAX_VALUE;
         int nAttempt;
-        for (nAttempt = 1; nAttempt <= 25; nAttempt++) {
+        for (nAttempt = 1; nAttempt <= 300 && !fAccepted; nAttempt++) {
             if (listener != null) {
                 if (listener.isCancelled())
                     return null;
-                listener.progress(nAttempt * 3, "Layout attempt " + nAttempt + "...");
+                listener.progress(Math.min(nAttempt / 4, 75), "Layout attempt " + nAttempt + "...");
             }
             prims = buildPrimitives(rand, nTargetTlu, nCorners);
             int nHeadResidual = TrackLayoutClosure.closeHeading(prims, 0x10000);
@@ -120,13 +132,15 @@ public class RandomTrackGenerator {
             if (totalTlu(prims) > SEG_BUDGET)
                 continue;
             dGap = closure.closePosition(prims);
-            if (dGap <= TrackLayoutClosure.GAP_TARGET
-                && totalTlu(prims) <= SEG_BUDGET)
-                break;
+            fAccepted = dGap <= TrackLayoutClosure.GAP_TARGET
+                && totalTlu(prims) <= SEG_BUDGET
+                && closure.aspectRatio() <= TrackLayoutClosure.MAX_ASPECT
+                && !closure.selfIntersects();
         }
-        if (dGap > TrackLayoutClosure.GAP_TARGET)
-            throw new Exception("Could not close a layout after " + (nAttempt - 1)
-                                + " attempts (best gap " + (long) dGap + " units)");
+        if (!fAccepted)
+            throw new Exception("Could not generate an acceptable layout after "
+                                + (nAttempt - 1) + " attempts (closure, compactness and"
+                                + " self-intersection gates)");
 
         if (listener != null)
             listener.progress(80, "Layout closed (gap " + (long) dGap + " units)");
@@ -143,9 +157,21 @@ public class RandomTrackGenerator {
             ts.setCurvature(p.curv);
             ts.setFenceDistR(nFenceR);
             ts.setFenceDistL(nFenceL);
+            // Countdown boards and arrows are section flags drawn by the
+            // game on the approach, set on the corner's first section
+            // (originals' pattern: bit 3 = 300/200/100, bit 6 = arrow)
+            long lTurn = Math.abs((long) p.tlu * p.curv);
+            if (p.curv != 0 && lTurn >= 0x2000) {
+                int nFlags = 0x8;
+                if (lTurn >= 0x4000)
+                    nFlags |= 0x40;
+                ts.setFlags(nFlags);
+            }
             result.segments.add(ts);
         }
         attachCommands(result, donorCommands);
+        attachScenery(result, donorScenery, nDonorTotalTlu);
+        attachSfMarkings(result, donorSfMarkings, nDonorTotalTlu);
 
         return result;
     }
@@ -178,10 +204,17 @@ public class RandomTrackGenerator {
 
             int nStraight = Math.max(4, nPerCorner - nCornerTlu
                                         + rand.nextInt(21) - 10);
-            if (nStraight > 191)
-                nStraight = 191;
+            if (nStraight > 120) // long straights caused Session 7 elongation
+                nStraight = 120;
             prims.add(new TrackLayoutClosure.Prim(nStraight, 0));
         }
+        // The approach straight carries the pit entry group and the grid
+        // markings (donor grids sit ~40 TLU before S/F) — keep it long
+        // enough for both
+        TrackLayoutClosure.Prim last =
+            (TrackLayoutClosure.Prim) prims.get(prims.size() - 1);
+        if (last.tlu < 60)
+            last.tlu = 60;
         return prims;
     }
 
@@ -243,6 +276,136 @@ public class RandomTrackGenerator {
             }
             clampOffset(cmd, approach.getTlu());
             approach.getCommands().add(cmd);
+        }
+    }
+
+    /** A donor command with its lap-relative TLU position. */
+    private static class PositionedCommand {
+        final Command cmd;
+        final int tlu;
+        PositionedCommand(Command cmd, int tlu) { this.cmd = cmd; this.tlu = tlu; }
+    }
+
+    /** All donor scenery/view commands (0x80/0x81/0x82) with positions. */
+    private Vector harvestPositionedCommands(TrackSegments donorSegments) {
+        Vector list = new Vector();
+        int nCumTlu = 0;
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = (Command) c.nextElement();
+                int nType = cmd.getType();
+                if (nType == 0x80 || nType == 0x81 || nType == 0x82)
+                    list.add(new PositionedCommand(copyCommand(cmd),
+                                                   nCumTlu + cmd.getParam(0)));
+            }
+            nCumTlu += ts.getTlu();
+        }
+        return list;
+    }
+
+    private static int donorTotalTlu(TrackSegments donorSegments) {
+        int nTotal = 0;
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); )
+            nTotal += ((TrackSegment) e.nextElement()).getTlu();
+        return nTotal;
+    }
+
+    /** Restores donor-density scenery and draw distance ("mist" fix):
+        every donor 0x80/0x81/0x82 command is re-attached at the same
+        proportional lap position on the generated track. The game anchors
+        one object per Seg (TCAnchorObject stores a single bObjectID), so
+        colliding object TLUs are nudged to a nearby free TLU instead of
+        silently overwriting each other. */
+    private void attachScenery(Result result, Vector donorScenery,
+                               int nDonorTotalTlu) {
+        if (donorScenery.isEmpty() || nDonorTotalTlu <= 0)
+            return;
+        boolean[] afObjectTlu = new boolean[result.totalTlu];
+        for (int i = 0; i < donorScenery.size(); i++) {
+            PositionedCommand pc = (PositionedCommand) donorScenery.get(i);
+            int nNewTlu = (int) ((long) pc.tlu * result.totalTlu / nDonorTotalTlu);
+            if (pc.cmd.getType() == 0x80) {
+                nNewTlu = findFreeObjectTlu(afObjectTlu, nNewTlu);
+                if (nNewTlu < 0)
+                    continue;
+                afObjectTlu[nNewTlu] = true;
+            }
+            placeCommandAt(result, copyCommand(pc.cmd), nNewTlu);
+        }
+    }
+
+    /** Nearest lap TLU (within 3) not already carrying an object. */
+    private static int findFreeObjectTlu(boolean[] afTaken, int nTlu) {
+        int n = afTaken.length;
+        for (int d = 0; d <= 3; d++) {
+            int nUp = ((nTlu + d) % n + n) % n;
+            if (!afTaken[nUp])
+                return nUp;
+            int nDown = ((nTlu - d) % n + n) % n;
+            if (!afTaken[nDown])
+                return nDown;
+        }
+        return -1;
+    }
+
+    /** Grid + start/finish line markings: every 0x8A/0x8B command in the
+        donor's final stretch before the S/F line. The originals draw the
+        grid as a marking group there — e.g. Monaco carries 0x8A (x +768)
+        and 0x8B (x -768) with 13 dotted lines each (the two grid columns)
+        about 40 TLU out, plus a single-line 0x8B on the line itself. */
+    private Vector harvestSfMarkings(TrackSegments donorSegments,
+                                     int nDonorTotalTlu) {
+        Vector list = new Vector();
+        int nCumTlu = 0;
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = (Command) c.nextElement();
+                int nType = cmd.getType();
+                int nTlu = nCumTlu + cmd.getParam(0);
+                if ((nType == 0x8A || nType == 0x8B)
+                    && nDonorTotalTlu - nTlu <= SF_MARKING_WINDOW)
+                    list.add(new PositionedCommand(copyCommand(cmd), nTlu));
+            }
+            nCumTlu += ts.getTlu();
+        }
+        return list;
+    }
+
+    /** Re-attaches the S/F marking group at the same distance before the
+        new S/F line, i.e. on the approach straight. */
+    private void attachSfMarkings(Result result, Vector markings,
+                                  int nDonorTotalTlu) {
+        if (markings.isEmpty()) {
+            result.warnings.add("Donor has no grid markings near start/finish");
+            return;
+        }
+        for (int i = 0; i < markings.size(); i++) {
+            PositionedCommand pc = (PositionedCommand) markings.get(i);
+            placeCommandAt(result, copyCommand(pc.cmd),
+                           result.totalTlu - (nDonorTotalTlu - pc.tlu));
+        }
+    }
+
+    /** Attaches a command to the segment containing the given lap TLU. */
+    private void placeCommandAt(Result result, Command cmd, int nTlu) {
+        int nTotal = result.totalTlu;
+        if (nTotal <= 0)
+            return;
+        nTlu = ((nTlu % nTotal) + nTotal) % nTotal;
+        int nCum = 0;
+        for (int i = 0; i < result.segments.size(); i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            if (nTlu < nCum + ts.getTlu()) {
+                int nOffset = nTlu - nCum;
+                if (nOffset > 255)
+                    nOffset = 255;
+                cmd.setParam(0, nOffset);
+                ts.getCommands().add(cmd);
+                return;
+            }
+            nCum += ts.getTlu();
         }
     }
 

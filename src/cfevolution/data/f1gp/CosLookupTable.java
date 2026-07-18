@@ -28,16 +28,16 @@ package cfevolution.data.f1gp;
 
 public class CosLookupTable {
 	public static short get(int i) {
-            int c = 0;
-            try {
-		c = data[i];
-		if (c >= 0x8000)
-                    c -= 0x10000;
-            }
-            catch( Exception e )
-            {
-                e.printStackTrace();
-            }
+            // Out-of-range indices happen for angle 0x8000 exactly (the
+            // 16-bit negate in LookupCos leaves it unchanged and the index
+            // math overflows the table). Keep the legacy behaviour of
+            // returning 0 for those, but without the stack trace spam the
+            // generator's candidate search used to produce.
+            if (i < 0 || i >= data.length)
+                return 0;
+            int c = data[i];
+            if (c >= 0x8000)
+                c -= 0x10000;
             return (short) c;
 	}
 

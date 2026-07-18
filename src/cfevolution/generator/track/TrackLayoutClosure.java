@@ -60,8 +60,13 @@ public class TrackLayoutClosure {
     public static final int HEADING_TOLERANCE = 64;
 
     private static final int MIN_STRAIGHT = 4;
-    private static final int MAX_LENGTH = 191;   // longest section in original data
+    /** Closure may lengthen straights only up to this (well below the 191
+        file maximum — maximal straights caused the Session 7 elongation). */
+    private static final int MAX_ADJUSTED_LENGTH = 150;
     private static final int MAX_CURV = 0x2000;  // engine limit
+
+    /** Maximum bounding-box aspect ratio accepted as a sane circuit. */
+    public static final double MAX_ASPECT = 2.2;
 
     private final Track scratch;
 
@@ -215,7 +220,63 @@ public class TrackLayoutClosure {
 
     private static int clampLength(int nLen) {
         if (nLen < MIN_STRAIGHT) return MIN_STRAIGHT;
-        if (nLen > MAX_LENGTH) return MAX_LENGTH;
+        if (nLen > MAX_ADJUSTED_LENGTH) return MAX_ADJUSTED_LENGTH;
         return nLen;
+    }
+
+    /** Tests the compiled layout for self-intersection: samples the
+        centreline every 4 TLU and intersects every non-adjacent segment
+        pair. The first map exports (Session 7) showed v1 layouts crossing
+        themselves — closure gates cannot see this. */
+    public boolean selfIntersects() {
+        TrackSegments segs = scratch.getTrackSegments();
+        int nPts = segs.getMaxTrackSegIndex() / 4;
+        double[] px = new double[nPts], py = new double[nPts];
+        for (int i = 0; i < nPts; i++) {
+            Seg s = segs.getSegAt(i * 4);
+            px[i] = s.getPosX();
+            py[i] = s.getPosY();
+        }
+        for (int a = 0; a < nPts - 1; a++)
+            for (int b = a + 2; b < nPts - 1; b++) {
+                if (a == 0 && b == nPts - 2)
+                    continue; // wrap-adjacent
+                if (segmentsCross(px[a], py[a], px[a + 1], py[a + 1],
+                                  px[b], py[b], px[b + 1], py[b + 1]))
+                    return true;
+            }
+        return false;
+    }
+
+    /** Bounding-box aspect ratio of the compiled layout (>= 1). Session 7
+        exports showed v1 layouts stretched ~5:1 by maximal straights. */
+    public double aspectRatio() {
+        TrackSegments segs = scratch.getTrackSegments();
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (int i = 0; i <= segs.getMaxTrackSegIndex(); i++) {
+            Seg s = segs.getSegAt(i);
+            minX = Math.min(minX, s.getPosX());
+            maxX = Math.max(maxX, s.getPosX());
+            minY = Math.min(minY, s.getPosY());
+            maxY = Math.max(maxY, s.getPosY());
+        }
+        double w = Math.max(maxX - minX, 1), h = Math.max(maxY - minY, 1);
+        return Math.max(w, h) / Math.min(w, h);
+    }
+
+    private static boolean segmentsCross(double ax, double ay, double bx, double by,
+                                         double cx, double cy, double dx, double dy) {
+        double d1 = cross(cx, cy, dx, dy, ax, ay);
+        double d2 = cross(cx, cy, dx, dy, bx, by);
+        double d3 = cross(ax, ay, bx, by, cx, cy);
+        double d4 = cross(ax, ay, bx, by, dx, dy);
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0))
+            && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+    }
+
+    private static double cross(double ax, double ay, double bx, double by,
+                                double px2, double py2) {
+        return (bx - ax) * (py2 - ay) - (by - ay) * (px2 - ax);
     }
 }
