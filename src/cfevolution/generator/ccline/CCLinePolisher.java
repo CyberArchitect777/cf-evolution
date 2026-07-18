@@ -70,9 +70,18 @@ public class CCLinePolisher {
             }
             CCLine candidate =
                 cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(current);
-            boolean fMutated = (rand.nextInt(2) == 0)
-                ? cfevolution.generator.ccline.refine.RefinementCCLineGenerator.mutate(candidate, rand)
-                : transferCorrection(candidate, rand);
+            boolean fMutated;
+            switch (rand.nextInt(3)) {
+            case 0:
+                fMutated = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.mutate(candidate, rand);
+                break;
+            case 1:
+                fMutated = transferCorrection(candidate, rand);
+                break;
+            default:
+                fMutated = convertKickToArc(candidate, rand);
+                break;
+            }
             if (!fMutated)
                 continue;
             CCLineEvaluator.Score s = ev.score(candidate);
@@ -113,6 +122,75 @@ public class CCLinePolisher {
             return false;
         a.setParam(nParamA, nNewA);
         b.setParam(nParamB, nNewB);
+        return true;
+    }
+
+    /** Converts (part of) a large heading kick into a tangent arc: a
+        straight sector STR(L, K) becomes STR(1, K·f) + ARC(L−1, r) where
+        the arc supplies the remaining (1−f)·K of rotation gradually over
+        L−1 TLU. This is the corner move hand-tuned lines use, and the one
+        structure that perturbation/transfer can never reach — big kicks
+        are exactly what throws the AI cars in-game (Sessions 8/9/11). */
+    private static boolean convertKickToArc(CCLine line, Random rand) {
+        int nCount = line.size();
+        if (nCount < 2)
+            return false;
+        // Straight sectors long enough to split, ranked by kick size
+        java.util.Vector big = new java.util.Vector();
+        for (int i = 1; i <= nCount; i++) {
+            cfevolution.data.track.CCLineSegment sg = line.getAt(i);
+            if (CCLineEvaluator.rawRadius(sg) != 0 || sg.getTlu() < 4)
+                continue;
+            int ci = ((sg.getType() & 0x80) != 0) ? 1 : 0;
+            if (Math.abs(sg.getParam(ci)) < 512)
+                continue; // small kicks are already followable
+            big.add(new int[] { i, Math.abs(sg.getParam(ci)) });
+        }
+        if (big.isEmpty())
+            return false;
+        for (int a = 0; a < big.size(); a++) // selection sort, descending
+            for (int b = a + 1; b < big.size(); b++)
+                if (((int[]) big.get(b))[1] > ((int[]) big.get(a))[1]) {
+                    Object tmp = big.get(a); big.set(a, big.get(b)); big.set(b, tmp);
+                }
+        int nPick = Math.min(rand.nextInt(3), big.size() - 1);
+        int nIndex = ((int[]) big.get(nPick))[0];
+
+        cfevolution.data.track.CCLineSegment sg = line.getAt(nIndex);
+        int ci = ((sg.getType() & 0x80) != 0) ? 1 : 0;
+        int nKick = sg.getParam(ci);
+        int nLen = sg.getTlu();
+        double[] adKeep = { 0.0, 0.25, 0.5 };
+        int nKeep = (int) Math.round(nKick * adKeep[rand.nextInt(3)]);
+        int nTheta = nKick - nKeep;
+        if (nTheta == 0)
+            return false;
+        double dThetaRad = Math.abs(nTheta) * 2.0 * Math.PI / 65536.0;
+        long lRaw = Math.round(((nLen - 1) * 1024.0 / dThetaRad) / 8.0);
+        if (lRaw < 16)
+            return false;
+        long r = (nTheta >= 0) ? lRaw : -lRaw;
+        if (rand.nextInt(4) == 0)
+            r = -r; // occasional flip; simulation scoring rejects wrong turns
+
+        // Shrink the straight to a 1-TLU kick of the kept size...
+        sg.setTlu(1);
+        sg.setParam(ci, nKeep);
+        // ...and insert the arc carrying the remaining rotation after it
+        cfevolution.data.track.CCLineSegment arc = line.insertAt(nIndex + 1);
+        if (arc == null)
+            return false;
+        if (r > Short.MAX_VALUE || r < Short.MIN_VALUE) {
+            arc.setType(0x40);
+            arc.setParam(0, 0);
+            arc.setParam(1, (int) (r >> 16));
+            arc.setParam(2, (int) (short) (r & 0xFFFF));
+        }
+        else {
+            arc.setParam(0, 0);
+            arc.setParam(1, (int) r);
+        }
+        arc.setTlu(nLen - 1);
         return true;
     }
 

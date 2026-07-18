@@ -53,14 +53,39 @@ public class CCLineQuantizer {
     private static double kickPenalty(int nCorr) {
         return Math.abs(nCorr) * KICK_PENALTY;
     }
-    /** Weight of the end-heading mismatch term (angle units → error units). */
+    /** Weight of the end-heading mismatch term (angle units → error units).
+        Raising this to parity with position (1.0) was tried 2026-07-18:
+        no systematic gain — some tracks' worst jump halved, others
+        (F1CT05) more than doubled; the greedy walk is chaotically
+        sensitive to it. Kick removal is done structurally by the
+        polisher's kick→arc conversion instead. */
     private static final double HEADING_WEIGHT = 0.1;
+    /** Relative-heading rotation (line vs track) a sector may perform per
+        TLU without penalty. Hand-tuned lines' sector-average rates stay
+        under ~1600 angle units/TLU (measured across all 16 originals,
+        2026-07-18); the degenerate "whip arcs" the greedy fit used to
+        turn hairpins with run 2x-4x beyond. Excess rotation is charged
+        like a kick — arcs previously turned for free, which is exactly
+        why whip arcs beat honest corner arcs at corner entries. */
+    private static final double REL_RATE_ALLOWANCE = 1600.0;
+
+    /** Profile heading rate (angle units per TLU) above which a Seg counts
+        as the core of a corner. 90 deg over 20 TLU is ~820/TLU; gentle
+        sweeps and straight-line drift stay well below. */
+    private static final double TURN_RATE_THRESHOLD = 400.0;
+    /** Detected corners extend outward while the rate stays above this —
+        captures the gradual ease-in (hand-tuned lines turn in ~5 TLU
+        before the track bends). */
+    private static final double TURN_RATE_EASE = 150.0;
+    /** Turning/straight runs shorter than this are absorbed (noise). */
+    private static final int MIN_RUN = 3;
 
     private final CCLineTrackGeometry geo;
     private final CCLineSimulator simulator;
     private final double[] profile;      // target offset per Seg
     private final double[] profileHeading; // profile chord heading per Seg (game angle units)
     private final int seamOvershoot;
+    private final int[] tluToBoundary;   // per Seg: TLUs until the next turn-in/turn-out
 
     // Scratch stamping area shared by all candidate simulations
     private final CCLineSimulator.Result scratch;
@@ -90,6 +115,78 @@ public class CCLineQuantizer {
             double[] pb = worldPoint(b, profile[b]);
             profileHeading[i] = Math.atan2(pb[0] - pa[0], pb[1] - pa[1]) * 65536.0 / (2.0 * Math.PI);
         }
+
+        // Corner turn-in points from the profile's heading rate. A sector
+        // may never cross one: a straight carried even 2 TLU past a
+        // turn-in leaves only degenerate whip-arcs and monster kicks as
+        // followers (Session 9/11 hairpin diagnosis). Aligning sector ends
+        // with turn-ins lets arcs take whole corners, as hand-tuned lines
+        // do. Turn-OUTS deliberately do not constrain: hand-tuned corner
+        // arcs run past the geometric corner exit into the straight.
+        double[] rate = new double[n];
+        boolean[] turning = new boolean[n];
+        for (int i = 0; i < n; i++) {
+            rate[i] = Math.abs(wrapAngle(profileHeading[(i + 1) % n] - profileHeading[i]));
+            turning[i] = rate[i] > TURN_RATE_THRESHOLD;
+        }
+        // Extend each corner outward while the profile still curves gently
+        // (ease-in/ease-out capture)
+        boolean[] extended = (boolean[]) turning.clone();
+        for (int i = 0; i < n; i++) {
+            if (!turning[i])
+                continue;
+            for (int d = 1; d <= 8; d++) {
+                int back = (i - d + n) % n;
+                if (turning[back] || rate[back] <= TURN_RATE_EASE)
+                    break;
+                extended[back] = true;
+            }
+            for (int d = 1; d <= 8; d++) {
+                int fwd = (i + d) % n;
+                if (turning[fwd] || rate[fwd] <= TURN_RATE_EASE)
+                    break;
+                extended[fwd] = true;
+            }
+        }
+        turning = extended;
+        // Hysteresis: absorb runs shorter than MIN_RUN into their surroundings
+        boolean fChanged = true;
+        while (fChanged) {
+            fChanged = false;
+            for (int i = 0; i < n; i++) {
+                int prev = (i + n - 1) % n;
+                if (turning[i] == turning[prev])
+                    continue; // not a run start
+                int nRun = runLength(turning, i);
+                if (nRun < MIN_RUN && nRun < n) {
+                    for (int k = 0; k < nRun; k++)
+                        turning[(i + k) % n] = turning[prev];
+                    fChanged = true;
+                }
+            }
+        }
+        // Distance from every Seg to the next turn-in (straight->turning
+        // transition), skipping the one we may be standing on
+        tluToBoundary = new int[n];
+        for (int i = 0; i < n; i++) {
+            int d = 1;
+            while (d < n) {
+                int j = (i + d) % n;
+                int jPrev = (j - 1 + n) % n;
+                if (turning[j] && !turning[jPrev])
+                    break;
+                d++;
+            }
+            tluToBoundary[i] = d;
+        }
+    }
+
+    private static int runLength(boolean[] state, int nFrom) {
+        int n = state.length;
+        int d = 1;
+        while (d < n && state[(nFrom + d) % n] == state[nFrom])
+            d++;
+        return d;
     }
 
     /** Builds the quantised CCLine. */
@@ -103,9 +200,14 @@ public class CCLineQuantizer {
             int nRemaining = nTargetTlu - st.walkedTlu;
             Candidate best = null;
 
+            // Corner alignment: candidates may not cross the next profile
+            // turn-in, and the exact run up to it is itself a candidate
+            // (so the walk can arrive at a corner precisely).
+            int nToBoundary = tluToBoundary[st.walkedTlu % geo.segCount];
+
             for (int li = 0; li < CANDIDATE_LENGTHS.length; li++) {
                 int nLen = CANDIDATE_LENGTHS[li];
-                if (nLen > nRemaining)
+                if (nLen > nRemaining || nLen > nToBoundary)
                     continue;
                 Candidate c = bestForLength(st, nLen, fFirst);
                 if (best == null || c.errorPerTlu < best.errorPerTlu)
@@ -114,6 +216,11 @@ public class CCLineQuantizer {
                 // stop scanning shorter ones once a good long fit exists.
                 if (best.errorPerTlu < 64.0 && best.length >= 64)
                     break;
+            }
+            if (nToBoundary <= Math.min(nRemaining, 255)) {
+                Candidate c = bestForLength(st, nToBoundary, fFirst);
+                if (best == null || c.errorPerTlu < best.errorPerTlu)
+                    best = c;
             }
             if (nRemaining < 8 || best == null) {
                 // Tail shorter than the smallest candidate: emit directly.
@@ -296,6 +403,15 @@ public class CCLineQuantizer {
         int nClampsBefore = scratch.clampCount;
         for (int si = 0; si < segs.length; si++)
             simulator.runSegment(segs[si], trial, scratch);
+
+        // Followability: charge relative-heading rotation beyond the
+        // per-TLU allowance like a kick (see REL_RATE_ALLOWANCE).
+        int iStart = segAt(st.walkedTlu);
+        double dRelStart = wrapAngle((short) (st.wTmpAngleZ - geo.angleZ[iStart]));
+        double dRelChange = Math.abs(wrapAngle(
+            wrapAngle((short) (trial.wTmpAngleZ - geo.angleZ[segAt(st.walkedTlu + nLen - 1)]))
+            - dRelStart));
+        dPenalty += Math.max(0.0, dRelChange - REL_RATE_ALLOWANCE * nLen) * KICK_PENALTY;
 
         double dSumSq = 0.0;
         // A fired Pythagoras clamp means this radius breaks the game's
