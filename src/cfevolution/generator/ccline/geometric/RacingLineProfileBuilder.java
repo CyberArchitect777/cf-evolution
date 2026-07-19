@@ -47,6 +47,21 @@ public class RacingLineProfileBuilder {
     private static final int MERGE_GAP = 6;
     /** Longest approach/exit transition (TLU). */
     private static final int MAX_TRANSITION = 48;
+    /** Opposite-sign corners closer than this get their amplitude scaled
+        down (ramping with the gap): a full out-in-out swing through a
+        tight S demands transients the quantizer cannot deliver inside a
+        narrow road — F1CT12's 65-left-into-79-right on a +-1124 road was
+        the diagnosed runaway site (2026-07-19). */
+    private static final int S_COMBO_GAP = 24;
+    private static final double S_COMBO_MIN_SCALE = 0.35;
+    /** Cap on the apex inset as a fraction of the corner's own turn
+        radius. Cutting inside a corner tightens the line's radius below
+        the track's; at max-curvature hairpins an 80%-of-road inset
+        demands turn rates the sector primitives cannot deliver and the
+        quantizer walk explodes mid-corner (F1CT03/04/11 diagnosis,
+        2026-07-19). 0.25 keeps the line's radius within ~25% of the
+        track's. */
+    private static final double APEX_INSET_RADIUS_FRACTION = 0.25;
 
     /** Builds the lateral profile. standoffFraction is the fixed distance
         kept from the physical road edge, as a fraction of the half-width
@@ -96,6 +111,24 @@ public class RacingLineProfileBuilder {
         int nCorners = corners.size();
         double dRail = 1.0 - Math.max(0.05, standoffFraction);
 
+        // Amplitude scale per corner: tight opposite-sign combinations
+        // (S/chicane) ramp down toward S_COMBO_MIN_SCALE
+        double[] adScale = new double[nCorners];
+        for (int c = 0; c < nCorners; c++)
+            adScale[c] = 1.0;
+        for (int c = 0; c < nCorners; c++) {
+            int[] run = (int[]) corners.get(c);
+            int[] next = (int[]) corners.get((c + 1) % nCorners);
+            if ((run[2] > 0) == (next[2] > 0))
+                continue; // same-direction corners keep full amplitude
+            int gap = ((next[0] - run[1]) % n + n) % n;
+            if (gap >= S_COMBO_GAP)
+                continue;
+            double dScale = Math.max(S_COMBO_MIN_SCALE, (double) gap / S_COMBO_GAP);
+            adScale[c] = Math.min(adScale[c], dScale);
+            adScale[(c + 1) % nCorners] = Math.min(adScale[(c + 1) % nCorners], dScale);
+        }
+
         // Keyframes in strict lap order: entry rail, apex, exit rail per
         // corner. Transitions are clamped to strictly less than half the
         // gap to the neighbouring corner so consecutive keyframes can
@@ -115,12 +148,24 @@ public class RacingLineProfileBuilder {
             int tIn = Math.min(MAX_TRANSITION, Math.max(0, gapBefore / 2 - 1));
             int tOut = Math.min(MAX_TRANSITION, Math.max(0, gapAfter / 2 - 1));
 
+            double dAmp = dRail * adScale[c];
+            // Apex inset limited by the corner's own turn radius: the
+            // line's radius must stay near the track's at tight corners
+            int nRunLen = ((run[1] - run[0]) % n + n) % n + 1;
+            double dRate = Math.abs((double) run[2]) / nRunLen; // units/TLU
+            double dApexAmp = dAmp;
+            if (dRate > 1.0) {
+                double dTrackRadius = 65536.0 * 1024.0 / (2.0 * Math.PI * dRate);
+                double dInsetCap = APEX_INSET_RADIUS_FRACTION * dTrackRadius
+                                   / Math.max(1.0, geo.physicalBound[mid]);
+                dApexAmp = Math.min(dApexAmp, dInsetCap);
+            }
             kfTlu[c * 3] = (run[0] - tIn + n) % n;
-            kfFrac[c * 3] = -inside * dRail;      // entry rail (outside)
+            kfFrac[c * 3] = -inside * dAmp;          // entry rail (outside)
             kfTlu[c * 3 + 1] = mid;
-            kfFrac[c * 3 + 1] = inside * dRail;   // apex (inside)
+            kfFrac[c * 3 + 1] = inside * dApexAmp;   // apex (inside)
             kfTlu[c * 3 + 2] = (run[1] + tOut) % n;
-            kfFrac[c * 3 + 2] = -inside * dRail;  // exit rail (outside)
+            kfFrac[c * 3 + 2] = -inside * dAmp;      // exit rail (outside)
         }
 
         // --- rasterise: one smoothstep span between each consecutive
