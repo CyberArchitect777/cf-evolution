@@ -353,8 +353,12 @@ public class CCLineQuantizer {
         // Arcs alone cannot correct a heading error (they are tangent-
         // continuous), which otherwise forces the fit into kicky straights.
         // Hand-tuned lines use exactly this move: a small heading
-        // correction, then a curve.
-        if (nLen >= 12) {
+        // correction, then a curve — including at max-curvature corners
+        // with very short sectors (F1CT04's hairpin: corr 232 + r -800
+        // over 6 TLU), so short lengths must offer it too (was >= 12
+        // until 2026-07-19; the tight S-flips it excluded were exactly
+        // where the walk diverged).
+        if (nLen >= 4) {
             int nAlign = (int) (short) (int) Math.round(
                 wrapAngle(profileHeading[st.segIndex] - st.wTmpAngleZ));
             if (nAlign != 0) {
@@ -362,6 +366,38 @@ public class CCLineQuantizer {
                 addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy, 0);
                 if (lCurvSeed != 0)
                     addArcCandidates(best, st, fFirst, nLen, nAlign, wAligned, dx, dy, lCurvSeed);
+            }
+        }
+
+        // Fine radius refinement around the winning arc: at max-curvature
+        // corners a few percent of radius decides hundreds of units of
+        // drift per sector, which the coarse RADIUS_VARIANTS grid cannot
+        // hit (hand-tuned hairpins use e.g. r=-480 exactly; 2026-07-19)
+        if (best.segments != null) {
+            CCLineSegment lastSeg = best.segments[best.segments.length - 1];
+            long lBestRaw = CCLineEvaluator.rawRadius(lastSeg);
+            if (lBestRaw != 0) {
+                double[] adFine = { 0.96, 0.98, 1.02, 1.04 };
+                CCLineSegment lead = (best.segments.length == 2) ? best.segments[0] : null;
+                int nArcLen = lastSeg.getTlu();
+                double dLeadPenalty = (lead != null)
+                    ? kickPenalty(lead.getParam(((lead.getType() & 0x80) != 0) ? 1 : 0)) : 0.0;
+                for (int fi = 0; fi < adFine.length; fi++) {
+                    long r = Math.round(lBestRaw * adFine[fi]);
+                    if (r == 0 || r == lBestRaw)
+                        continue;
+                    if (lead == null) {
+                        if (fFirst && (r > Short.MAX_VALUE || r < Short.MIN_VALUE))
+                            continue;
+                        trySegments(best, st, single(makeSegment(fFirst, nLen, 0, r)), nLen, 0.0);
+                    }
+                    else {
+                        CCLineSegment[] pair = new CCLineSegment[] {
+                            copyOf(lead), makeSegment(false, nArcLen, 0, r)
+                        };
+                        trySegments(best, st, pair, nLen, dLeadPenalty);
+                    }
+                }
             }
         }
 
@@ -428,6 +464,14 @@ public class CCLineQuantizer {
 
     private static CCLineSegment[] single(CCLineSegment seg) {
         return new CCLineSegment[] { seg };
+    }
+
+    private static CCLineSegment copyOf(CCLineSegment seg) {
+        CCLineSegment copy = new CCLineSegment(seg.getType());
+        copy.setTlu(seg.getTlu());
+        for (int p = 0; p < 4; p++)
+            copy.setParam(p, seg.getParam(p));
+        return copy;
     }
 
     /** Simulates a candidate (one or two sectors) from a state copy and

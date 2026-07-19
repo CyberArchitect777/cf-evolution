@@ -59,6 +59,9 @@ public class RandomTrackGenerator {
         public int totalTlu;
         public double closureGap;
         public long seed;
+        /** TLU to add to/remove from the donor pit lane straights so the
+            pit length matches the connect distance (PitLaneFitter). */
+        public int pitDelta;
         public final Vector warnings = new Vector();
     }
 
@@ -169,7 +172,22 @@ public class RandomTrackGenerator {
             }
             result.segments.add(ts);
         }
-        attachCommands(result, donorCommands);
+        // Pit connect placement: the pit lane's length must match the
+        // entry->exit distance (originals: within -13..+1 TLU) or the
+        // game computes garbage pit geometry and crashes on pit starts
+        int nPitTlu = cfevolution.generator.pitlane.PitLaneFitter.pitTlu(
+            scratch.getPitlaneSegments());
+        cfevolution.generator.pitlane.PitLaneFitter.Plan pitPlan =
+            cfevolution.generator.pitlane.PitLaneFitter.plan(
+                ((TrackLayoutClosure.Prim) prims.get(0)).tlu,
+                ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu,
+                nPitTlu);
+        result.pitDelta = pitPlan.pitDelta;
+        if (pitPlan.pitDelta != 0)
+            result.warnings.add("Pit lane length adjusted by " + pitPlan.pitDelta
+                                + " TLU to fit the layout");
+
+        attachCommands(result, donorCommands, pitPlan);
         attachScenery(result, donorScenery, nDonorTotalTlu);
         attachSfMarkings(result, donorSfMarkings, nDonorTotalTlu);
 
@@ -252,8 +270,10 @@ public class RandomTrackGenerator {
     /** Attaches the harvested donor commands around the new S/F straight:
         exit-side group on the first segment, entry-side group on the last
         (the approach straight). Offsets (param 0) are clamped into the
-        carrying segment's length. */
-    private void attachCommands(Result result, Vector donorCommands) {
+        carrying segment's length; the pit connects (0x86/0x87) get the
+        fitter's computed offsets so the pit length matches. */
+    private void attachCommands(Result result, Vector donorCommands,
+                                cfevolution.generator.pitlane.PitLaneFitter.Plan pitPlan) {
         TrackSegment sfSegment = (TrackSegment) result.segments.get(0);
         TrackSegment approach = (TrackSegment) result.segments.get(result.segments.size() - 1);
 
@@ -264,6 +284,8 @@ public class RandomTrackGenerator {
                     + Integer.toHexString(SF_COMMANDS[i]).toUpperCase() + " command");
                 continue;
             }
+            if (cmd.getType() == 0x87)
+                cmd.setParam(0, pitPlan.exitOffset);
             clampOffset(cmd, sfSegment.getTlu());
             sfSegment.getCommands().add(cmd);
         }
@@ -274,6 +296,8 @@ public class RandomTrackGenerator {
                     + Integer.toHexString(APPROACH_COMMANDS[i]).toUpperCase() + " command");
                 continue;
             }
+            if (cmd.getType() == 0x86)
+                cmd.setParam(0, pitPlan.entryOffset);
             clampOffset(cmd, approach.getTlu());
             approach.getCommands().add(cmd);
         }

@@ -215,7 +215,8 @@ public class GenerateTrackDialog extends JDialog {
     }
 
     /** Replaces a track's segment list with the generated one, keeping the
-        dummy terminator (stripped of donor commands). */
+        dummy terminator (stripped of donor commands), and fits the donor
+        pit lane's length to the new connect distance. */
     static void applySegments(Track track, RandomTrackGenerator.Result layout) {
         cfevolution.data.track.TrackSegments segs = track.getTrackSegments();
         cfevolution.data.track.TrackSegment dummy =
@@ -225,6 +226,13 @@ public class GenerateTrackDialog extends JDialog {
         for (int i = 0; i < layout.segments.size(); i++)
             segs.add(layout.segments.get(i));
         segs.add(dummy);
+        cfevolution.generator.pitlane.PitLaneFitter.adjustPitLength(
+            track.getPitlaneSegments(), layout.pitDelta);
+        // Generated laps wind right (interior on the right), so the pit
+        // bulges left; donor pit curves mirror their own track's final
+        // corner and would walk the pit off into the void here
+        cfevolution.generator.pitlane.PitLaneFitter.neutralizeCurvature(
+            track.getPitlaneSegments(), -1);
     }
 
     private void generationFinished(RandomTrackGenerator.Result layout,

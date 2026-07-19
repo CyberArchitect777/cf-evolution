@@ -45,6 +45,7 @@ public class GenerateCCLineDialog extends JDialog {
 
     private JTextField iterationsField;
     private JTextField overshootField;
+    private JTextField standoffField;
     private JTextField folderField;
     private JProgressBar progressBar;
     private JLabel statusLabel;
@@ -95,6 +96,13 @@ public class GenerateCCLineDialog extends JDialog {
         gc.gridx = 1;
         overshootField = new JTextField("8", 8);
         params.add(overshootField, gc);
+
+        gc.gridy = row++;
+        gc.gridx = 0;
+        params.add(new JLabel("Edge standoff (% of half-width):"), gc);
+        gc.gridx = 1;
+        standoffField = new JTextField("15", 8);
+        params.add(standoffField, gc);
 
         if (fNeedsTrainingFolder) {
             gc.gridy = row++;
@@ -179,6 +187,10 @@ public class GenerateCCLineDialog extends JDialog {
             context.seamOvershoot = Integer.parseInt(overshootField.getText().trim());
             if (context.seamOvershoot < 0 || context.seamOvershoot > 255)
                 throw new NumberFormatException("seam overshoot must be 0-255");
+            int nStandoff = Integer.parseInt(standoffField.getText().trim());
+            if (nStandoff < 5 || nStandoff > 60)
+                throw new NumberFormatException("edge standoff must be 5-60 (%)");
+            context.edgeStandoff = nStandoff / 100.0;
             if (fNeedsTrainingFolder) {
                 String path = folderField.getText().trim();
                 if (path.length() == 0) {
