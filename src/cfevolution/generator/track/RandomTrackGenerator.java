@@ -191,7 +191,118 @@ public class RandomTrackGenerator {
         attachScenery(result, donorScenery, nDonorTotalTlu);
         attachSfMarkings(result, donorSfMarkings, nDonorTotalTlu);
 
+        // Donor-like short sections: long generated straights carried 40+
+        // commands each and the game silently drops objects beyond a
+        // per-section budget (proven by the ABTEST A/B: the same commands
+        // through the same pipeline render fine on the donor's 67 short
+        // sections — 2026-07-19). Splitting also creates the small wall
+        // removal windows at the pit connects that the originals have
+        // (without them the pit mouth is walled shut: invisible wall on
+        // entry, wing damage on exit — in-game finding).
+        int nExitTlu = pitPlan.exitOffset;
+        int nEntryTlu = result.totalTlu
+            - ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu
+            + pitPlan.entryOffset;
+        splitSections(result, nExitTlu, nEntryTlu);
+
         return result;
+    }
+
+    /** Longest section kept when splitting straights (donors average ~12
+        TLU per section; command capacity is the binding reason). */
+    private static final int MAX_STRAIGHT_SECTION = 32;
+    /** Pit connect wall windows: [connect-2, connect+3), flags 0x2000
+        (remove left wall — generated pits bulge left). */
+    private static final int WALL_WINDOW_BEFORE = 2;
+    private static final int WALL_WINDOW_AFTER = 3;
+
+    private void splitSections(Result result, int nExitTlu, int nEntryTlu) {
+        Vector split = new Vector();
+        int nCum = 0;
+        for (int i = 0; i < result.segments.size(); i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            int nLen = ts.getTlu();
+            if (ts.getCurvature() != 0 || nLen <= MAX_STRAIGHT_SECTION
+                || nLen < 2 * WALL_WINDOW_BEFORE) {
+                split.add(ts);
+                nCum += nLen;
+                continue;
+            }
+            // Cut points within this segment (relative): wall windows
+            // that fall inside it, then even chunks between
+            java.util.TreeSet cuts = new java.util.TreeSet();
+            int[] anConnects = { nExitTlu, nEntryTlu };
+            for (int c = 0; c < anConnects.length; c++) {
+                int nRel = anConnects[c] - nCum;
+                if (nRel - WALL_WINDOW_BEFORE > 0 && nRel + WALL_WINDOW_AFTER < nLen) {
+                    cuts.add(new Integer(nRel - WALL_WINDOW_BEFORE));
+                    cuts.add(new Integer(nRel + WALL_WINDOW_AFTER));
+                }
+            }
+            // Even chunks: subdivide every stretch between existing cuts
+            java.util.Vector bounds = new java.util.Vector();
+            bounds.add(new Integer(0));
+            for (java.util.Iterator it = cuts.iterator(); it.hasNext(); )
+                bounds.add(it.next());
+            bounds.add(new Integer(nLen));
+            java.util.TreeSet all = new java.util.TreeSet(bounds);
+            for (int b = 0; b + 1 < bounds.size(); b++) {
+                int a = ((Integer) bounds.get(b)).intValue();
+                int z = ((Integer) bounds.get(b + 1)).intValue();
+                int nSpan = z - a;
+                if (nSpan > MAX_STRAIGHT_SECTION) {
+                    int nPieces = (nSpan + MAX_STRAIGHT_SECTION - 1) / MAX_STRAIGHT_SECTION;
+                    for (int k = 1; k < nPieces; k++)
+                        all.add(new Integer(a + nSpan * k / nPieces));
+                }
+            }
+
+            // Materialise the pieces, migrating commands by offset
+            Integer[] anBounds = (Integer[]) all.toArray(new Integer[0]);
+            for (int b = 0; b + 1 < anBounds.length; b++) {
+                int a = anBounds[b].intValue();
+                int z = anBounds[b + 1].intValue();
+                TrackSegment piece = (b == 0) ? ts : new TrackSegment();
+                if (b > 0) {
+                    piece.setCurvature(0);
+                    piece.setFenceDistR(ts.getFenceDistR());
+                    piece.setFenceDistL(ts.getFenceDistL());
+                }
+                piece.setTlu(z - a);
+                // Wall window? (piece covers a connect's window exactly)
+                for (int c = 0; c < anConnects.length; c++) {
+                    int nRel = anConnects[c] - nCum;
+                    if (a == nRel - WALL_WINDOW_BEFORE && z == nRel + WALL_WINDOW_AFTER)
+                        piece.setFlags(piece.getFlags() | 0x2000);
+                }
+                if (b > 0)
+                    split.add(piece);
+                else
+                    split.add(ts);
+            }
+            // Command migration: collect the original's commands once,
+            // then deal to pieces by offset
+            Vector cmds = new Vector(ts.getCommands());
+            ts.setCommands(new Vector());
+            int nPieceIndexBase = split.size() - (anBounds.length - 1);
+            for (int ci = 0; ci < cmds.size(); ci++) {
+                Command cmd = (Command) cmds.get(ci);
+                int nOff = Math.min(cmd.getParam(0), nLen - 1);
+                for (int b = 0; b + 1 < anBounds.length; b++) {
+                    int a = anBounds[b].intValue();
+                    int z = anBounds[b + 1].intValue();
+                    if (nOff >= a && nOff < z) {
+                        cmd.setParam(0, nOff - a);
+                        ((TrackSegment) split.get(nPieceIndexBase + b)).getCommands().add(cmd);
+                        break;
+                    }
+                }
+            }
+            nCum += nLen;
+        }
+        result.segments.clear();
+        for (int i = 0; i < split.size(); i++)
+            result.segments.add(split.get(i));
     }
 
     // ------------------------------------------------------------------

@@ -161,6 +161,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateLineGeometric = new javax.swing.JMenuItem();
         generateLineDataFit = new javax.swing.JMenuItem();
         generateLineRefine = new javax.swing.JMenuItem();
+        generateLineFastest = new javax.swing.JMenuItem();
         repairLineItem = new javax.swing.JMenuItem();
         generateRandomTrack = new javax.swing.JMenuItem();
 
@@ -250,7 +251,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
 
         toolsMenu.addSeparator();
 
-        generateLineGeometric.setText("Generate Best Line (Geometric)...");
+        generateLineGeometric.setText("Generate Best Line (Constructed Racing Line)...");
         generateLineGeometric.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 openGenerateDialog(new cfevolution.generator.ccline.geometric.MinCurvatureCCLineGenerator());
@@ -273,6 +274,14 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateLineRefine);
+
+        generateLineFastest.setText("Generate Best Line (Fastest Lap Simulation)...");
+        generateLineFastest.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
+            }
+        });
+        toolsMenu.add(generateLineFastest);
 
         repairLineItem.setText("Repair Best Line After Edit");
         repairLineItem.setEnabled(false);
@@ -594,6 +603,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem generateLineGeometric;
     private javax.swing.JMenuItem generateLineDataFit;
     private javax.swing.JMenuItem generateLineRefine;
+    private javax.swing.JMenuItem generateLineFastest;
     private javax.swing.JMenuItem repairLineItem;
     private javax.swing.JMenuItem generateRandomTrack;
     private javax.swing.JMenuItem removeLine;

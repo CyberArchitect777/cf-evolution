@@ -23,26 +23,23 @@ import cfevolution.data.track.CCLine;
 import cfevolution.generator.ccline.*;
 
 /**
-    Approach 1: geometric optimisation.
+    Approach 1: geometric construction.
 
     Builds a constructed out-in-out racing line (RacingLineProfileBuilder)
     within the physical road at a configurable edge standoff
-    (context.edgeStandoff) and quantises it into CCLine segments with the
-    shared CCLineQuantizer. The hand-tuned originals average 50-60% of
-    the physical half-road and kerb-clip past the edge at apexes
-    (2026-07-19 scale correction in BESTLINE.md) — this generator aims
-    for the same behaviour with the standoff as the safety knob.
+    (context.edgeStandoff) and quantises it into CCLine segments. Kept as
+    its own method (rule-based, no objective) so it can be compared
+    in-game against the fastest-lap simulation (option 4), which uses
+    this construction as its seed.
 */
 public class MinCurvatureCCLineGenerator implements CCLineGenerator {
 
     public String getName() {
-        return "Geometric (Minimum Curvature)";
+        return "Geometric (Constructed Racing Line)";
     }
 
     public CCLineGenerationResult generate(CCLineGeneratorContext context,
                                            CCLineProgressListener listener) throws Exception {
-        CCLineTrackGeometry geo = context.geometry;
-
         if (listener != null)
             listener.progress(5, "Constructing racing line...");
 
@@ -51,15 +48,27 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         // energy-relaxation profiles either hugged the middle or targeted
         // the game's 8x-inflated tolerance bound, i.e. off the real road)
         CCLineLateralProfile profile =
-            RacingLineProfileBuilder.build(geo, context.edgeStandoff);
+            RacingLineProfileBuilder.build(context.geometry, context.edgeStandoff);
 
+        return quantizeAndPolish(context, listener, profile, null);
+    }
+
+    /** Shared tail of the geometric-family methods: profile -> quantize
+        -> smoothness polish -> score. adLapTimes (nullable) is the
+        {seed, optimised} lap-time pair reported by the fastest-lap
+        method. */
+    static CCLineGenerationResult quantizeAndPolish(CCLineGeneratorContext context,
+                                                    CCLineProgressListener listener,
+                                                    CCLineLateralProfile profile,
+                                                    double[] adLapTimes) throws Exception {
         if (listener != null) {
             if (listener.isCancelled())
                 return null;
             listener.progress(85, "Quantising into CCLine segments...");
         }
 
-        CCLine ccLine = new CCLineQuantizer(geo, profile, context.seamOvershoot).quantize();
+        CCLine ccLine = new CCLineQuantizer(context.geometry, profile,
+            context.seamOvershoot).quantize();
 
         // Smoothness polish: the greedy quantizer steers with heading
         // kicks that destabilise the AI in-game; anneal them out.
@@ -75,6 +84,9 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
             listener.progress(100, "Done");
 
         CCLineGenerationResult result = new CCLineGenerationResult(ccLine, score);
+        if (adLapTimes != null)
+            result.addWarning(String.format("Lap time model: %.2fs seed -> %.2fs optimised",
+                new Object[] { new Double(adLapTimes[0]), new Double(adLapTimes[1]) }));
         if (!score.isValid()) {
             if (score.outOfBounds > 0)
                 result.addWarning(score.outOfBounds + " Seg(s) outside the drivable bound");

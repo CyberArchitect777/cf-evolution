@@ -196,7 +196,7 @@ public class GenerateTrackDialog extends JDialog {
                         lineTrack.calculateTrackLayout();
                         CCLineGeneratorContext ctx = new CCLineGeneratorContext(lineTrack);
                         ctx.seamOvershoot = 8;
-                        line = new MinCurvatureCCLineGenerator().generate(ctx, null);
+                        line = new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator().generate(ctx, null);
                     }
                 }
                 catch (Exception e) {
