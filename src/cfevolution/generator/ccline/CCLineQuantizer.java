@@ -68,6 +68,10 @@ public class CCLineQuantizer {
         like a kick — arcs previously turned for free, which is exactly
         why whip arcs beat honest corner arcs at corner entries. */
     private static final double REL_RATE_ALLOWANCE = 1600.0;
+    /** Candidates are hard-rejected beyond this multiple of the physical
+        road half-width (deep-kerb range; Monaco's hand-tuned line peaks
+        at 1.36x). */
+    private static final double KERB_HARD_LIMIT = 1.45;
 
     /** Profile heading rate (angle units per TLU) above which a Seg counts
         as the core of a corner. 90 deg over 20 TLU is ~820/TLU; gentle
@@ -448,11 +452,22 @@ public class CCLineQuantizer {
         // A fired Pythagoras clamp means this radius breaks the game's
         // math at this point — reject regardless of tracking error.
         boolean fInvalid = scratch.clampCount > nClampsBefore;
+        // Off-road ratchet against the PHYSICAL road edge (the old
+        // geo.usableBound check was the game's ~8x-inflated tolerance and
+        // never fired — 2026-07-19 scale correction). A hard wall alone
+        // caused runaways: once outside, recovery candidates were invalid
+        // too and the walk careened in the invalid tier. So: candidates
+        // may never be FURTHER out than both the deep-kerb limit and the
+        // walk's current excursion — going out is rejected, coming back
+        // is always legal.
+        int iStartSeg = segAt(st.walkedTlu);
+        double dEntryRatio = Math.abs(st.wSegPosX) / Math.max(1.0, geo.physicalBound[iStartSeg]);
+        double dRatioLimit = Math.max(KERB_HARD_LIMIT, dEntryRatio + 0.05);
         for (int t = st.walkedTlu; t < st.walkedTlu + nLen; t++) {
             int i = segAt(t);
             double dErr = scratch.ccLine[i] - profile[i];
             dSumSq += dErr * dErr;
-            if (Math.abs(scratch.ccLine[i]) >= geo.usableBound[i])
+            if (Math.abs(scratch.ccLine[i]) >= geo.physicalBound[i] * dRatioLimit)
                 fInvalid = true;
         }
         // Anchor the sector end so state stays on the profile

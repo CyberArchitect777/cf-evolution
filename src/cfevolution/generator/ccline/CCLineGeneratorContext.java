@@ -40,6 +40,10 @@ public class CCLineGeneratorContext {
         across the start/finish seam (original tracks use 0-44). */
     public int seamOvershoot = 0;
 
+    /** Geometric method: distance kept from the physical road edge, as a
+        fraction of the local half-width (0.15 = leave 15% margin). */
+    public double edgeStandoff = 0.15;
+
     /** 0..1: how strongly the geometric method smooths towards minimum
         curvature vs staying near the track centre. */
     public double smoothingWeight = 0.9;

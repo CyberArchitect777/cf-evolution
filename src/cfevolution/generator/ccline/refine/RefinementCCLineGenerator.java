@@ -91,11 +91,20 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
             if (!mutate(candidate, rand))
                 continue;
 
-            double dCand = evaluator.score(candidate).total();
+            CCLineEvaluator.Score candScore = evaluator.score(candidate);
+            // Hard rule: never accept more out-of-bounds Segs than we
+            // already have. Out-of-bounds is a soft score term (kerb
+            // clipping is legitimate), but long annealing runs otherwise
+            // ratchet the line clean off the track through accepted
+            // uphill steps (seen in-game with 1M iterations, 2026-07-19).
+            if (candScore.outOfBounds > currentScore.outOfBounds)
+                continue;
+            double dCand = candScore.total();
             double dDelta = dCand - dCurrent;
             if (dDelta <= 0
                 || (dTemp > 0 && rand.nextDouble() < Math.exp(-dDelta / dTemp))) {
                 current = candidate;
+                currentScore = candScore;
                 dCurrent = dCand;
                 if (dCand < dBest) {
                     best = copyLine(candidate);

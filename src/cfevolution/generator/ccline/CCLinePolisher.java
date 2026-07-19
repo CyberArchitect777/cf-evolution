@@ -57,6 +57,7 @@ public class CCLinePolisher {
         // Reference profile: what the unpolished line actually does
         CCLineEvaluator.Score seedScore = ev.score(line);
         short[] reference = seedScore.simulation.ccLine.clone();
+        int nCurrentOob = seedScore.outOfBounds;
 
         CCLine current = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(line);
         double dCurrent = polishTotal(ev, seedScore, reference);
@@ -107,8 +108,13 @@ public class CCLinePolisher {
                     if (s.unsafeRadius > 0) DEBUG_STATS[6]++;
                 }
             }
+            // Never trade smoothness for new out-of-bounds Segs (same
+            // hard rule as the refinement annealer, 2026-07-19)
+            if (s.outOfBounds > nCurrentOob)
+                continue;
             if (dCand <= dCurrent) { // hill climb; plateau moves allowed
                 current = candidate;
+                nCurrentOob = s.outOfBounds;
                 dCurrent = dCand;
                 if (dCand < dBest) {
                     best = candidate;

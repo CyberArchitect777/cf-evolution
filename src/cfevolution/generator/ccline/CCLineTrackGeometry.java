@@ -48,9 +48,18 @@ public class CCLineTrackGeometry {
            + (wLeftAndRightSideY + bExtraSideY)^2 / 64) * 8 */
     public final double[] trackWidth;
 
-    /** Usable lateral bound per Seg: trackWidth - 0x340 (car-width margin).
-        A CCLine point is inside the track when abs(wCCLine) < usableBound. */
+    /** The game's tolerance bound per Seg: trackWidth - 0x340. This is
+        what TCCompareCCLineToTrackWidth checks — but it is ~8x the
+        physical road (see physicalBound) and nearly vacuous; treat it as
+        the game's flag threshold, not the road edge. */
     public final double[] usableBound;
+
+    /** PHYSICAL road half-width per Seg in wCCLine units: trackWidth / 8
+        — the same scale the map draws edges at (width >> 3 from centre).
+        Established 2026-07-19: hand-tuned lines average 50-60% of this
+        and peak at 0.9-1.36x (kerb clipping); it is the real corridor
+        for line generation. */
+    public final double[] physicalBound;
 
     public CCLineTrackGeometry(Track track) {
         TrackSegments segs = track.getTrackSegments();
@@ -62,6 +71,7 @@ public class CCLineTrackGeometry {
         angleZChangeMulHalfPI = new int[segCount];
         trackWidth = new double[segCount];
         usableBound = new double[segCount];
+        physicalBound = new double[segCount];
 
         for (int i = 0; i < segCount; i++) {
             Seg seg = segs.getSegAt(i);
@@ -73,6 +83,7 @@ public class CCLineTrackGeometry {
             double wy = seg.getTrackWidthY() + seg.getExtraSideY();
             trackWidth[i] = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0) * 8.0;
             usableBound[i] = trackWidth[i] - 0x340;
+            physicalBound[i] = trackWidth[i] / 8.0;
         }
     }
 }

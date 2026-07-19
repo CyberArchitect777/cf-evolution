@@ -102,7 +102,7 @@ public class CCLineEvaluator {
         for (int i = 0; i < geo.segCount; i++) {
             if (!r.covered[i])
                 s.uncovered++;
-            else if (Math.abs(r.ccLine[i]) >= geo.usableBound[i])
+            else if (Math.abs(r.ccLine[i]) >= geo.physicalBound[i])
                 s.outOfBounds++;
         }
 
