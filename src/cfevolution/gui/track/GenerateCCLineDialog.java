@@ -46,6 +46,8 @@ public class GenerateCCLineDialog extends JDialog {
     private JTextField iterationsField;
     private JTextField overshootField;
     private JTextField standoffField;
+    private JRadioButton replaceModeButton;
+    private JRadioButton completeModeButton;
     private JTextField folderField;
     private JProgressBar progressBar;
     private JLabel statusLabel;
@@ -103,6 +105,20 @@ public class GenerateCCLineDialog extends JDialog {
         gc.gridx = 1;
         standoffField = new JTextField("15", 8);
         params.add(standoffField, gc);
+
+        gc.gridy = row++;
+        gc.gridx = 0;
+        params.add(new JLabel("Mode:"), gc);
+        gc.gridx = 1;
+        replaceModeButton = new JRadioButton("Replace whole line", true);
+        completeModeButton = new JRadioButton("Complete existing line");
+        ButtonGroup modeGroup = new ButtonGroup();
+        modeGroup.add(replaceModeButton);
+        modeGroup.add(completeModeButton);
+        JPanel modePanel = new JPanel(new GridLayout(2, 1, 0, 0));
+        modePanel.add(replaceModeButton);
+        modePanel.add(completeModeButton);
+        params.add(modePanel, gc);
 
         if (fNeedsTrainingFolder) {
             gc.gridy = row++;
@@ -227,12 +243,28 @@ public class GenerateCCLineDialog extends JDialog {
             }
         };
 
+        final boolean fComplete = completeModeButton.isSelected();
         workerThread = new Thread(new Runnable() {
             public void run() {
                 CCLineGenerationResult generated = null;
                 String error = null;
                 try {
                     generated = generator.generate(context, listener);
+                    // Completion mode: keep the existing sectors, generate
+                    // only the remaining lap targeting the method's line,
+                    // rejoining the kept line's own stamps at the wrap
+                    if (fComplete && generated != null) {
+                        cfevolution.data.track.CCLine completed =
+                            CCLineCompletion.complete(context.geometry,
+                                track.getCCLine(),
+                                generated.score.simulation, context.seamOvershoot);
+                        if (completed == null)
+                            error = "Nothing to complete: the existing line is empty"
+                                  + " or already covers the whole lap.";
+                        else
+                            generated = new CCLineGenerationResult(completed,
+                                context.evaluator.score(completed));
+                    }
                 }
                 catch (Exception e) {
                     error = e.getMessage();

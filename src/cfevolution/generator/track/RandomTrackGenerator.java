@@ -111,6 +111,15 @@ public class RandomTrackGenerator {
         int nDonorTotalTlu = donorTotalTlu(scratch.getTrackSegments());
         Vector donorSfMarkings = harvestSfMarkings(scratch.getTrackSegments(),
                                                    nDonorTotalTlu);
+        int[] anLaneTemplate = harvestLaneTemplate(scratch.getTrackSegments());
+        double[] adKerbTemplate = harvestKerbTemplate(scratch.getTrackSegments());
+        double dHalfRoad = 0;
+        if (scratch.getTrackSegments().getMaxTrackSegIndex() > 0) {
+            cfevolution.data.track.Seg seg0 = scratch.getTrackSegments().getSegAt(0);
+            double wx = seg0.getTrackWidthX() + seg0.getExtraSideX();
+            double wy = seg0.getTrackWidthY() + seg0.getExtraSideY();
+            dHalfRoad = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0);
+        }
         TrackSegment donorFirst = scratch.getTrackSegments().getAt(1);
         int nFenceR = donorFirst != null ? donorFirst.getFenceDistR() : 2;
         int nFenceL = donorFirst != null ? donorFirst.getFenceDistL() : 2;
@@ -191,6 +200,27 @@ public class RandomTrackGenerator {
         attachScenery(result, donorScenery, nDonorTotalTlu);
         attachSfMarkings(result, donorSfMarkings, nDonorTotalTlu);
 
+        // Rolling elevation (donor-calibrated; random tracks were dead
+        // flat since v1). Heights are per-TLU gradients and the lap must
+        // close on sum(len*h) ~ 0 — all 16 originals close within +-21.
+        assignHeights(result, rand);
+
+        // Kerbs: inside of corners, at the donor's own kerb density
+        // (Phoenix has almost none, Silverstone plenty — per-track style),
+        // skipped entirely on minimal-width roads (user rule)
+        assignKerbs(result, adKerbTemplate, dHalfRoad, rand);
+
+        // Pit lane paint: the dashed in/out lane lines are MarkingType-3
+        // 0x8A commands on the MAIN track ~5-12 TLU before each connect,
+        // on the pit's side (all donors; in-game round 4 found them
+        // missing). Reuse the donor's own dash count/lateral magnitude,
+        // sign forced to our left-side pit.
+        int nExitTlu = pitPlan.exitOffset;
+        int nEntryTlu = result.totalTlu
+            - ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu
+            + pitPlan.entryOffset;
+        attachPitLaneMarkings(result, anLaneTemplate, nEntryTlu, nExitTlu);
+
         // Donor-like short sections: long generated straights carried 40+
         // commands each and the game silently drops objects beyond a
         // per-section budget (proven by the ABTEST A/B: the same commands
@@ -199,13 +229,156 @@ public class RandomTrackGenerator {
         // removal windows at the pit connects that the originals have
         // (without them the pit mouth is walled shut: invisible wall on
         // entry, wing damage on exit — in-game finding).
-        int nExitTlu = pitPlan.exitOffset;
-        int nEntryTlu = result.totalTlu
-            - ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu
-            + pitPlan.entryOffset;
         splitSections(result, nExitTlu, nEntryTlu);
 
         return result;
+    }
+
+    /** Donor-calibrated gradient cap (originals: typical max 43-98). */
+    private static final int MAX_GRADIENT = 60;
+
+    /** Assigns a rolling elevation profile: 2-4 sinusoidal gradient waves
+        with whole numbers of cycles per lap (so the elevation integral
+        closes by construction), rounded per section, S/F and approach
+        straights kept flat (the grid), then a closure pass keeps
+        sum(len*h) within the originals' +-21 tolerance. */
+    private void assignHeights(Result result, Random rand) {
+        int nCount = result.segments.size();
+        int nTotal = result.totalTlu;
+        int nWaves = 2 + rand.nextInt(3);
+        double[] adAmp = new double[nWaves];
+        double[] adPhase = new double[nWaves];
+        int[] anCycles = new int[nWaves];
+        for (int w = 0; w < nWaves; w++) {
+            adAmp[w] = 10.0 + rand.nextInt(30);
+            adPhase[w] = rand.nextDouble();
+            anCycles[w] = 1 + rand.nextInt(3);
+        }
+        int nCum = 0;
+        for (int i = 0; i < nCount; i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            double dMid = (nCum + ts.getTlu() / 2.0) / nTotal;
+            double h = 0.0;
+            for (int w = 0; w < nWaves; w++)
+                h += adAmp[w] * Math.sin(2.0 * Math.PI * (anCycles[w] * dMid + adPhase[w]));
+            int nH = (int) Math.round(h);
+            if (nH > MAX_GRADIENT) nH = MAX_GRADIENT;
+            if (nH < -MAX_GRADIENT) nH = -MAX_GRADIENT;
+            if (i == 0 || i == nCount - 1)
+                nH = 0; // grid and pit approach stay flat
+            ts.setHeightChange(nH);
+            nCum += ts.getTlu();
+        }
+        // Closure: walk mid-lap sections shaving one gradient unit at a
+        // time until the length-weighted sum is inside tolerance
+        long lResidual = 0;
+        for (int i = 0; i < nCount; i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            lResidual += (long) ts.getTlu() * ts.getHeightChange();
+        }
+        int nGuard = 0;
+        while (Math.abs(lResidual) > 16 && nGuard++ < 10000) {
+            for (int i = 1; i < nCount - 1 && Math.abs(lResidual) > 16; i++) {
+                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                int nLen = ts.getTlu();
+                if (nLen > Math.abs(lResidual))
+                    continue; // too coarse; a finer section will fix it
+                if (lResidual > 0 && ts.getHeightChange() > -MAX_GRADIENT) {
+                    ts.setHeightChange(ts.getHeightChange() - 1);
+                    lResidual -= nLen;
+                }
+                else if (lResidual < 0 && ts.getHeightChange() < MAX_GRADIENT) {
+                    ts.setHeightChange(ts.getHeightChange() + 1);
+                    lResidual += nLen;
+                }
+            }
+        }
+    }
+
+    /** Roads narrower than this (physical half-width, wCCLine units)
+        get no kerbs at all (user rule: not on minimal-width streets). */
+    private static final double KERB_MIN_HALF_ROAD = 1100.0;
+
+    /** Donor kerb style {fraction of corners kerbed, low-kerb fraction}.
+        Corners counted as sign-runs of curvature; kerb runs as contiguous
+        kerb-flagged stretches. */
+    private double[] harvestKerbTemplate(TrackSegments donorSegments) {
+        int nCorners = 0, nKerbRuns = 0, nKerbSecs = 0, nLow = 0;
+        int nPrevSign = 0;
+        boolean fPrevKerb = false;
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            if (ts.getTlu() <= 0)
+                continue;
+            int nSign = ts.getCurvature() == 0 ? 0 : (ts.getCurvature() > 0 ? 1 : -1);
+            if (nSign != 0 && nSign != nPrevSign)
+                nCorners++;
+            nPrevSign = nSign;
+            boolean fKerb = (ts.getFlags() & 0xC00) != 0;
+            if (fKerb) {
+                nKerbSecs++;
+                if (!fPrevKerb)
+                    nKerbRuns++;
+                if ((ts.getFlags() & 0x4) != 0)
+                    nLow++;
+            }
+            fPrevKerb = fKerb;
+        }
+        double dDensity = nCorners > 0 ? Math.min(1.0, (double) nKerbRuns / nCorners) : 0.0;
+        double dLow = nKerbSecs > 0 ? (double) nLow / nKerbSecs : 0.0;
+        return new double[] { dDensity, dLow };
+    }
+
+    /** Flags inside kerbs on generated corner sections at the donor's
+        density. Curvature sign convention (established from all 16
+        originals, 2026-07-19): positive = right turn -> right kerb 0x400;
+        negative -> left kerb 0x800. */
+    private void assignKerbs(Result result, double[] adTemplate, double dHalfRoad,
+                             Random rand) {
+        if (dHalfRoad < KERB_MIN_HALF_ROAD || adTemplate[0] <= 0.0)
+            return;
+        for (int i = 1; i < result.segments.size() - 1; i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            if (ts.getCurvature() == 0)
+                continue;
+            if (rand.nextDouble() >= adTemplate[0])
+                continue;
+            int nKerb = ts.getCurvature() > 0 ? 0x400 : 0x800;
+            if (rand.nextDouble() < adTemplate[1])
+                nKerb |= 0x4; // low kerb
+            ts.setFlags(ts.getFlags() | nKerb);
+        }
+    }
+
+    /** Donor's dashed-lane template {dashes, |lateral|} from its first
+        MarkingType-3 command; fallback 8 dashes at 400. Must run BEFORE
+        the closure loop replaces the scratch's donor segments. */
+    private int[] harvestLaneTemplate(TrackSegments donorSegments) {
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = (Command) c.nextElement();
+                if ((cmd.getType() == 0x8A || cmd.getType() == 0x8B)
+                    && cmd.getParam(1) == 3)
+                    // loaded command params are unsigned 16-bit; sign via short
+                    return new int[] { Math.max(3, (short) cmd.getParam(2)),
+                                       Math.max(90, Math.abs((short) cmd.getParam(3))) };
+            }
+        }
+        return new int[] { 8, 400 };
+    }
+
+    /** Places the dashed pit in/out lane paint (MarkingType 3) before the
+        entry and exit connects. Our generated pit is on the LEFT, so the
+        lateral position is negative. */
+    private void attachPitLaneMarkings(Result result, int[] anLaneTemplate,
+                                       int nEntryTlu, int nExitTlu) {
+        Command entryLane = new Command(0x8A, 0, 3, anLaneTemplate[0],
+                                        -anLaneTemplate[1], 0, 257);
+        Command exitLane = new Command(0x8A, 0, 3, anLaneTemplate[0],
+                                       -anLaneTemplate[1], 0, 257);
+        placeCommandAt(result, entryLane, nEntryTlu - 8);
+        placeCommandAt(result, exitLane, nExitTlu - 5);
     }
 
     /** Longest section kept when splitting straights (donors average ~12
@@ -267,6 +440,8 @@ public class RandomTrackGenerator {
                     piece.setCurvature(0);
                     piece.setFenceDistR(ts.getFenceDistR());
                     piece.setFenceDistL(ts.getFenceDistL());
+                    // gradient is per-TLU: every piece carries it
+                    piece.setHeightChange(ts.getHeightChange());
                 }
                 piece.setTlu(z - a);
                 // Wall window? (piece covers a connect's window exactly)
