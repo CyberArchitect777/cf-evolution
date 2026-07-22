@@ -93,8 +93,28 @@ public class RandomTrackGenerator {
         scratch = scratchTrack;
     }
 
-    /** Generates a closed random layout. Returns null only if cancelled. */
+    /** Default elevation range cap for callers that don't specify one
+        (harnesses, older callers) — a donor-typical mid-range hill. */
+    private static final double DEFAULT_MAX_ELEVATION_METRES = 25.0;
+
+    /** Generates a closed random layout with the default elevation cap.
+        Returns null only if cancelled. */
     public Result generate(long lSeed, int nTargetTlu, int nCorners,
+                           TrackProgressListener listener) throws Exception {
+        return generate(lSeed, nTargetTlu, nCorners, DEFAULT_MAX_ELEVATION_METRES, listener);
+    }
+
+    /** Generates a closed random layout. dMaxElevationMetres is the
+        user-facing cap on peak-to-trough elevation over the whole lap
+        (0 = flat, street-circuit style, e.g. Phoenix — the user's own
+        reference for scenery that doesn't suit hills); values are
+        clamped to ELEVATION_HARD_CEILING_M regardless, since generation
+        without any cap was found to drive the pitch angle (and hence the
+        Z position, stored as a 16-bit short like X/Y) into wraparound —
+        a real overflow bug, not just "too hilly" (2026-07-22, from the
+        user's Phoenix-scenery report). Returns null only if cancelled. */
+    public Result generate(long lSeed, int nTargetTlu, int nCorners,
+                           double dMaxElevationMetres,
                            TrackProgressListener listener) throws Exception {
         if (nTargetTlu > SEG_BUDGET)
             nTargetTlu = SEG_BUDGET;
@@ -203,7 +223,7 @@ public class RandomTrackGenerator {
         // Rolling elevation (donor-calibrated; random tracks were dead
         // flat since v1). Heights are per-TLU gradients and the lap must
         // close on sum(len*h) ~ 0 — all 16 originals close within +-21.
-        assignHeights(result, rand);
+        assignHeights(result, rand, dMaxElevationMetres);
 
         // Kerbs: inside of corners, at the donor's own kerb density
         // (Phoenix has almost none, Silverstone plenty — per-track style),
@@ -234,16 +254,48 @@ public class RandomTrackGenerator {
         return result;
     }
 
-    /** Donor-calibrated gradient cap (originals: typical max 43-98). */
+    /** Donor-calibrated gradient cap (originals: typical max 43-98) —
+        bounds the per-TLU pitch RATE for smoothness. This is independent
+        of (and much smaller a constraint than) the overall elevation
+        RANGE cap below: a modest gradient sustained over a long, mostly
+        one-signed stretch still integrates into a huge total climb (see
+        ELEVATION_HARD_CEILING_M). */
     private static final int MAX_GRADIENT = 60;
+
+    /** World Z units per metre — same 1024-units-per-TLU-per-4.87m scale
+        as X/Y (nPosChangeZ uses the identical LookupSinRaw*1024>>14
+        formula), per CLAUDE.md. */
+    private static final double Z_UNITS_PER_METRE = 210.0;
+
+    /** Hard safety ceiling on peak-to-trough elevation, regardless of the
+        user's requested cap: wPosZ is a 16-bit short like X/Y, and an
+        uncapped sinusoidal height profile was found to drive it into
+        wraparound (measured peak-to-trough of ~310m against a ~155m
+        representable half-range — 2026-07-22). Comfortably under the
+        original tracks' own observed maximum (~55m, Silverstone-style). */
+    private static final double ELEVATION_HARD_CEILING_M = 90.0;
 
     /** Assigns a rolling elevation profile: 2-4 sinusoidal gradient waves
         with whole numbers of cycles per lap (so the elevation integral
         closes by construction), rounded per section, S/F and approach
         straights kept flat (the grid), then a closure pass keeps
-        sum(len*h) within the originals' +-21 tolerance. */
-    private void assignHeights(Result result, Random rand) {
+        sum(len*h) within the originals' +-21 tolerance. The whole
+        profile is then uniformly rescaled (re-simulating the actual
+        pitch/Z stepping, not just the per-TLU gradient) until its real
+        peak-to-trough range is within the requested cap — dMaxMetres <=
+        0 means flat (no hills at all, e.g. for street-circuit-style
+        scenery that doesn't suit elevation change, the user's own
+        Phoenix example). */
+    private void assignHeights(Result result, Random rand, double dMaxMetres) {
         int nCount = result.segments.size();
+        double dCapMetres = Math.min(Math.max(dMaxMetres, 0.0), ELEVATION_HARD_CEILING_M);
+        if (dCapMetres <= 0.5) {
+            for (int i = 0; i < nCount; i++)
+                ((TrackSegment) result.segments.get(i)).setHeightChange(0);
+            return;
+        }
+        double dCapUnits = dCapMetres * Z_UNITS_PER_METRE;
+
         int nTotal = result.totalTlu;
         int nWaves = 2 + rand.nextInt(3);
         double[] adAmp = new double[nWaves];
@@ -254,23 +306,44 @@ public class RandomTrackGenerator {
             adPhase[w] = rand.nextDouble();
             anCycles[w] = 1 + rand.nextInt(3);
         }
-        int nCum = 0;
-        for (int i = 0; i < nCount; i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
-            double dMid = (nCum + ts.getTlu() / 2.0) / nTotal;
-            double h = 0.0;
-            for (int w = 0; w < nWaves; w++)
-                h += adAmp[w] * Math.sin(2.0 * Math.PI * (anCycles[w] * dMid + adPhase[w]));
-            int nH = (int) Math.round(h);
-            if (nH > MAX_GRADIENT) nH = MAX_GRADIENT;
-            if (nH < -MAX_GRADIENT) nH = -MAX_GRADIENT;
-            if (i == 0 || i == nCount - 1)
-                nH = 0; // grid and pit approach stay flat
-            ts.setHeightChange(nH);
-            nCum += ts.getTlu();
+
+        double dScale = 1.0;
+        for (int nPass = 0; nPass < 8; nPass++) {
+            int nCum = 0;
+            for (int i = 0; i < nCount; i++) {
+                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                double dMid = (nCum + ts.getTlu() / 2.0) / nTotal;
+                double h = 0.0;
+                for (int w = 0; w < nWaves; w++)
+                    h += adAmp[w] * Math.sin(2.0 * Math.PI * (anCycles[w] * dMid + adPhase[w]));
+                h *= dScale;
+                int nH = (int) Math.round(h);
+                if (nH > MAX_GRADIENT) nH = MAX_GRADIENT;
+                if (nH < -MAX_GRADIENT) nH = -MAX_GRADIENT;
+                if (i == 0 || i == nCount - 1)
+                    nH = 0; // grid and pit approach stay flat
+                ts.setHeightChange(nH);
+                nCum += ts.getTlu();
+            }
+            closeHeightSum(result);
+
+            long[] anRange = simulateElevationRange(result.segments);
+            long lActual = anRange[1] - anRange[0];
+            if (lActual <= dCapUnits || lActual == 0)
+                break;
+            // The pitch angle scales linearly with the height array, but
+            // Z (the sine of an accumulated angle) does not once angles
+            // stop being small — converge with a damped ratio rather
+            // than a single-shot linear guess.
+            dScale *= Math.sqrt(dCapUnits / lActual);
         }
-        // Closure: walk mid-lap sections shaving one gradient unit at a
-        // time until the length-weighted sum is inside tolerance
+    }
+
+    /** Nudges mid-lap sections by one gradient unit at a time until the
+        length-weighted sum of heights (~ the net pitch angle at lap end)
+        is within the originals' own +-16..21 tolerance. */
+    private void closeHeightSum(Result result) {
+        int nCount = result.segments.size();
         long lResidual = 0;
         for (int i = 0; i < nCount; i++) {
             TrackSegment ts = (TrackSegment) result.segments.get(i);
@@ -278,6 +351,7 @@ public class RandomTrackGenerator {
         }
         int nGuard = 0;
         while (Math.abs(lResidual) > 16 && nGuard++ < 10000) {
+            boolean fChanged = false;
             for (int i = 1; i < nCount - 1 && Math.abs(lResidual) > 16; i++) {
                 TrackSegment ts = (TrackSegment) result.segments.get(i);
                 int nLen = ts.getTlu();
@@ -286,13 +360,44 @@ public class RandomTrackGenerator {
                 if (lResidual > 0 && ts.getHeightChange() > -MAX_GRADIENT) {
                     ts.setHeightChange(ts.getHeightChange() - 1);
                     lResidual -= nLen;
+                    fChanged = true;
                 }
                 else if (lResidual < 0 && ts.getHeightChange() < MAX_GRADIENT) {
                     ts.setHeightChange(ts.getHeightChange() + 1);
                     lResidual += nLen;
+                    fChanged = true;
                 }
             }
+            if (!fChanged)
+                break; // no section fine enough left; leave the residual
         }
+    }
+
+    /** Standalone elevation-range estimate: replicates the game's pitch
+        accumulation + Z-position stepping (TCProcessTrackSectorPass1 —
+        wTCAbsAngleX accumulates the per-TLU height field exactly like
+        wTCAbsAngleZ accumulates curvature, then
+        Z += LookupSinRaw(pitch)*1024>>14 per TLU). Simplified: skips the
+        sector-boundary half-step phase alignment TrackSegments.java uses
+        for curvature/height, since that shifts the profile by under one
+        TLU and does not materially change the aggregate peak-to-trough
+        range this is used to cap — this is an internal diagnostic for
+        scaling, not a value stamped anywhere or gated for bit-fidelity. */
+    private static long[] simulateElevationRange(Vector segments) {
+        int nAngleX = 0;
+        long lZ = 0, lMin = 0, lMax = 0;
+        for (int s = 0; s < segments.size(); s++) {
+            TrackSegment ts = (TrackSegment) segments.get(s);
+            int nH = ts.getHeightChange();
+            for (int i = 0; i < ts.getTlu(); i++) {
+                nAngleX += nH;
+                int nPosChangeZ = cfevolution.data.f1gp.F1GPMath.LookupSinRaw((short) nAngleX);
+                lZ += (nPosChangeZ * 1024) >> 14;
+                if (lZ < lMin) lMin = lZ;
+                if (lZ > lMax) lMax = lZ;
+            }
+        }
+        return new long[] { lMin, lMax };
     }
 
     /** Roads narrower than this (physical half-width, wCCLine units)

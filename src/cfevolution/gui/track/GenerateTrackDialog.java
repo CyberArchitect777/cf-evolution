@@ -47,6 +47,7 @@ public class GenerateTrackDialog extends JDialog {
     private JTextField seedField;
     private JTextField lengthField;
     private JTextField cornersField;
+    private JTextField elevationField;
     private JProgressBar progressBar;
     private JLabel statusLabel;
     private JButton generateButton;
@@ -99,6 +100,13 @@ public class GenerateTrackDialog extends JDialog {
         cornersField = new JTextField("12", 10);
         params.add(cornersField, gc);
 
+        gc.gridy = 3;
+        gc.gridx = 0;
+        params.add(new JLabel("Max elevation change (metres, 0 = flat):"), gc);
+        gc.gridx = 1;
+        elevationField = new JTextField("25", 10);
+        params.add(elevationField, gc);
+
         progressBar = new JProgressBar(0, 100);
         statusLabel = new JLabel("Replaces the open track's layout and best line.", JLabel.CENTER);
 
@@ -134,11 +142,15 @@ public class GenerateTrackDialog extends JDialog {
     private void startGeneration() {
         final long lSeed;
         final int nTargetTlu, nCorners;
+        final double dMaxElevation;
         try {
             String sSeed = seedField.getText().trim();
             lSeed = sSeed.length() == 0 ? seedRoller.nextLong() : Long.parseLong(sSeed);
             nTargetTlu = Integer.parseInt(lengthField.getText().trim());
             nCorners = Integer.parseInt(cornersField.getText().trim());
+            dMaxElevation = Double.parseDouble(elevationField.getText().trim());
+            if (dMaxElevation < 0)
+                throw new NumberFormatException("elevation change must be 0 or more");
         }
         catch (NumberFormatException e) {
             statusLabel.setText("Invalid parameter: " + e.getMessage());
@@ -184,7 +196,7 @@ public class GenerateTrackDialog extends JDialog {
                     if (!scratch.load(new File(fileName)))
                         throw new Exception("Could not reload " + fileName + " as scratch track");
                     layout = new RandomTrackGenerator(scratch)
-                        .generate(lSeed, nTargetTlu, nCorners, listener);
+                        .generate(lSeed, nTargetTlu, nCorners, dMaxElevation, listener);
 
                     if (layout != null) {
                         // Scratch 2: carry the final layout, generate the best line on it
