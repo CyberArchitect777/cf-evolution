@@ -332,8 +332,20 @@ public class MainGUI extends javax.swing.JFrame implements WindowListener
             exceptionError.printStackTrace();
         }
     }
-    
-    
+
+    /** Re-applies the "Enable legacy options" preference to every open
+        track window's Tools menu (called when the option is changed). */
+    public void refreshLegacyOptions()
+    {
+        javax.swing.JInternalFrame[] frames = mainEditorWindow.getAllFrames();
+        for (int i = 0; i < frames.length; i++)
+        {
+            if (frames[i] instanceof TrackWindow)
+                ((TrackWindow) frames[i]).applyLegacyOptionsVisibility();
+        }
+    }
+
+
     private void optionsMenuActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_optionsMenuActionPerformed
         // Handles the event after the option menu item is activated by the user.
         

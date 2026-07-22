@@ -71,9 +71,24 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         treeWindow.setVisible(true);
         mapWindow.setVisible(true);
         updateCCLineCoverageStatus();
+        applyLegacyOptionsVisibility(); // Legacy best line methods hidden unless enabled in Options
         addInternalFrameListener(this); // Listener for internal frame closing events
         closingWindow = false; // Boolean value for detecting if closing occurs and then blocks any further events
         this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE); // Handle close operations manually
+    }
+
+    /** Shows or hides the legacy best line generation methods (options
+        1-3: Constructed Racing Line, Learned from Original Tracks,
+        Iterative Refinement) in the Tools menu, based on the "Enable
+        legacy options" preference. Fastest Lap Simulation (option 4) is
+        always shown. Off by default. */
+    public void applyLegacyOptionsVisibility()
+    {
+        boolean legacy = java.util.prefs.Preferences.userRoot().node("cfevolution")
+            .getBoolean("EnableLegacyOptions", false);
+        generateLineGeometric.setVisible(legacy);
+        generateLineDataFit.setVisible(legacy);
+        generateLineRefine.setVisible(legacy);
     }
     
     public void internalFrameClosing(InternalFrameEvent e) 

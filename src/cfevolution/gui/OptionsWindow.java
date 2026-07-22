@@ -65,7 +65,8 @@ public class OptionsWindow extends javax.swing.JInternalFrame
             interfaceModeSelector.setSelectedItem(interfaceSetting);
         }
         executableLocation.setText(cheqFlagData.get("EXELocation", ""));
-        System.out.println("Operating System Detected: " + System.getProperty("os.name"));                    
+        legacyOptionsCheckBox.setSelected(cheqFlagData.getBoolean("EnableLegacyOptions", false));
+        System.out.println("Operating System Detected: " + System.getProperty("os.name"));
     }
     
     /** This method is called from within the constructor to
@@ -84,12 +85,15 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         executableLocationPanel = new javax.swing.JPanel();
         executableLocation = new javax.swing.JTextField();
         executableSelector = new javax.swing.JButton();
+        legacyOptionsPanel = new javax.swing.JPanel();
+        legacyOptionsLabel = new javax.swing.JLabel();
+        legacyOptionsCheckBox = new javax.swing.JCheckBox();
         clearRecent = new javax.swing.JButton();
         buttonPanel = new javax.swing.JPanel();
         okButton = new javax.swing.JButton();
         cancelButton = new javax.swing.JButton();
 
-        getContentPane().setLayout(new java.awt.GridLayout(4, 1, 5, 5));
+        getContentPane().setLayout(new java.awt.GridLayout(5, 1, 5, 5));
 
         lookFeelPanel.setLayout(new java.awt.GridLayout(1, 2, 5, 5));
 
@@ -127,6 +131,16 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         executablePanel.add(executableLocationPanel);
 
         getContentPane().add(executablePanel);
+
+        legacyOptionsPanel.setLayout(new java.awt.GridLayout(1, 2, 5, 5));
+
+        legacyOptionsLabel.setText("Enable legacy options");
+        legacyOptionsPanel.add(legacyOptionsLabel);
+
+        legacyOptionsCheckBox.setToolTipText("Shows the older best line generation methods (Constructed Racing Line, Learned from Original Tracks, Iterative Refinement) in a track window's Tools menu. When off, only Fastest Lap Simulation is shown.");
+        legacyOptionsPanel.add(legacyOptionsCheckBox);
+
+        getContentPane().add(legacyOptionsPanel);
 
         clearRecent.setText("Clear Recent File List");
         clearRecent.addActionListener(new java.awt.event.ActionListener() {
@@ -214,6 +228,8 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         ThemeManager userInterfaceTheme = new ThemeManager();
         userInterfaceTheme.setUserInterfaceType(selectedMode, mainWindow);
         cheqFlagData.put("EXELocation", executableLocation.getText());
+        cheqFlagData.putBoolean("EnableLegacyOptions", legacyOptionsCheckBox.isSelected());
+        mainWindow.refreshLegacyOptions();
         try
         {
             this.setClosed(true);
@@ -243,6 +259,9 @@ public class OptionsWindow extends javax.swing.JInternalFrame
     private javax.swing.JPanel buttonPanel;
     private javax.swing.JButton cancelButton;
     private javax.swing.JButton clearRecent;
+    private javax.swing.JPanel legacyOptionsPanel;
+    private javax.swing.JLabel legacyOptionsLabel;
+    private javax.swing.JCheckBox legacyOptionsCheckBox;
     private javax.swing.JLabel executableLabel;
     private javax.swing.JPanel executableLabelPanel;
     private javax.swing.JTextField executableLocation;
