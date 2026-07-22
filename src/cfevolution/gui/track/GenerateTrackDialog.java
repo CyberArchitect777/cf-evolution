@@ -27,7 +27,6 @@ import cfevolution.data.track.CCLine;
 import cfevolution.data.track.Track;
 import cfevolution.generator.ccline.CCLineGenerationResult;
 import cfevolution.generator.ccline.CCLineGeneratorContext;
-import cfevolution.generator.ccline.geometric.MinCurvatureCCLineGenerator;
 import cfevolution.generator.track.RandomTrackGenerator;
 import cfevolution.generator.track.TrackProgressListener;
 
