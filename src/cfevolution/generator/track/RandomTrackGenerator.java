@@ -62,6 +62,11 @@ public class RandomTrackGenerator {
         /** TLU to add to/remove from the donor pit lane straights so the
             pit length matches the connect distance (PitLaneFitter). */
         public int pitDelta;
+        /** Closest the lap comes to itself, as a multiple of the full road
+            width (parts less than 30 TLU apart along the track excluded).
+            1.0 means the road surfaces just touch; the accepted layout is
+            always above TrackLayoutClosure.CLEARANCE_ROAD_WIDTHS. */
+        public double clearanceRoadWidths;
         public final Vector warnings = new Vector();
     }
 
@@ -147,10 +152,17 @@ public class RandomTrackGenerator {
         Random rand = new Random(lSeed);
         TrackLayoutClosure closure = new TrackLayoutClosure(scratch);
 
+        // Overlap clearance is measured against the donor's own road
+        // width; fall back to a typical original if the donor gave us
+        // nothing to measure.
+        double dClearanceHalfRoad = dHalfRoad > 0 ? dHalfRoad : 1500.0;
+
         Vector prims = null;
         boolean fAccepted = false;
         double dGap = Double.MAX_VALUE;
+        double dClearance = 0;
         int nAttempt;
+        int nRejectedOverlap = 0;
         for (nAttempt = 1; nAttempt <= 300 && !fAccepted; nAttempt++) {
             if (listener != null) {
                 if (listener.isCancelled())
@@ -164,15 +176,29 @@ public class RandomTrackGenerator {
             if (totalTlu(prims) > SEG_BUDGET)
                 continue;
             dGap = closure.closePosition(prims);
-            fAccepted = dGap <= TrackLayoutClosure.GAP_TARGET
-                && totalTlu(prims) <= SEG_BUDGET
-                && closure.aspectRatio() <= TrackLayoutClosure.MAX_ASPECT
-                && !closure.selfIntersects();
+            if (dGap > TrackLayoutClosure.GAP_TARGET
+                || totalTlu(prims) > SEG_BUDGET
+                || closure.aspectRatio() > TrackLayoutClosure.MAX_ASPECT
+                || closure.selfIntersects())
+                continue;
+            // Overlap gate: a layout whose centreline never crosses itself
+            // can still run alongside itself closely enough for the two
+            // road surfaces to merge — that is what the crossing test
+            // above cannot see, and what produced the overlapping tracks
+            // reported in-game (2026-07-27). Rejecting here simply draws
+            // another layout, which is what the retry loop is for.
+            dClearance = closure.minClearance(TrackLayoutClosure.CLEARANCE_WINDOW_TLU);
+            if (dClearance < TrackLayoutClosure.requiredClearance(dClearanceHalfRoad)) {
+                nRejectedOverlap++;
+                continue;
+            }
+            fAccepted = true;
         }
         if (!fAccepted)
             throw new Exception("Could not generate an acceptable layout after "
-                                + (nAttempt - 1) + " attempts (closure, compactness and"
-                                + " self-intersection gates)");
+                                + (nAttempt - 1) + " attempts (closure, compactness,"
+                                + " self-intersection and overlap gates; "
+                                + nRejectedOverlap + " rejected for overlapping themselves)");
 
         if (listener != null)
             listener.progress(80, "Layout closed (gap " + (long) dGap + " units)");
@@ -182,6 +208,7 @@ public class RandomTrackGenerator {
         result.seed = lSeed;
         result.closureGap = dGap;
         result.totalTlu = totalTlu(prims);
+        result.clearanceRoadWidths = dClearance / (2.0 * dClearanceHalfRoad);
         for (int i = 0; i < prims.size(); i++) {
             TrackLayoutClosure.Prim p = (TrackLayoutClosure.Prim) prims.get(i);
             TrackSegment ts = new TrackSegment();

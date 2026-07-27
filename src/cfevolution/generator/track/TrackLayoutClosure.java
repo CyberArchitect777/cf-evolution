@@ -65,8 +65,18 @@ public class TrackLayoutClosure {
     private static final int MAX_ADJUSTED_LENGTH = 150;
     private static final int MAX_CURV = 0x2000;  // engine limit
 
-    /** Maximum bounding-box aspect ratio accepted as a sane circuit. */
-    public static final double MAX_ASPECT = 2.2;
+    /** Maximum bounding-box aspect ratio accepted as a sane circuit.
+
+        Set to the loosest real circuit: F1CT05 Montreal is 3.68, F1CT01
+        Phoenix 3.16, F1CT13 Estoril 2.46 — all three failed the 2.2 this
+        gate used to carry (2026-07-27), which was truncating the shape
+        distribution rather than catching pathology. The Session 7
+        elongation it was introduced for (~5:1 strips) is prevented at
+        source by the straight-length caps (MAX_ADJUSTED_LENGTH here and
+        the 120 TLU cap in RandomTrackGenerator.buildPrimitives): with
+        this gate at 3.7 the generator's own layouts still peak at 3.13.
+        It is a backstop now, not a shaping constraint. */
+    public static final double MAX_ASPECT = 3.7;
 
     private final Track scratch;
 
@@ -231,21 +241,97 @@ public class TrackLayoutClosure {
     public boolean selfIntersects() {
         TrackSegments segs = scratch.getTrackSegments();
         int nPts = segs.getMaxTrackSegIndex() / 4;
+        if (nPts < 4)
+            return false;
         double[] px = new double[nPts], py = new double[nPts];
         for (int i = 0; i < nPts; i++) {
             Seg s = segs.getSegAt(i * 4);
             px[i] = s.getPosX();
             py[i] = s.getPosY();
         }
-        for (int a = 0; a < nPts - 1; a++)
-            for (int b = a + 2; b < nPts - 1; b++) {
-                if (a == 0 && b == nPts - 2)
-                    continue; // wrap-adjacent
-                if (segmentsCross(px[a], py[a], px[a + 1], py[a + 1],
-                                  px[b], py[b], px[b + 1], py[b + 1]))
+        // Sample i joins sample (i+1) % nPts, so the run back to the S/F
+        // line is part of the ring — a crossing there was invisible to
+        // this test before 2026-07-27.
+        for (int a = 0; a < nPts; a++)
+            for (int b = a + 2; b < nPts; b++) {
+                if (a == 0 && b == nPts - 1)
+                    continue; // wrap-adjacent to segment 0
+                int a2 = (a + 1) % nPts, b2 = (b + 1) % nPts;
+                if (segmentsCross(px[a], py[a], px[a2], py[a2],
+                                  px[b], py[b], px[b2], py[b2]))
                     return true;
             }
         return false;
+    }
+
+    /** Sampling step (TLU) for the clearance scan. */
+    private static final int CLEARANCE_STEP = 2;
+
+    /** Along-track window (TLU) used by the overlap gate. */
+    public static final int CLEARANCE_WINDOW_TLU = 30;
+
+    /** Required centreline separation as a multiple of the FULL road
+        width. 1.0 would mean the two road surfaces exactly touch; the
+        originals never come closer than 2.04 away from their two
+        deliberate crossings, so this leaves a visible gap while staying
+        well inside what hand-made layouts do. */
+    public static final double CLEARANCE_ROAD_WIDTHS = 1.5;
+
+    /** Smallest distance between two points of the centreline that are at
+        least nWindowTlu apart ALONG the lap (measured the short way
+        round, so the S/F wrap is included).
+
+        This is the test for layouts that look "overlapped": two stretches
+        running alongside each other never cross centrelines, so
+        selfIntersects() stays false while the road surfaces sit on top of
+        one another. The surfaces touch once the centrelines are within
+        2 x half-road.
+
+        The window stops a corner being compared against itself — the two
+        ends of a tight hairpin are legitimately close, but only a few TLU
+        apart along the track. Measured on the 16 originals, a 30 TLU
+        window leaves every track at 2.04 x road width or more, except at
+        the two places where the originals genuinely cross themselves
+        (Monaco's tunnel, Suzuka's figure-of-eight bridge), so the window
+        does not raise false alarms on hand-made corner geometry. */
+    public double minClearance(int nWindowTlu) {
+        TrackSegments segs = scratch.getTrackSegments();
+        int nLast = segs.getMaxTrackSegIndex();
+        int nPts = nLast / CLEARANCE_STEP + 1;
+        if (nPts < 8)
+            return Double.MAX_VALUE;
+        double[] px = new double[nPts], py = new double[nPts];
+        for (int i = 0; i < nPts; i++) {
+            Seg s = segs.getSegAt(i * CLEARANCE_STEP);
+            px[i] = s.getPosX();
+            py[i] = s.getPosY();
+        }
+        int nWindow = Math.max(1, nWindowTlu / CLEARANCE_STEP);
+        if (nWindow * 2 >= nPts)
+            return Double.MAX_VALUE; // lap too short to compare anything
+        double dBestSq = Double.MAX_VALUE;
+        for (int a = 0; a < nPts; a++)
+            for (int b = a + nWindow; b < nPts; b++) {
+                if (nPts - (b - a) < nWindow)
+                    continue; // closer than the window the other way round
+                double dx = px[a] - px[b], dy = py[a] - py[b];
+                double dSq = dx * dx + dy * dy;
+                if (dSq < dBestSq)
+                    dBestSq = dSq;
+            }
+        return dBestSq == Double.MAX_VALUE ? Double.MAX_VALUE : Math.sqrt(dBestSq);
+    }
+
+    /** The separation overlaps() demands, in world units. dHalfRoad is
+        the physical half-road width (trackWidth / 8). */
+    public static double requiredClearance(double dHalfRoad) {
+        return 2.0 * dHalfRoad * CLEARANCE_ROAD_WIDTHS;
+    }
+
+    /** True if any two parts of the lap are close enough that their road
+        surfaces overlap or nearly touch. */
+    public boolean overlaps(double dHalfRoad) {
+        return minClearance(CLEARANCE_WINDOW_TLU) < requiredClearance(dHalfRoad);
     }
 
     /** Bounding-box aspect ratio of the compiled layout (>= 1). Session 7

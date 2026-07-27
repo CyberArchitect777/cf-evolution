@@ -266,6 +266,10 @@ public class GenerateTrackDialog extends JDialog {
         status.append("Applied: seed ").append(layout.seed)
               .append(", ").append(layout.totalTlu).append(" TLU, closure gap ")
               .append((long) layout.closureGap).append(" units");
+        if (layout.clearanceRoadWidths < 100)
+            status.append(", closest approach ")
+                  .append(Math.round(layout.clearanceRoadWidths * 10) / 10.0)
+                  .append(" road widths");
         for (int i = 0; i < layout.warnings.size(); i++)
             status.append(" — ").append(layout.warnings.get(i));
         statusLabel.setText(status.toString());
