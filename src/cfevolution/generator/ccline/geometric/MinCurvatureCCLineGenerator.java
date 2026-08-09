@@ -67,6 +67,17 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
             listener.progress(85, "Quantising into CCLine segments...");
         }
 
+        // Keep the line out of the way of cars rejoining from the pits.
+        CCLineCorridor.keepClearOfPitExit(context.track, context.geometry, profile);
+
+        // NOT requantised against the corridor. That was tried (see
+        // CCLineCorridor.quantizeWithinCorridor) to stop the line reaching
+        // the road edge on corner approaches, and measured: it improved the
+        // worst amplitude on three originals but made it worse on the track
+        // the problem was reported from, and left the lateral snap that
+        // actually upsets the AI untouched. The snap comes from where the
+        // quantiser places its sector boundaries at a corner, not from the
+        // corridor, so it needs fixing there.
         CCLine ccLine = new CCLineQuantizer(context.geometry, profile,
             context.seamOvershoot).quantize();
 
