@@ -179,6 +179,8 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateLineFastest = new javax.swing.JMenuItem();
         repairLineItem = new javax.swing.JMenuItem();
         generateRandomTrack = new javax.swing.JMenuItem();
+        reduceMinimalTrack = new javax.swing.JMenuItem();
+        matchEndHeading = new javax.swing.JMenuItem();
 
         getContentPane().setLayout(new java.awt.FlowLayout());
 
@@ -317,6 +319,22 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         });
         toolsMenu.add(generateRandomTrack);
 
+        reduceMinimalTrack.setText("Reduce to Minimal Track...");
+        reduceMinimalTrack.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                reduceToMinimalTrack();
+            }
+        });
+        toolsMenu.add(reduceMinimalTrack);
+
+        matchEndHeading.setText("Add Segment to Match Start/End Heading...");
+        matchEndHeading.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                addEndHeadingSegment();
+            }
+        });
+        toolsMenu.add(matchEndHeading);
+
         trackMenuBar.add(toolsMenu);
 
         setJMenuBar(trackMenuBar);
@@ -411,8 +429,52 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private void openGenerateDialog(cfevolution.generator.ccline.CCLineGenerator generator)
     {
         // Opens the shared best line generation dialog preset to a method
+        String blocked = bestLineBlocker();
+        if (blocked != null)
+        {
+            JOptionPane.showMessageDialog(this, blocked, "Cannot Generate Best Line",
+                                          JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         GenerateCCLineDialog dialog = new GenerateCCLineDialog(this, currentTrack, generator);
         dialog.setVisible(true);
+    }
+
+    /** Why a best line cannot sensibly be generated for this track, or null
+        when it can. Checked before the dialog opens, so it covers every
+        generation method.
+
+        Two cases, both of which produced a meaningless line rather than an
+        error before: a track with no corners at all, where every line is
+        equally fast and the generator returns an almost empty one; and a
+        track whose ends do not face the same way, which the game cannot
+        wrap from the last segment back to the first — the line is walked
+        in world coordinates, so it needs the end to line up with the
+        start. */
+    private String bestLineBlocker()
+    {
+        TrackSegments segs = currentTrack.getTrackSegments();
+        if (cfevolution.generator.track.TrackHeadingClosure.allStraight(segs))
+            return "This track has no corners — every segment runs straight.\n\n"
+                 + "A best line only earns anything through corners, so there is\n"
+                 + "nothing here for it to work with. Build some corners first,\n"
+                 + "then generate the line.";
+        if (!cfevolution.generator.track.TrackHeadingClosure.headingMatches(segs))
+        {
+            int nWinding = cfevolution.generator.track.TrackHeadingClosure.netWinding(segs);
+            int nTurns = cfevolution.generator.track.TrackHeadingClosure.nearestWholeTurn(nWinding);
+            int nOut = nTurns * cfevolution.generator.track.TrackHeadingClosure.FULL_TURN - nWinding;
+            double dDegrees = nOut * 360.0
+                            / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN;
+            return "The last segment does not face the way the first one does —\n"
+                 + "they are " + (Math.round(Math.abs(dDegrees) * 10) / 10.0)
+                 + " degrees apart.\n\n"
+                 + "The game wraps from the last segment straight back to the first,\n"
+                 + "and the best line is built in world coordinates, so it needs the\n"
+                 + "two ends to line up. Run Tools > \"Add Segment to Match Start/End\n"
+                 + "Heading\" first, then generate the line.";
+        }
+        return null;
     }
 
     private void openGenerateTrackDialog()
@@ -434,6 +496,168 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         highlightSection(1, -1); // no track segment selected any more
         highlightSection(2, -1); // pit selection also stale
         replaceBestLine(newLine); // recalculates, rebuilds line nodes, map + title
+    }
+
+    /** Tools > cuts the track down to the stretch carrying the pit lane,
+        the grid and the start/finish line, so a short but fully featured
+        track can be built up from it. */
+    private void reduceToMinimalTrack()
+    {
+        cfevolution.generator.track.MinimalTrackReducer reducer =
+            new cfevolution.generator.track.MinimalTrackReducer(currentTrack);
+        cfevolution.generator.track.MinimalTrackReducer.Result plan = reducer.analyse();
+        if (!plan.ok)
+        {
+            JOptionPane.showMessageDialog(this, plan.failure, "Reduce to Minimal Track",
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        StringBuffer ask = new StringBuffer();
+        ask.append("Cut this track back to a straight starting canvas — the pit lane,\n")
+           .append("the grid and the start/finish line, with the rest of the lap removed?\n\n")
+           .append("Keeping sections 1-").append(plan.keepHead).append(" and ")
+           .append(plan.keepTail).append("-end; removing ").append(plan.removedSections)
+           .append(" sections (").append(plan.removedTlu).append(" TLU).\n")
+           .append("Every remaining corner is straightened, and the result padded to ")
+           .append(plan.resultTlu).append(" TLU\n")
+           .append("— a whole 512 TLU coordinate period, which is what keeps the road\n")
+           .append("drawn at its true size rather than squashed.\n\n")
+           .append("The grid and start/finish line are kept; the pit lane's entry and exit\n")
+           .append("are rebuilt to suit a straight track.\n")
+           .append("The best line will be cleared — build the track out, then generate one.\n\n")
+           .append("This cannot be undone. Continue?");
+        if (JOptionPane.showConfirmDialog(this, ask.toString(), "Reduce to Minimal Track",
+                                          JOptionPane.YES_NO_OPTION,
+                                          JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION)
+            return;
+
+        cfevolution.generator.track.MinimalTrackReducer.Result result = reducer.reduce();
+        if (!result.ok)
+        {
+            JOptionPane.showMessageDialog(this, result.failure, "Reduce to Minimal Track",
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        cfevolution.generator.track.TrackCameraSection.emptyCameraAdjustments(currentTrack.getFooter());
+        currentTrack.setLayoutMode(false);
+        currentTrack.calculateTrackLayout();
+        treeWindow.rebuildTrackNodes();
+        highlightSection(1, -1); // no track segment selected any more
+        highlightSection(2, -1); // pit selection also stale
+        treeWindow.deleteAllSegments(2); // clears the best line and its nodes
+        updateTrackMap();
+
+        StringBuffer msg = new StringBuffer();
+        msg.append("Reduced to ").append(currentTrack.getTrackTlu()).append(" TLU (")
+           .append(result.removedSections).append(" sections removed).\n\n")
+           .append("Kept: pit entry, grid, start/finish line, pit exit.\n")
+           .append("Straightened ").append(result.straightenedSections)
+           .append(" sections, and added ").append(result.padTlu)
+           .append(" TLU of straight so the length is a whole 512 TLU\n")
+           .append("coordinate period — which is what keeps the road drawn at its")
+           .append(" true size.\n")
+           .append("The pit lane's entry and exit were rebuilt to suit a straight track.\n")
+           .append("Road is drawn within ").append(Math.round(result.drawnError * 100))
+           .append("% of its true length, the pit lane within ")
+           .append(Math.round(result.pitDrawnError * 100))
+           .append("% (the originals sit at 3-5%).\n");
+        if (result.startAngleChanged)
+            msg.append("The start angle was squared up so the straight runs along an axis.\n");
+        msg.append("\nThe best line was cleared. Build the track out first — a line is")
+           .append("\nonly worth generating once the track is the shape you want.");
+        for (int i = 0; i < result.notes.size(); i++)
+            msg.append('\n').append(result.notes.get(i));
+        JOptionPane.showMessageDialog(this, msg.toString(), "Reduce to Minimal Track",
+                                      JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Tools > adds one segment at the end so the last segment faces the
+        way the first does. A track needs that to work; it does not need
+        to close back onto its own start position. */
+    private void addEndHeadingSegment()
+    {
+        cfevolution.generator.track.TrackHeadingClosure.Result plan =
+            cfevolution.generator.track.TrackHeadingClosure.analyse(currentTrack);
+        if (!plan.ok)
+        {
+            JOptionPane.showMessageDialog(this, plan.failure, "Match Start/End Heading",
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (plan.alreadyMatching)
+        {
+            StringBuffer msg = new StringBuffer();
+            msg.append("The last segment already faces the way the first does — ")
+               .append("net winding ").append(plan.turnsTarget).append(" turns");
+            if (plan.headingNeeded != 0)
+                msg.append(", out by ").append(Math.abs(plan.headingNeeded))
+                   .append(" angle units (the original tracks are out by 2 to 165)");
+            msg.append(". Nothing needs adding.\n");
+            appendGapReport(msg);
+            JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
+                                          JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        double dDegrees = plan.headingNeeded * 360.0
+                        / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN;
+        StringBuffer ask = new StringBuffer();
+        ask.append("The last segment faces ")
+           .append(Math.round(Math.abs(dDegrees) * 10) / 10.0)
+           .append(" degrees away from the first.\n\n")
+           .append("Add one segment of ").append(plan.addedTlu)
+           .append(" TLU, curvature ").append(plan.addedCurvature)
+           .append(", at the end of the track to bring them into line?\n\n")
+           .append("The track becomes ").append(plan.trackTluBefore).append(" + ")
+           .append(plan.addedTlu).append(" TLU. Continue?");
+        if (JOptionPane.showConfirmDialog(this, ask.toString(), "Match Start/End Heading",
+                                          JOptionPane.YES_NO_OPTION,
+                                          JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
+            return;
+
+        cfevolution.generator.track.TrackHeadingClosure.Result result =
+            cfevolution.generator.track.TrackHeadingClosure.addClosingSegment(currentTrack);
+        currentTrack.setLayoutMode(false);
+        currentTrack.calculateTrackLayout();
+        treeWindow.rebuildTrackNodes();
+        highlightSection(1, -1);
+        updateTrackMap();
+
+        StringBuffer msg = new StringBuffer();
+        msg.append("Added a ").append(result.addedTlu).append(" TLU segment, curvature ")
+           .append(result.addedCurvature).append(".\n")
+           .append("Track is now ").append(result.trackTluAfter).append(" TLU; net winding ")
+           .append(result.netWindingAfter
+                   / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN)
+           .append(" turns");
+        if (result.headingResidual != 0)
+            msg.append(", ").append(Math.abs(result.headingResidual))
+               .append(" angle units short (under a tenth of a degree — no whole-TLU")
+               .append(" segment lands on it exactly)");
+        msg.append(".\n");
+        appendGapReport(msg);
+        int nCcTlu = currentTrack.getCCLineTlu();
+        if (nCcTlu > 0 && nCcTlu < currentTrack.getTrackTlu())
+            msg.append("\nThe best line now covers ").append(nCcTlu).append(" of ")
+               .append(currentTrack.getTrackTlu())
+               .append(" TLU — use Tools > Generate Best Line (Complete existing line).");
+        JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
+                                      JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Adds the start-to-end gap and what it means to a report. The game
+        closes the gap itself by sliding every Seg, so the figure that
+        matters is the gap relative to the lap length. */
+    private void appendGapReport(StringBuffer msg)
+    {
+        double dGap = cfevolution.generator.track.TrackHeadingClosure.gapTlu(currentTrack);
+        double dRatio = currentTrack.getTrackTlu() > 0 ? dGap / currentTrack.getTrackTlu() : 0;
+        msg.append("Start-to-end gap: ").append(Math.round(dGap)).append(" TLU, ")
+           .append(Math.round(dRatio * 100)).append("% of the lap — ")
+           .append(cfevolution.generator.track.TrackHeadingClosure.describeGap(dRatio))
+           .append(".\n");
     }
 
     public void showBestLinePreview(double[] adOffsets)
@@ -621,6 +845,8 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem generateLineFastest;
     private javax.swing.JMenuItem repairLineItem;
     private javax.swing.JMenuItem generateRandomTrack;
+    private javax.swing.JMenuItem reduceMinimalTrack;
+    private javax.swing.JMenuItem matchEndHeading;
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;
     private javax.swing.JMenuItem removeTrack;

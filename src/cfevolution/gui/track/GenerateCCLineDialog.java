@@ -187,6 +187,59 @@ public class GenerateCCLineDialog extends JDialog {
         getContentPane().add(south, BorderLayout.SOUTH);
     }
 
+    /** Warning text when the generated line behaves far outside anything
+        the original tracks do, or null when it does not.
+
+        On a track whose end does not return to its start, the game slides
+        every Seg to close the gap, so the world path the generators
+        optimise is a distorted version of the road and the line can come
+        out badly. Nothing else catches it: `CCLineEvaluator` scores such
+        a line valid — measured on a line straying 7.9x off the road.
+
+        The test is on the line itself rather than on how open the track
+        is, because the two turned out to be unrelated (Session 25,
+        measured over all 16 reduced tracks: the worst line of the set
+        came from one of the more closed tracks, while the two most open
+        produced clean lines).
+
+        Thresholds are set from what the originals actually do: their
+        hand-tuned lines peak at 1.05x the physical road with kicks up to
+        683, and lines generated on them peak at 1.27x with kicks up to
+        922. Reduced tracks legitimately reach kicks of about 2,400, so
+        the bar sits above that. */
+    private String lineQualityWarning(CCLineGenerationResult generated) {
+        if (generated == null || generated.score == null || generated.score.simulation == null)
+            return null;
+        CCLineTrackGeometry geo = new CCLineTrackGeometry(track);
+        cfevolution.generator.ccline.CCLineSimulator.Result sim = generated.score.simulation;
+        if (sim.ccLine.length < geo.segCount)
+            return null;
+        double dWorst = 0;
+        int nMaxKick = 0;
+        for (int i = 0; i < geo.segCount; i++) {
+            if (geo.physicalBound[i] > 0)
+                dWorst = Math.max(dWorst, Math.abs(sim.ccLine[i]) / geo.physicalBound[i]);
+            int j = i + 1 >= geo.segCount ? 0 : i + 1;
+            nMaxKick = Math.max(nMaxKick, Math.abs(sim.ccLine[j] - sim.ccLine[i]));
+        }
+        if (dWorst <= WORST_EXCURSION_WARNING && nMaxKick <= MAX_KICK_WARNING)
+            return null;
+        return "WARNING: the line runs to "
+             + (Math.round(dWorst * 100) / 100.0) + "x the road half-width"
+             + " with a biggest sideways step of " + nMaxKick
+             + " (originals stay near 1.0x and under 1,000). The generator"
+             + " optimises the road as the game compiles it, and on a track"
+             + " whose end does not return to its start that shape is"
+             + " distorted. Check the preview before applying.";
+    }
+
+    /** Excursion, as a multiple of the physical road half-width, past which
+        a generated line is reported as suspect. */
+    private static final double WORST_EXCURSION_WARNING = 2.0;
+
+    /** Largest acceptable sideways step between adjacent Segs. */
+    private static final int MAX_KICK_WARNING = 3000;
+
     private void chooseFolder() {
         JFileChooser chooser = new JFileChooser(folderField.getText());
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -303,6 +356,9 @@ public class GenerateCCLineDialog extends JDialog {
             status.append(", ").append(result.score.outOfBounds).append(" Seg(s) out of bounds");
         for (int i = 0; i < result.warnings.size(); i++)
             status.append(" — ").append(result.warnings.get(i));
+        String warning = lineQualityWarning(result);
+        if (warning != null)
+            status.append(" — ").append(warning);
         statusLabel.setText(status.toString());
 
         trackWindow.showBestLinePreview(result.previewOffsets);
