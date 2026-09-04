@@ -3,7 +3,7 @@
 
 0.3.0
 
-- Random playable tracks can now be generated with changeable parameters. An AI drivable best line is also generated
+- Random playable tracks can now be generated with changeable parameters. An AI drivable best line is also generated.
 - Best lines can also be generated on existing tracks, either creating a completely new line or adding segments onto the existing line.
 - A minimal track mode has been created, cutting a circuit back to the bare basics for further user development.
 - A circuit can be automatically joined up to ensure that the first and last track segments face the same way.
@@ -11,6 +11,7 @@
 - Clicking the track map now selects the matching best line sector, pit lane segment or track segment in the tree.
 - The window title now warns when the best line is shorter than the track, which would leave the end of the lap without an AI line.
 - Project website added under `web/`, published automatically to GitHub Pages.
+- Several track editing process fixes.
 
 0.2.0
 
