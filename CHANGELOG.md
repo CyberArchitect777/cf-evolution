@@ -11,7 +11,7 @@
 - Clicking the track map now selects the matching best line sector, pit lane segment or track segment in the tree.
 - The window title now warns when the best line is shorter than the track, which would leave the end of the lap without an AI line.
 - Project website added under `web/`, published automatically to GitHub Pages.
-- Several track editing process fixes, including a track segment length truncation error above 255.
+- Several track editing process fixes, including resolving a best line length truncation error.
 
 0.2.0
 
