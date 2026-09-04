@@ -48,7 +48,8 @@ public class AboutGUI extends javax.swing.JInternalFrame {
         successorText = new javax.swing.JLabel();
         descText = new javax.swing.JLabel();
         f1gpText = new javax.swing.JLabel();
-        byText = new javax.swing.JLabel();
+        ceByText = new javax.swing.JLabel();
+        cfByText = new javax.swing.JLabel();
         versionText = new javax.swing.JLabel();
         okButton = new javax.swing.JButton();
 
@@ -78,13 +79,17 @@ public class AboutGUI extends javax.swing.JInternalFrame {
         f1gpText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
         f1gpText.setText("Formula One Grand Prix / World Circuit");
 
-        byText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        byText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
-        byText.setText("Development by Klaus Six, Barrie Millar and Rene Smit");
+        ceByText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        ceByText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        ceByText.setText("Development by Barrie Millar");
+
+        cfByText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        cfByText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+        cfByText.setText("Chequered Flag developed by Klaus Six, Barrie Millar and Rene Smit");
 
         versionText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         versionText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
-        versionText.setText("Version 0.2.0");
+        versionText.setText("Version 0.3.0");
 
         okButton.setText("OK");
         okButton.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
@@ -103,7 +108,9 @@ public class AboutGUI extends javax.swing.JInternalFrame {
         getContentPane().add(javax.swing.Box.createVerticalGlue());
         getContentPane().add(successorText);
         getContentPane().add(javax.swing.Box.createVerticalGlue());
-        getContentPane().add(byText);
+        getContentPane().add(ceByText);
+        getContentPane().add(javax.swing.Box.createVerticalGlue());
+        getContentPane().add(cfByText);
         getContentPane().add(javax.swing.Box.createVerticalGlue());
         getContentPane().add(versionText);
         getContentPane().add(javax.swing.Box.createVerticalGlue());
@@ -129,7 +136,8 @@ public class AboutGUI extends javax.swing.JInternalFrame {
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JLabel byText;
+    private javax.swing.JLabel ceByText;
+    private javax.swing.JLabel cfByText;
     private javax.swing.JLabel successorText;
     private javax.swing.JLabel descText;
     private javax.swing.JLabel f1gpText;
