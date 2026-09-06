@@ -201,7 +201,18 @@ public class CCLineQuantizer {
         return d;
     }
 
-    /** Builds the quantised CCLine. */
+    /** Builds the quantised CCLine.
+
+        NOTE (2026-09-06): steering the final sector onto the state the early
+        sectors hand over from — the seam closure CCLineWindowRepair uses after
+        a manual edit, applied to the lap wrap — was implemented, measured and
+        REVERTED. A/B on a freshly generated line for the reduced-Monza repro
+        track: 329 units at the handover without it, 333 with. That difference
+        is optimiser noise, not signal. It did improve a straight round-trip of
+        the originals (9 of 19 better, best -71), but it costs a second full
+        quantise pass and fixes nothing a user sees. Do not re-try it without a
+        different idea: one sector cannot absorb the error the tail accumulates
+        over a whole lap. See the Session 36 dev-log entry. */
     public CCLine quantize() {
         CCLine ccLine = new CCLine();
         CCLineSimulator.State st = simulator.initialState();
