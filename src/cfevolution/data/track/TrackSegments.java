@@ -523,7 +523,11 @@ public class TrackSegments extends Vector {
         wTCAbsAngleZ_2 = (short) nStartAngle;
         wTCAbsAngleX = 0; // @@@ X-Angle from header
         dTCAbsPosX = nPosX;
-        dTCAbsPosZ = 0; // @@@ get from header
+        // Track layouts start at zero (the header carries no Z); a PIT lane
+        // layout starts at the altitude of the road at its entry connect,
+        // supplied by calculatePitlaneLayout.
+        dTCAbsPosZ = m_pendingHaveStartPitZ ? m_pendingStartPitZ : 0;
+        m_pendingHaveStartPitZ = false;
         dTCAbsPosY = nPosY;
         wTrk_Width = (short) nStartWidth;
         wTrk_WidthPlus0x50 = (short) (wTrk_Width + 0x50);
@@ -688,6 +692,12 @@ public class TrackSegments extends Vector {
         // it should overlap the main track at entry and exit (the connection points).
         int nPitStartX = entrySeg.getPosX();
         int nPitStartY = entrySeg.getPosY();
+        // The pit lane leaves the road at the entry Seg, so it starts at that
+        // Seg's ALTITUDE too — the walk otherwise begins at zero and the whole
+        // lane sits at the wrong height on any track with elevation.
+        int nPitStartZ = entrySeg.getPosZ();
+        m_pendingStartPitZ = nPitStartZ;
+        m_pendingHaveStartPitZ = true;
 
         // If the pit exit (0x87) is found, wire up bCreatingPitlaneSegments so that
         // TCRecalcPosToFit forces the pit lane path to end at the exit track centre.
@@ -700,7 +710,12 @@ public class TrackSegments extends Vector {
                 m_pendingCreatingPitlane = true;
                 m_pendingOffsetPitX = exitSeg.getPosX() - nPitStartX;
                 m_pendingOffsetPitY = exitSeg.getPosY() - nPitStartY;
-                m_pendingOffsetPitZ = 0;
+                // Z was hardcoded to 0 here until 2026-09-05, so the pit lane
+                // was drawn as if the road were level at both connects. On the
+                // unmodified originals that put the lane up to 20.4 m out of
+                // position (F1CT02), and it is why a generated track's pit
+                // could appear far below its road.
+                m_pendingOffsetPitZ = exitSeg.getPosZ() - nPitStartZ;
                 fHaveExit = true;
             }
         }
@@ -945,6 +960,10 @@ public class TrackSegments extends Vector {
     boolean bCreatingPitlaneSegments = false;
     boolean m_pendingCreatingPitlane = false;
     int m_pendingOffsetPitX = 0, m_pendingOffsetPitY = 0, m_pendingOffsetPitZ = 0;
+    /** Altitude the pit lane walk starts at — the road's Z at the entry
+        connect. Consumed and cleared by the next calculateTrackLayout. */
+    int m_pendingStartPitZ = 0;
+    boolean m_pendingHaveStartPitZ = false;
     byte bDefaultTextureFlagsPlus1 = 3;
     byte byte_1E8AF = (byte) 0xaa;
     byte byte_1E8AE = 0x3d;
