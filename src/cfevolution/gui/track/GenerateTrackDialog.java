@@ -230,6 +230,7 @@ public class GenerateTrackDialog extends JDialog {
         pit lane's length to the new connect distance. */
     static void applySegments(Track track, RandomTrackGenerator.Result layout) {
         cfevolution.data.track.TrackSegments segs = track.getTrackSegments();
+
         cfevolution.data.track.TrackSegment dummy =
             (cfevolution.data.track.TrackSegment) segs.get(segs.size() - 1);
         dummy.setCommands(new java.util.Vector());
@@ -242,8 +243,18 @@ public class GenerateTrackDialog extends JDialog {
         // Generated laps wind right (interior on the right), so the pit
         // bulges left; donor pit curves mirror their own track's final
         // corner and would walk the pit off into the void here
+        // The offset was measured before generation began: generation uses
+        // this very track as its scratch pad, so measuring it here would read
+        // a layout the donor never had.
         cfevolution.generator.pitlane.PitLaneFitter.neutralizeCurvature(
-            track.getPitlaneSegments(), -1);
+            track.getPitlaneSegments(), -1, layout.donorPitOffset);
+
+        // The generated layout has its own hills; the pit lane still carries
+        // the donor's. Height is a per-TLU pitch rate the game double-
+        // integrates, so mismatched profiles leave the lane metres above or
+        // below the road. Must run AFTER the new segments are installed.
+        cfevolution.generator.pitlane.PitLaneFitter.followTrackHeights(
+            track.getPitlaneSegments(), segs);
     }
 
     private void generationFinished(RandomTrackGenerator.Result layout,

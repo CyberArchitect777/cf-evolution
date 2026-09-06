@@ -134,6 +134,11 @@ public class MinimalTrackReducer {
             stretched to meet its connects. */
         public double pitDrawnError;
 
+        /** How far the donor's own pit lane sat from its road, in world
+            units — the target the rebuilt lane is aimed at. 0 if it could
+            not be measured, in which case a fixed bend angle was used. */
+        public double pitOffset;
+
         /** Feature positions found, in TLU from the S/F line. */
         public int entryPaintTlu = -1;
         public int entryConnectTlu = -1;
@@ -269,6 +274,13 @@ public class MinimalTrackReducer {
         TrackSegments segs = track.getTrackSegments();
         int nLast = lastRealSection(segs);
 
+        // How far the donor's own pit lane sits from its own road, measured
+        // BEFORE anything is straightened — once the track is cut this
+        // relationship is gone. The rebuilt pit lane is aimed at the same
+        // distance, so a reduced track keeps its donor's pit geometry
+        // instead of inheriting whatever a fixed bend angle happens to give.
+        double dPitOffset = donorPitOffset();
+
         // Track width is set by 0x85 commands as the lap runs, so the width
         // the kept tail was authored at may be set by a command the cut is
         // about to delete. Carry the tail's own starting width across.
@@ -327,7 +339,13 @@ public class MinimalTrackReducer {
         // track's corners; against a straight canvas they would walk the
         // pit lane off the road.
         PitLaneFitter.neutralizeCurvature(track.getPitlaneSegments(),
-                                          track.getTrackDataHeader().getPitSide() ? -1 : 1);
+                                          track.getTrackDataHeader().getPitSide() ? -1 : 1,
+                                          dPitOffset);
+        // Step 1 flattened the track. The pit lane's height field is a pitch
+        // rate the game double-integrates, so leaving the donor's in place
+        // strands the lane metres above or below the road it runs beside.
+        PitLaneFitter.flattenHeights(track.getPitlaneSegments());
+        r.pitOffset = dPitOffset;
 
         track.setLayoutMode(false);
         track.calculateTrackLayout();
@@ -338,6 +356,14 @@ public class MinimalTrackReducer {
     }
 
     private static final int FULL_TURN = 65536;
+
+    /** Where the donor's own pit lane sits relative to its own road, taken
+        before the reduction touches either. Shared with the random track
+        generator, which needs the same answer for the same reason. */
+    private double donorPitOffset() {
+        return PitLaneFitter.measurePitOffset(track.getTrackSegments(),
+                                              track.getPitlaneSegments());
+    }
 
     /** How far a segment list's DRAWN length is from the length its data
         claims, as a fraction. The engine closes an open lap by sliding

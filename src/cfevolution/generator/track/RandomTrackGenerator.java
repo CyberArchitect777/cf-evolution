@@ -62,6 +62,10 @@ public class RandomTrackGenerator {
         /** TLU to add to/remove from the donor pit lane straights so the
             pit length matches the connect distance (PitLaneFitter). */
         public int pitDelta;
+        /** How far the donor's pit lane sat from the donor's road, in world
+            units — measured before generation overwrote the scratch track,
+            and the distance the rebuilt pit lane is aimed at. */
+        public double donorPitOffset;
         /** Closest the lap comes to itself, as a multiple of the full road
             width (parts less than 30 TLU apart along the track excluded).
             1.0 means the road surfaces just touch; the accepted layout is
@@ -131,6 +135,14 @@ public class RandomTrackGenerator {
             nCorners = 30;
 
         // Harvest donor properties BEFORE the scratch segments are replaced
+        // — including where the donor's pit lane sits relative to its own
+        // road, which the pit rebuild aims at later. Generated tracks inherit
+        // the donor's width (dHalfRoad below reads it from Seg 0), so that
+        // distance carries over. This MUST be taken here: generation uses the
+        // track as its scratch pad, so by the time the layout is applied the
+        // donor's own geometry is long gone.
+        double dDonorPitOffset = cfevolution.generator.pitlane.PitLaneFitter.measurePitOffset(
+            scratch.getTrackSegments(), scratch.getPitlaneSegments());
         Vector donorCommands = harvestCommands(scratch.getTrackSegments());
         Vector donorScenery = harvestPositionedCommands(scratch.getTrackSegments());
         int nDonorTotalTlu = donorTotalTlu(scratch.getTrackSegments());
@@ -206,6 +218,7 @@ public class RandomTrackGenerator {
         // Materialise the final segment list with commands attached
         Result result = new Result();
         result.seed = lSeed;
+        result.donorPitOffset = dDonorPitOffset;
         result.closureGap = dGap;
         result.totalTlu = totalTlu(prims);
         result.clearanceRoadWidths = dClearance / (2.0 * dClearanceHalfRoad);
