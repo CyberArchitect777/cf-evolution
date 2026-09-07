@@ -217,7 +217,66 @@ public class CCLineQuantizer {
         CCLine ccLine = new CCLine();
         CCLineSimulator.State st = simulator.initialState();
         quantizeFrom(st, geo.segCount + seamOvershoot, true, ccLine);
+        // NOT capped here. quantize()'s contract is to reproduce the profile it
+        // is given as faithfully as it can, and callers such as QuantGate and
+        // the repair path depend on that. Capping the coaching entries here
+        // straightens real corners out of a round-tripped original and took the
+        // round-trip error from rms 114 to rms 9846. It is a generation policy,
+        // so it is applied to the finished line by the generators instead.
         return ccLine;
+    }
+
+    /**
+        Keeps the line inside the game's 64-entry AI coaching table.
+
+        The game writes one entry per curved sector and only checks the count
+        afterwards, so a line with too many curves overruns the table and the
+        game HANGS when the track is loaded — measured at 3 of 12 generated
+        tracks before this existed. See CCLine.getCoachingEntryCount().
+
+        The quantiser emits 125-130 sectors where the original circuits carry
+        36-70, so the honest fix is to emit fewer in the first place; that is a
+        larger change. Until then, straighten the GENTLEST offending curves —
+        the ones whose arc turns least over its own length, which are the ones
+        contributing least to the racing line. A curve that barely bends is
+        nearly a straight already, so replacing it moves the line least.
+
+        Deliberately does nothing when the line is already inside the limit, so
+        every track that worked before still gets exactly the line it had.
+    */
+    public static void capCoachingEntries(CCLine ccLine) {
+        int nEntries = ccLine.getCoachingEntryCount();
+        if (nEntries <= CCLine.MAX_COACHING_ENTRIES)
+            return;
+
+        int nGuard = 0;
+        while (nEntries > CCLine.MAX_COACHING_ENTRIES && nGuard++ < 512) {
+            int nGentlest = -1;
+            double dLeastTurn = Double.MAX_VALUE;
+            for (int i = 0; i < ccLine.size(); i++) {
+                CCLineSegment seg = (CCLineSegment) ccLine.get(i);
+                if (!CCLine.countsTowardsCoachingTable(seg))
+                    continue;
+                // How far this sector actually turns: length over radius.
+                // Read the RAW radius word, not getRadius() — that is derived
+                // during track layout and is still zero on a freshly generated
+                // line, which silently made this whole loop find nothing.
+                int nRaw = (short) seg.getParam(seg.getType() == 0x80 ? 2 : 1);
+                if (nRaw == 0)
+                    continue;
+                double dTurn = seg.getTlu() / Math.abs((double) nRaw);
+                if (dTurn < dLeastTurn) {
+                    dLeastTurn = dTurn;
+                    nGentlest = i;
+                }
+            }
+            if (nGentlest < 0)
+                break;
+
+            CCLineSegment seg = (CCLineSegment) ccLine.get(nGentlest);
+            seg.setParam(seg.getType() == 0x80 ? 2 : 1, 0);   // straighten it
+            nEntries = ccLine.getCoachingEntryCount();
+        }
     }
 
     /** Greedy-quantizes nWindowTlu more TLU from the given walk state,

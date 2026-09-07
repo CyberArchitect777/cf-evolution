@@ -174,6 +174,11 @@ public class DataFitCCLineGenerator implements CCLineGenerator {
             return null; // cancelled
         ccLine = polished;
 
+        // After the polish, not just inside the quantiser: the polisher turns
+        // heading kicks into curves, and curves are what the game's 64-entry
+        // coaching table counts.
+        CCLineQuantizer.capCoachingEntries(ccLine);
+
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 
         if (listener != null)

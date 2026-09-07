@@ -138,6 +138,60 @@ public class CCLine extends Vector {
         return total;
     }
 
+    /** The game builds a table of AI coaching data from the best line, one
+        entry per qualifying sector, and that table holds only 64. It writes
+        the entries first and checks the count afterwards, so a line with too
+        many sectors overruns it and the game HANGS on loading the track —
+        no error, no crash, just a frozen circuit preview.
+
+        Only curved sectors count. A straight makes no entry, a wide (0x40)
+        sector makes no entry, and a curve outside the game's own radius
+        window makes no entry. The radius here is the RAW stored word, which
+        is getRadius() * 128.
+
+        Established 2026-09-06: the rule is the F1GP-SDL project's reading of
+        the game, and reproduces their per-circuit counts on all 16 originals
+        exactly. The originals sit at 18-36 against the limit; a generated
+        line reached 66. See CLAUDE.md, "A malformed track HANGS the game". */
+    public int getCoachingEntryCount() {
+        int nEntries = 0;
+        for (Enumeration e = elements(); e.hasMoreElements(); ) {
+            if (countsTowardsCoachingTable((CCLineSegment) e.nextElement()))
+                nEntries++;
+        }
+        return nEntries;
+    }
+
+    /** Whether one sector writes an entry into that table. */
+    public static boolean countsTowardsCoachingTable(CCLineSegment seg) {
+        int nType = seg.getType();
+        if (nType == 0x40)
+            return false;                       // wide (32-bit radius) sectors are skipped outright
+        // 0x80 is the first sector and carries an extra leading parameter.
+        int nRaw = (short) seg.getParam(nType == 0x80 ? 2 : 1);
+        if (nRaw == 0)
+            return false;                       // a straight
+        // The game divides a constant by the radius and skips the sector if
+        // that overflows a 16-bit result or comes out under 60 — i.e. if the
+        // curve is either impossibly tight or too gentle to be worth coaching.
+        long lValue = COACHING_DIVIDEND / Math.abs((long) nRaw);
+        return lValue <= 0xFFFF && lValue >= COACHING_MIN_VALUE;
+    }
+
+    /** The constant the game divides by the raw radius (0x0014_5F30). */
+    private static final long COACHING_DIVIDEND = 1335088L;
+    /** Below this the sector is too gently curved to earn an entry. */
+    private static final long COACHING_MIN_VALUE = 60L;
+
+    /** The game's coaching table holds 64 entries. We stay below that with
+        margin: measured against the real game across 12 generated tracks, the
+        three that hung counted 58, 62 and 66 while the nine that loaded
+        counted 56 or fewer — so the effective ceiling is lower than 64 by a
+        constant 6-8 that is not yet explained (the routine runs twice per
+        compile, and the pit lane is the likeliest second source). 54 sits
+        clear of the highest count that has ever been observed to load. */
+    public static final int MAX_COACHING_ENTRIES = 54;
+
     /** instance data members */
     protected int m_nCumTlu;
 }

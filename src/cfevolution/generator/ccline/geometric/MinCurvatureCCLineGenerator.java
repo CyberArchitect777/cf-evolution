@@ -89,6 +89,13 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
             return null; // cancelled
         ccLine = polished;
 
+        // Keep inside the game's 64-entry coaching table. This has to run
+        // AFTER the polish, not just inside the quantiser: the polisher's
+        // kick->arc conversion turns heading kicks into curves, and curves are
+        // exactly what the table counts, so polishing can put a capped line
+        // back over the limit.
+        CCLineQuantizer.capCoachingEntries(ccLine);
+
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 
         if (listener != null)
