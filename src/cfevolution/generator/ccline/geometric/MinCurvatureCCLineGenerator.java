@@ -93,8 +93,9 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         // AFTER the polish, not just inside the quantiser: the polisher's
         // kick->arc conversion turns heading kicks into curves, and curves are
         // exactly what the table counts, so polishing can put a capped line
-        // back over the limit.
-        CCLineQuantizer.capCoachingEntries(ccLine);
+        // back over the limit. Returns a new line — it re-fits the lap
+        // downstream of every straightening, so the result must be taken.
+        ccLine = CCLineQuantizer.capCoachingEntries(context.geometry, ccLine);
 
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 

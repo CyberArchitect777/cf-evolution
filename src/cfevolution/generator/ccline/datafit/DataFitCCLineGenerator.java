@@ -176,8 +176,9 @@ public class DataFitCCLineGenerator implements CCLineGenerator {
 
         // After the polish, not just inside the quantiser: the polisher turns
         // heading kicks into curves, and curves are what the game's 64-entry
-        // coaching table counts.
-        CCLineQuantizer.capCoachingEntries(ccLine);
+        // coaching table counts. Returns a new line — it re-fits the lap
+        // downstream of every straightening, so the result must be taken.
+        ccLine = CCLineQuantizer.capCoachingEntries(geo, ccLine);
 
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 

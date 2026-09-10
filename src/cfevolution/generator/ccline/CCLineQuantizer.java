@@ -241,43 +241,133 @@ public class CCLineQuantizer {
         contributing least to the racing line. A curve that barely bends is
         nearly a straight already, so replacing it moves the line least.
 
+        EVERY STRAIGHTENING IS FOLLOWED BY A DOWNSTREAM RE-FIT, and that is not
+        optional. The CCLine is stateful: each sector starts from the position
+        and heading the previous one ended with, so zeroing one radius shifts
+        the whole remainder of the lap. The first version of this method did
+        exactly that and, while it did make hanging tracks load, it destroyed
+        the line on every track it touched — worst single-Seg step 407 -> 65,009
+        units (~310 m) on one generated track, 0 -> 292 Segs beyond the road
+        edge. CCLineWindowRepair exists precisely to stop that cascade: it
+        re-quantises a bounded window after the change against the line's
+        ORIGINAL stamped offsets, so the walk rejoins the untouched remainder at
+        a sector boundary and the straightening is absorbed locally.
+
+        The target profile is captured ONCE, before any straightening, so every
+        repair aims at the line the generator actually produced rather than at
+        the partially-capped intermediate.
+
         Deliberately does nothing when the line is already inside the limit, so
-        every track that worked before still gets exactly the line it had.
+        every track that worked before still gets exactly the line it had. Note
+        that the limit carries a deliberate safety margin (54 against the game's
+        64, because the pit lane's share of the same table cannot be computed
+        here), so this DOES fire on tracks that would have loaded — two of the
+        twelve measured. That is another reason the re-fit is mandatory rather
+        than a refinement: a line that never needed capping must survive it.
+
+        Returns the capped line, which is a NEW object whenever a repair
+        succeeded; callers must use the return value.
     */
-    public static void capCoachingEntries(CCLine ccLine) {
-        int nEntries = ccLine.getCoachingEntryCount();
-        if (nEntries <= CCLine.MAX_COACHING_ENTRIES)
-            return;
+    public static CCLine capCoachingEntries(CCLineTrackGeometry geo, CCLine ccLine) {
+        return capCoachingEntries(geo, ccLine, CAP_REPAIR_WINDOW_TLU);
+    }
+
+    /** As above, with an explicit downstream re-fit window (TLU). Exposed so
+        the window can be swept from a harness; production callers take the
+        calibrated default. */
+    public static CCLine capCoachingEntries(CCLineTrackGeometry geo, CCLine ccLine,
+                                            int nWindowTlu) {
+        if (ccLine.getCoachingEntryCount() <= CCLine.MAX_COACHING_ENTRIES)
+            return ccLine;
+
+        // What the line does before any straightening — the profile every
+        // repair below aims to get back onto.
+        CCLineSimulator.Result start = new CCLineSimulator(geo).run(ccLine);
+        double[] adTarget = new double[geo.segCount];
+        for (int i = 0; i < geo.segCount && i < start.ccLine.length; i++)
+            adTarget[i] = start.ccLine[i];
 
         int nGuard = 0;
-        while (nEntries > CCLine.MAX_COACHING_ENTRIES && nGuard++ < 512) {
-            int nGentlest = -1;
-            double dLeastTurn = Double.MAX_VALUE;
-            for (int i = 0; i < ccLine.size(); i++) {
-                CCLineSegment seg = (CCLineSegment) ccLine.get(i);
-                if (!CCLine.countsTowardsCoachingTable(seg))
-                    continue;
-                // How far this sector actually turns: length over radius.
-                // Read the RAW radius word, not getRadius() — that is derived
-                // during track layout and is still zero on a freshly generated
-                // line, which silently made this whole loop find nothing.
-                int nRaw = (short) seg.getParam(seg.getType() == 0x80 ? 2 : 1);
-                if (nRaw == 0)
-                    continue;
-                double dTurn = seg.getTlu() / Math.abs((double) nRaw);
-                if (dTurn < dLeastTurn) {
-                    dLeastTurn = dTurn;
-                    nGentlest = i;
-                }
-            }
+        while (ccLine.getCoachingEntryCount() > CCLine.MAX_COACHING_ENTRIES
+               && nGuard++ < MAX_CAP_PASSES) {
+            int nGentlest = gentlestQualifyingSector(ccLine);
             if (nGentlest < 0)
                 break;
 
-            CCLineSegment seg = (CCLineSegment) ccLine.get(nGentlest);
-            seg.setParam(seg.getType() == 0x80 ? 2 : 1, 0);   // straighten it
-            nEntries = ccLine.getCoachingEntryCount();
+            CCLineSegment seg = ccLine.getAt(nGentlest);
+            int nRadiusParam = seg.getType() == 0x80 ? 2 : 1;
+
+            CCLineSegment straight = new CCLineSegment(seg.getType());
+            straight.setTlu(seg.getTlu());
+            for (int p = 0; p < 4; p++)
+                straight.setParam(p, seg.getParam(p));
+            straight.setParam(nRadiusParam, 0);
+
+            CCLine repaired = CCLineWindowRepair.replaceAndRepair(geo, ccLine,
+                nGentlest, new CCLineSegment[] { straight },
+                nWindowTlu, adTarget);
+
+            if (repaired == null) {
+                // No room for a window — the sector is at or beyond the last
+                // boundary. There is nothing downstream left to displace, so
+                // straightening in place cannot cascade.
+                seg.setParam(nRadiusParam, 0);
+                continue;
+            }
+            ccLine = repaired;
         }
+        return ccLine;
     }
+
+    /** The qualifying sector that bends least over its own length (1-based),
+        or -1 if the line has none. This is the one whose removal moves the
+        racing line least. */
+    private static int gentlestQualifyingSector(CCLine ccLine) {
+        int nGentlest = -1;
+        double dLeastTurn = Double.MAX_VALUE;
+        for (int i = 1; i <= ccLine.size(); i++) {
+            CCLineSegment seg = ccLine.getAt(i);
+            if (!CCLine.countsTowardsCoachingTable(seg))
+                continue;
+            // How far this sector actually turns: length over radius. Read the
+            // RAW radius word, not getRadius() — that is derived during track
+            // layout and is still zero on a freshly generated line, which
+            // silently made an earlier version of this loop find nothing.
+            int nRaw = (short) seg.getParam(seg.getType() == 0x80 ? 2 : 1);
+            if (nRaw == 0)
+                continue;
+            double dTurn = seg.getTlu() / Math.abs((double) nRaw);
+            if (dTurn < dLeastTurn) {
+                dLeastTurn = dTurn;
+                nGentlest = i;
+            }
+        }
+        return nGentlest;
+    }
+
+    /** Downstream TLU re-fitted after each straightening.
+
+        Much larger than CCLineWindowRepair.DEFAULT_WINDOW_TLU (64), and
+        calibrated by sweep over the five generated tracks that exceed the
+        limit (Session 38). The re-fit has to absorb a whole sector's worth of
+        curvature, which needs far more runway than the single-sector edit that
+        default was chosen for: at 64 TLU two tracks still gained off-road Segs
+        and one pushed its worst step over the AI dead-band, and at 32 TLU one
+        track blew up completely (worst step 62,552).
+
+        Results are STABLE AND IDENTICAL from 288 TLU upwards (288/320/384/512
+        all measure the same), which is what makes this a plateau rather than a
+        tuned value. It is not monotonic below that — 272 sends one track to a
+        7,988-unit step where both 256 and 288 are clean — so the value is
+        deliberately taken from inside the plateau with margin on both sides
+        rather than at its edge. The quantiser pipeline is chaotic; see
+        docs/HARNESSES.md. */
+    private static final int CAP_REPAIR_WINDOW_TLU = 320;
+
+    /** Straighten-and-repair rounds allowed before giving up. Each round
+        removes at most one entry but the repair's re-quantisation can add
+        curves back, so this is a termination guard, not a budget. */
+    private static final int MAX_CAP_PASSES = 512;
 
     /** Greedy-quantizes nWindowTlu more TLU from the given walk state,
         appending the emitted sectors to out and advancing the state.
