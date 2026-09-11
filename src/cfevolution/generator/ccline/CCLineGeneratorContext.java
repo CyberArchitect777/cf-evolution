@@ -37,8 +37,15 @@ public class CCLineGeneratorContext {
     public int iterations = 2000;
 
     /** Extra TLU appended past the track end so the line wraps smoothly
-        across the start/finish seam (original tracks use 0-44). */
-    public int seamOvershoot = 0;
+        across the start/finish seam (original tracks use 0-44).
+
+        Defaults to 8, matching what both shipped generation paths set
+        explicitly (the Generate Best Line dialog's field and
+        GenerateTrackDialog). It used to default to 0, which no shipped path
+        ever saw but which silently gave any new caller a zero-overshoot line —
+        and F1CT05 is the one original with zero overshoot and the one original
+        with a bad seam (step 14 against 0-4 elsewhere). */
+    public int seamOvershoot = 8;
 
     /** Geometric method: distance kept from the physical road edge, as a
         fraction of the local half-width (0.15 = leave 15% margin). */

@@ -42,6 +42,32 @@ public class CCLinePolisher {
 
     /** Weight of profile drift (RMS world units) in the polish score. */
     private static final double DRIFT_WEIGHT = 30.0;
+
+    /** Weight of the START/FINISH SEAM STEP in the polish score.
+
+        The evaluator scores heading continuity and path curvature but NOT
+        lateral position steps, so before this existed a sideways jump in the
+        line cost the polish nothing at all. That is why the polish was the
+        stage that broke the seam: measured over generated tracks, the
+        quantiser hands it a line tracking the profile to 6-11 units at the lap
+        end, and the polish pushed that to 19-295 while the handover step went
+        from 48-167 to 3-639. It was buying heading smoothness with lateral
+        position, which its score rated free.
+
+        Only the SEAM step is charged, deliberately, not lateral steps in
+        general: the 16 originals' worst single-Seg step runs 374-1083 units,
+        so large steps are normal authored behaviour, while their seam step is
+        0-4. A general step penalty would fight the line everywhere to fix one
+        place. Public so a harness can sweep it; production takes the default.
+
+        Calibrated by sweep over four generated tracks (mean / worst handover
+        step): 4 -> 71/154, 12 -> 16/31, 24 -> 5/15, 40 -> 7/20, **48 -> 2/4**,
+        64 -> 2/3, 80 -> 50/118, 120 -> 23/81. The usable region is 24-64 and
+        it degrades from 80 — over-weighting the seam starts costing elsewhere.
+        48 sits inside that region rather than at its edge, lands in the
+        originals' own 0-4 range, and gives the best worst-step-in-lap of the
+        region. */
+    public static double SEAM_WEIGHT = 48.0;
     /** Smoothness weighting during polish (default evaluator uses 1.0). */
     private static final double POLISH_SMOOTHNESS_WEIGHT = 15.0;
 
@@ -58,9 +84,10 @@ public class CCLinePolisher {
         CCLineEvaluator.Score seedScore = ev.score(line);
         short[] reference = seedScore.simulation.ccLine.clone();
         int nCurrentOob = seedScore.outOfBounds;
+        int nSegCount = context.geometry.segCount;
 
         CCLine current = cfevolution.generator.ccline.refine.RefinementCCLineGenerator.copyLine(line);
-        double dCurrent = polishTotal(ev, seedScore, reference);
+        double dCurrent = polishTotal(ev, seedScore, reference, nSegCount);
         CCLine best = current;
         double dBest = dCurrent;
 
@@ -98,7 +125,7 @@ public class CCLinePolisher {
             if (candidate == null)
                 continue;
             CCLineEvaluator.Score s = ev.score(candidate);
-            double dCand = polishTotal(ev, s, reference);
+            double dCand = polishTotal(ev, s, reference, nSegCount);
             if (fConversion && DEBUG_STATS != null) {
                 if (dCand <= dCurrent) DEBUG_STATS[2]++;
                 else if (!s.isValid()) DEBUG_STATS[3]++;
@@ -240,7 +267,7 @@ public class CCLinePolisher {
     /** Polish score: smoothness-weighted evaluator total plus drift from
         the reference profile. */
     private static double polishTotal(CCLineEvaluator ev, CCLineEvaluator.Score s,
-                                      short[] reference) {
+                                      short[] reference, int nSegCount) {
         double dSumSq = 0.0;
         int n = 0;
         for (int i = 0; i < reference.length; i++) {
@@ -251,6 +278,24 @@ public class CCLinePolisher {
             n++;
         }
         double dDriftRms = n > 0 ? Math.sqrt(dSumSq / n) : 0.0;
-        return s.total() + dDriftRms * DRIFT_WEIGHT;
+        return s.total() + dDriftRms * DRIFT_WEIGHT
+             + seamStep(s, nSegCount) * SEAM_WEIGHT;
+    }
+
+    /** The lateral step where the line's overshoot hands back to its own
+        start. The line is authored longer than the lap, so the last sector
+        runs past the start/finish line and re-stamps the opening Segs; the
+        handover is at Seg (walkedTlu mod segCount), between the Seg the tail
+        stamped last and the first Seg still carrying an early sector's value.
+        On the originals this step is 0-4 units. */
+    static int seamStep(CCLineEvaluator.Score s, int nSegCount) {
+        if (nSegCount <= 1)
+            return 0;
+        int nSeam = s.simulation.walkedTlu % nSegCount;
+        if (nSeam <= 0 || nSeam >= nSegCount)
+            return 0;
+        if (!s.simulation.covered[nSeam] || !s.simulation.covered[nSeam - 1])
+            return 0;
+        return Math.abs(s.simulation.ccLine[nSeam] - s.simulation.ccLine[nSeam - 1]);
     }
 }
