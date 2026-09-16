@@ -150,6 +150,7 @@ public class RandomTrackGenerator {
                                                    nDonorTotalTlu);
         int[] anLaneTemplate = harvestLaneTemplate(scratch.getTrackSegments());
         double[] adKerbTemplate = harvestKerbTemplate(scratch.getTrackSegments());
+        double dSignFraction = harvestSignFraction(scratch.getTrackSegments());
         double dHalfRoad = 0;
         if (scratch.getTrackSegments().getMaxTrackSegIndex() > 0) {
             cfevolution.data.track.Seg seg0 = scratch.getTrackSegments().getSegAt(0);
@@ -229,16 +230,9 @@ public class RandomTrackGenerator {
             ts.setCurvature(p.curv);
             ts.setFenceDistR(nFenceR);
             ts.setFenceDistL(nFenceL);
-            // Countdown boards and arrows are section flags drawn by the
-            // game on the approach, set on the corner's first section
-            // (originals' pattern: bit 3 = 300/200/100, bit 6 = arrow)
-            long lTurn = Math.abs((long) p.tlu * p.curv);
-            if (p.curv != 0 && lTurn >= 0x2000) {
-                int nFlags = 0x8;
-                if (lTurn >= 0x4000)
-                    nFlags |= 0x40;
-                ts.setFlags(nFlags);
-            }
+            // Road signs are NOT decided here — see assignSigns below. They
+            // depend on how much straight precedes the corner, which cannot
+            // be known until the whole lap exists.
             result.segments.add(ts);
         }
         // Pit connect placement: the pit lane's length must match the
@@ -269,6 +263,10 @@ public class RandomTrackGenerator {
         // (Phoenix has almost none, Silverstone plenty — per-track style),
         // skipped entirely on minimal-width roads (user rule)
         assignKerbs(result, adKerbTemplate, dHalfRoad, rand);
+
+        // Road signs: the countdown a driver reads on the way into a corner.
+        // Must run AFTER assignKerbs — both OR into the same flags word.
+        assignSigns(result, dSignFraction, rand);
 
         // Pit lane paint: the dashed in/out lane lines are MarkingType-3
         // 0x8A commands on the MAIN track ~5-12 TLU before each connect,
@@ -492,6 +490,146 @@ public class RandomTrackGenerator {
             if (rand.nextDouble() < adTemplate[1])
                 nKerb |= 0x4; // low kerb
             ts.setFlags(ts.getFlags() | nKerb);
+        }
+    }
+
+    /* ---------------------------------------------------------------- signs */
+
+    /** TLU of approach the game needs per sign in a countdown.
+
+        `TCPreprocessTrackSectorPass2` (0x8F294) walks BACKWARDS from the
+        corner doing `sub bx, 18 * size Seg` before anchoring each sign in the
+        sequence, so sign n sits 18*n Segs upstream. At 1 TLU = 16 ft = 4.88 m
+        that is ~88 m a step, which is how the game approximates its
+        "100/200/300" boards. Measured against the 16 originals, the approach
+        straight before a marked corner matches: median 42 TLU for a one-sign
+        arrow, 53 for the two-sign arrow/100, 114 for the three-sign
+        countdown. */
+    private static final int SIGN_TLU_PER_STEP = 18;
+
+    /** Flag combinations, indexed by how many signs fit. The game turns these
+        into sequences through its `roadSigns` table (asm:63402), 8 rows of
+        object ids terminated by 0xFF:
+
+            0x40        arrow
+            0x80        arrow, 100m
+            0x40|0x80   arrow, 200m, 100m
+            0x8         300m, 200m, 100m
+            0x8|0x40    300m, arrow, 100m
+
+        **0x8|0x80 and 0x8|0x40|0x80 land on the two rows IDA labels "invalid
+        combination" and draw NOTHING AT ALL** — they are not a richer
+        countdown, so neither may ever be emitted.
+
+        Chosen here: one sign -> arrow; two -> arrow/100; three -> the full
+        300/arrow/100, which is what the originals overwhelmingly use for a
+        long approach (24 corners, against 2 for the arrowless 300/200/100).
+        The side is NOT ours to pick — the engine selects a different object
+        set from the corner's own direction at 0x8F294. */
+    private static final int[] SIGN_COMBO_BY_STEPS = { 0, 0x40, 0x80, 0x8 | 0x40 };
+
+    /** Fraction of the donor's corners that carry any road sign. The
+        originals mark 70 of 289 corners (24%), 219 carrying nothing, so
+        markings are RARE and runway alone must not be treated as sufficient:
+        plenty of unmarked corners have a long approach (up to 163 TLU). */
+    private double harvestSignFraction(TrackSegments donorSegments) {
+        int nCorners = 0, nMarked = 0, nPrevSign = 0;
+        boolean fMarked = false;
+        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            if (ts.getTlu() <= 0)
+                continue;
+            int nSign = ts.getCurvature() == 0 ? 0 : (ts.getCurvature() > 0 ? 1 : -1);
+            if (nSign != 0 && nSign != nPrevSign) {
+                nCorners++;
+                fMarked = false;
+            }
+            if (nSign != 0 && !fMarked && (ts.getFlags() & 0xC8) != 0) {
+                nMarked++;
+                fMarked = true;
+            }
+            nPrevSign = nSign;
+        }
+        return nCorners > 0 ? (double) nMarked / nCorners : 0.0;
+    }
+
+    /** Puts the countdown on the corners that have the runway for it.
+
+        Two conditions, both taken from the originals. RUNWAY decides WHICH
+        combination a corner can carry — 18 TLU of preceding straight per sign
+        (see SIGN_TLU_PER_STEP), so 54 TLU for the full three-sign countdown.
+        RATE decides HOW MANY corners are marked at all, from the donor's own
+        fraction, because the originals leave 76% of corners bare.
+
+        The corners with the most runway win, which is the same ordering the
+        measurement found: signed corners in the originals average a 104 TLU
+        approach against 23 for unsigned.
+
+        Flags are ORed onto the corner's FIRST section (the game draws the
+        signs upstream from there itself), so this composes with the kerb bits
+        assignKerbs has already written. The runway walk WRAPS the lap, as the
+        game's own placement loop does when it runs back past the S/F line. */
+    private void assignSigns(Result result, double dFraction, Random rand) {
+        int n = result.segments.size();
+        if (n < 3 || dFraction <= 0.0)
+            return;
+
+        // Corner starts, in lap order, with the straight TLU before each
+        int[] anStart = new int[n];
+        int[] anRunway = new int[n];
+        int nCorners = 0;
+        for (int i = 0; i < n; i++) {
+            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            if (ts.getCurvature() == 0)
+                continue;
+            int nPrev = (i - 1 + n) % n;
+            TrackSegment prev = (TrackSegment) result.segments.get(nPrev);
+            if (prev.getCurvature() != 0
+                && (prev.getCurvature() > 0) == (ts.getCurvature() > 0))
+                continue;               // mid-corner, not a corner start
+            int nRun = 0;
+            for (int k = 1; k < n; k++) {
+                TrackSegment back = (TrackSegment)
+                    result.segments.get((i - k + n) % n);
+                if (back.getCurvature() != 0)
+                    break;
+                nRun += back.getTlu();
+            }
+            anStart[nCorners] = i;
+            anRunway[nCorners] = nRun;
+            nCorners++;
+        }
+        if (nCorners == 0)
+            return;
+
+        // How many to mark, at the donor's rate — at least one if it marks any
+        int nTarget = (int) Math.round(dFraction * nCorners);
+        if (nTarget <= 0)
+            nTarget = 1;
+        if (nTarget > nCorners)
+            nTarget = nCorners;
+
+        // Rank by runway, descending (simple selection: nCorners is ~12-30)
+        boolean[] afTaken = new boolean[nCorners];
+        for (int pick = 0; pick < nTarget; pick++) {
+            int nBest = -1;
+            for (int c = 0; c < nCorners; c++)
+                if (!afTaken[c] && (nBest < 0 || anRunway[c] > anRunway[nBest]))
+                    nBest = c;
+            if (nBest < 0)
+                break;
+            afTaken[nBest] = true;
+
+            int nSteps = anRunway[nBest] / SIGN_TLU_PER_STEP;
+            if (nSteps <= 0)
+                continue;               // no room even for one sign
+            if (nSteps >= SIGN_COMBO_BY_STEPS.length)
+                nSteps = SIGN_COMBO_BY_STEPS.length - 1;
+            int nFlags = SIGN_COMBO_BY_STEPS[nSteps];
+            if (nFlags == 0)
+                continue;
+            TrackSegment ts = (TrackSegment) result.segments.get(anStart[nBest]);
+            ts.setFlags(ts.getFlags() | nFlags);
         }
     }
 
