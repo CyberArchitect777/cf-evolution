@@ -233,6 +233,28 @@ public class RandomTrackGenerator {
             // Road signs are NOT decided here — see assignSigns below. They
             // depend on how much straight precedes the corner, which cannot
             // be known until the whole lap exists.
+            //
+            // CORNERS ARE EMITTED AS TWO SECTIONS, split at the apex. Kerb
+            // flags are per SECTION, and the owner's kerbing pattern needs the
+            // apex as a boundary: the inside kerb runs from the apex outwards,
+            // not from the turn-in. A single-section corner cannot express
+            // that. Splitting costs nothing geometrically — same curvature,
+            // same total TLU — and it puts generated tracks at ~2.0 sections
+            // per corner, inside the originals' own 1.50-3.00. splitSections()
+            // later leaves curved sections alone, so this is the only place a
+            // corner is ever divided.
+            if (p.curv != 0 && p.tlu >= 2) {
+                int nFirst = p.tlu / 2;
+                ts.setTlu(nFirst);
+                result.segments.add(ts);
+                TrackSegment apexOn = new TrackSegment();
+                apexOn.setTlu(p.tlu - nFirst);
+                apexOn.setCurvature(p.curv);
+                apexOn.setFenceDistR(nFenceR);
+                apexOn.setFenceDistL(nFenceL);
+                result.segments.add(apexOn);
+                continue;
+            }
             result.segments.add(ts);
         }
         // Pit connect placement: the pit lane's length must match the
@@ -259,15 +281,6 @@ public class RandomTrackGenerator {
         // close on sum(len*h) ~ 0 — all 16 originals close within +-21.
         assignHeights(result, rand, dMaxElevationMetres);
 
-        // Kerbs: inside of corners, at the donor's own kerb density
-        // (Phoenix has almost none, Silverstone plenty — per-track style),
-        // skipped entirely on minimal-width roads (user rule)
-        assignKerbs(result, adKerbTemplate, dHalfRoad, rand);
-
-        // Road signs: the countdown a driver reads on the way into a corner.
-        // Must run AFTER assignKerbs — both OR into the same flags word.
-        assignSigns(result, dSignFraction, rand);
-
         // Pit lane paint: the dashed in/out lane lines are MarkingType-3
         // 0x8A commands on the MAIN track ~5-12 TLU before each connect,
         // on the pit's side (all donors; in-game round 4 found them
@@ -287,7 +300,29 @@ public class RandomTrackGenerator {
         // removal windows at the pit connects that the originals have
         // (without them the pit mouth is walled shut: invisible wall on
         // entry, wing damage on exit — in-game finding).
-        splitSections(result, nExitTlu, nEntryTlu);
+        // KERBS IN TWO PHASES, AROUND THE SPLIT, and the ordering is
+        // load-bearing rather than tidy.
+        //
+        // planKerbs decides which corners are kerbed and writes the INSIDE
+        // kerb straight away — corner sections are never split, so those flags
+        // survive untouched. It also returns the absolute TLU at which each
+        // EXIT kerb should stop, which splitSections then cuts at, so the kerb
+        // can end exactly there instead of being rounded up to a whole 32 TLU
+        // piece. applyExitKerbs writes the outside kerb afterwards, once those
+        // pieces exist.
+        //
+        // The exit kerb cannot simply be written before the split: pieces after
+        // the first get a FRESH flags word (only the wall-window bit), so a
+        // kerb on a long straight would survive on the first piece and vanish
+        // from the rest.
+        Vector kerbPlans = planKerbs(result, adKerbTemplate, dHalfRoad, rand);
+        splitSections(result, nExitTlu, nEntryTlu, kerbCutPositions(kerbPlans));
+        applyExitKerbs(result, kerbPlans);
+
+        // Road signs last: they only ever touch a corner's first section, which
+        // the split leaves alone, and they OR into the flags word so they
+        // compose with the kerbs.
+        assignSigns(result, dSignFraction, rand);
 
         return result;
     }
@@ -442,13 +477,19 @@ public class RandomTrackGenerator {
         get no kerbs at all (user rule: not on minimal-width streets). */
     private static final double KERB_MIN_HALF_ROAD = 1100.0;
 
-    /** Donor kerb style {fraction of corners kerbed, low-kerb fraction}.
-        Corners counted as sign-runs of curvature; kerb runs as contiguous
-        kerb-flagged stretches. */
+    /** Donor kerb style: {fraction of corners kerbed, low-kerb fraction,
+        mean kerb run TLU, share of kerb TLU sitting on STRAIGHT sections}.
+
+        The last two were added 2026-09-16. Measured across the 16 originals,
+        every one of them kerbs its straights — 16-66% of each circuit's kerb
+        TLU, median ~43% — with mean run lengths of 13.5-326.5 TLU. The old
+        code could not reproduce either, because it skipped straights outright:
+        generated tracks came out at 0% on straights with runs of 11.7-22.3. */
     private double[] harvestKerbTemplate(TrackSegments donorSegments) {
         int nCorners = 0, nKerbRuns = 0, nKerbSecs = 0, nLow = 0;
         int nPrevSign = 0;
         boolean fPrevKerb = false;
+        int nKerbTluStraight = 0, nKerbTluTotal = 0, nRunTluSum = 0;
         for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
             TrackSegment ts = (TrackSegment) e.nextElement();
             if (ts.getTlu() <= 0)
@@ -460,6 +501,10 @@ public class RandomTrackGenerator {
             boolean fKerb = (ts.getFlags() & 0xC00) != 0;
             if (fKerb) {
                 nKerbSecs++;
+                nKerbTluTotal += ts.getTlu();
+                nRunTluSum += ts.getTlu();
+                if (nSign == 0)
+                    nKerbTluStraight += ts.getTlu();
                 if (!fPrevKerb)
                     nKerbRuns++;
                 if ((ts.getFlags() & 0x4) != 0)
@@ -469,27 +514,176 @@ public class RandomTrackGenerator {
         }
         double dDensity = nCorners > 0 ? Math.min(1.0, (double) nKerbRuns / nCorners) : 0.0;
         double dLow = nKerbSecs > 0 ? (double) nLow / nKerbSecs : 0.0;
-        return new double[] { dDensity, dLow };
+        double dRun = nKerbRuns > 0 ? (double) nRunTluSum / nKerbRuns : 0.0;
+        double dStraight = nKerbTluTotal > 0
+                         ? (double) nKerbTluStraight / nKerbTluTotal : 0.0;
+        return new double[] { dDensity, dLow, dRun, dStraight };
     }
 
-    /** Flags inside kerbs on generated corner sections at the donor's
-        density. Curvature sign convention (established from all 16
-        originals, 2026-07-19): positive = right turn -> right kerb 0x400;
-        negative -> left kerb 0x800. */
-    private void assignKerbs(Result result, double[] adTemplate, double dHalfRoad,
+    /** One planned exit kerb: where the bend ends and where its outside kerb
+        should stop, both as absolute TLU from the lap start, plus the flag bits
+        to write. Positions are in TLU rather than section indices because
+        splitSections renumbers every section between planning and applying. */
+    private static class KerbPlan {
+        int cornerEndTlu;
+        int exitEndTlu;
+        int flags;
+    }
+
+    /** Decides which corners are kerbed, writes the INSIDE kerb, and plans
+        each exit kerb — to the pattern the project owner specified
+        (2026-09-16):
+
+          * the INSIDE of the corner is kerbed FROM THE APEX OUTWARDS, high
+            (not the low-kerb bit) — which is why corners are emitted as two
+            sections split at the apex, since kerb flags are per section;
+          * where that inside kerb stops, an OUTSIDE kerb starts and runs onto
+            the exit;
+          * there is NO kerb on the outside of the corner entry.
+
+        That pattern also explains the measurement it was reconciled against:
+        the outside exit kerb is what puts 16-66% of the originals' kerb TLU on
+        straight sections, which the previous corners-only code — which skipped
+        `curvature == 0` outright — could never produce.
+
+        Side convention (established from all 16 originals, 2026-07-19):
+        positive curvature = right turn, so the inside is the right, 0x400; the
+        outside of a right turn is the left, 0x800.
+
+        Density is the donor's, drawn ONCE PER CORNER rather than once per
+        section — with corners now spanning two sections a per-section draw
+        would kerb half a corner at random. */
+    private Vector planKerbs(Result result, double[] adTemplate, double dHalfRoad,
                              Random rand) {
+        Vector plans = new Vector();
         if (dHalfRoad < KERB_MIN_HALF_ROAD || adTemplate[0] <= 0.0)
-            return;
-        for (int i = 1; i < result.segments.size() - 1; i++) {
+            return plans;
+        int n = result.segments.size();
+        double dMeanRun = adTemplate.length > 2 ? adTemplate[2] : 0.0;
+
+        // absolute TLU at the start of each section
+        int[] anStartTlu = new int[n];
+        int nCum = 0;
+        for (int i = 0; i < n; i++) {
+            anStartTlu[i] = nCum;
+            nCum += ((TrackSegment) result.segments.get(i)).getTlu();
+        }
+
+        for (int i = 0; i < n; i++) {
             TrackSegment ts = (TrackSegment) result.segments.get(i);
             if (ts.getCurvature() == 0)
                 continue;
+            TrackSegment prev = (TrackSegment) result.segments.get((i - 1 + n) % n);
+            if (prev.getCurvature() != 0
+                && (prev.getCurvature() > 0) == (ts.getCurvature() > 0))
+                continue;                             // mid-corner, not a start
+            int nEnd = i;
+            for (int k = i + 1; k < n; k++) {
+                TrackSegment u = (TrackSegment) result.segments.get(k);
+                if (u.getCurvature() == 0
+                    || (u.getCurvature() > 0) != (ts.getCurvature() > 0))
+                    break;
+                nEnd = k;
+            }
             if (rand.nextDouble() >= adTemplate[0])
                 continue;
-            int nKerb = ts.getCurvature() > 0 ? 0x400 : 0x800;
-            if (rand.nextDouble() < adTemplate[1])
-                nKerb |= 0x4; // low kerb
-            ts.setFlags(ts.getFlags() | nKerb);
+
+            boolean fRightTurn = ts.getCurvature() > 0;
+            int nInside  = fRightTurn ? 0x400 : 0x800;
+            int nOutside = fRightTurn ? 0x800 : 0x400;
+
+            // INSIDE, apex outwards: the second half of the bend. A corner
+            // that is a single section (too short to split) is kerbed whole —
+            // there is no apex boundary available on it.
+            int nApex = (i == nEnd) ? i : i + (nEnd - i + 1) / 2;
+            int nInsideTlu = 0;
+            for (int k = nApex; k <= nEnd; k++) {
+                TrackSegment u = (TrackSegment) result.segments.get(k);
+                u.setFlags(u.getFlags() | nInside);   // high: no 0x4
+                nInsideTlu += u.getTlu();
+            }
+
+            // OUTSIDE: length set by the donor's own SHARE of kerb TLU on
+            // straights, not by its mean run length. Sizing it from the mean
+            // run was the first attempt and it overshot badly — 70-87% of kerb
+            // TLU landed on straights against the originals' 16-66% — because
+            // a generated corner is short (~15-23 TLU, so ~8-12 TLU from the
+            // apex out) and filling up to a 50-65 TLU run leaves nearly all of
+            // it on the straight. The originals reach their share with much
+            // more CORNER TLU kerbed, their bends being longer.
+            //
+            // Solving share = exit / (inside + exit) for the exit length
+            // reproduces the balance directly. The donor's mean run is kept as
+            // an upper bound, so a donor that kerbs briefly is not made to
+            // kerb further than it does.
+            double dShare = adTemplate.length > 3 ? adTemplate[3] : 0.4;
+            if (dShare > 0.75) dShare = 0.75;
+            if (dShare < 0.0)  dShare = 0.0;
+            int nWant = (int) Math.round(nInsideTlu * dShare / (1.0 - dShare));
+            int nCap = (int) Math.round(dMeanRun) - nInsideTlu;
+            if (nCap > 0 && nWant > nCap)
+                nWant = nCap;
+            if (nWant <= 0)
+                continue;
+
+            // How much straight is actually available before the next bend or
+            // an existing kerb — the plan must not run past either.
+            int nAvail = 0;
+            for (int k = nEnd + 1; k < nEnd + 1 + n; k++) {
+                TrackSegment u = (TrackSegment) result.segments.get(k % n);
+                if (u.getCurvature() != 0)
+                    break;
+                if ((u.getFlags() & 0xC00) != 0)
+                    break;
+                nAvail += u.getTlu();
+            }
+            if (nAvail <= 0)
+                continue;
+            if (nWant > nAvail)
+                nWant = nAvail;
+
+            KerbPlan plan = new KerbPlan();
+            plan.cornerEndTlu = anStartTlu[nEnd]
+                              + ((TrackSegment) result.segments.get(nEnd)).getTlu();
+            plan.exitEndTlu = plan.cornerEndTlu + nWant;
+            // low-kerb bit drawn once for the run, not per section
+            plan.flags = nOutside | (rand.nextDouble() < adTemplate[1] ? 0x4 : 0);
+            plans.add(plan);
+        }
+        return plans;
+    }
+
+    /** The TLU positions splitSections should cut at, so each exit kerb can
+        end where it was planned to rather than at a 32 TLU piece boundary. */
+    private int[] kerbCutPositions(Vector plans) {
+        int[] an = new int[plans.size()];
+        for (int i = 0; i < plans.size(); i++)
+            an[i] = ((KerbPlan) plans.get(i)).exitEndTlu;
+        return an;
+    }
+
+    /** Writes the outside exit kerbs planned by planKerbs, now that the split
+        has created a section boundary at each planned end. Works in absolute
+        TLU because the split renumbered everything. */
+    private void applyExitKerbs(Result result, Vector plans) {
+        int n = result.segments.size();
+        int[] anStartTlu = new int[n];
+        int nCum = 0;
+        for (int i = 0; i < n; i++) {
+            anStartTlu[i] = nCum;
+            nCum += ((TrackSegment) result.segments.get(i)).getTlu();
+        }
+        for (int p = 0; p < plans.size(); p++) {
+            KerbPlan plan = (KerbPlan) plans.get(p);
+            for (int i = 0; i < n; i++) {
+                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                if (ts.getCurvature() != 0)
+                    continue;
+                int nStart = anStartTlu[i];
+                int nStop = nStart + ts.getTlu();
+                if (nStart >= plan.cornerEndTlu && nStop <= plan.exitEndTlu)
+                    ts.setFlags(ts.getFlags() | plan.flags);
+            }
         }
     }
 
@@ -672,7 +866,8 @@ public class RandomTrackGenerator {
     private static final int WALL_WINDOW_BEFORE = 2;
     private static final int WALL_WINDOW_AFTER = 3;
 
-    private void splitSections(Result result, int nExitTlu, int nEntryTlu) {
+    private void splitSections(Result result, int nExitTlu, int nEntryTlu,
+                               int[] anExtraCuts) {
         Vector split = new Vector();
         int nCum = 0;
         for (int i = 0; i < result.segments.size(); i++) {
@@ -693,6 +888,21 @@ public class RandomTrackGenerator {
                 if (nRel - WALL_WINDOW_BEFORE > 0 && nRel + WALL_WINDOW_AFTER < nLen) {
                     cuts.add(new Integer(nRel - WALL_WINDOW_BEFORE));
                     cuts.add(new Integer(nRel + WALL_WINDOW_AFTER));
+                }
+            }
+            // Extra cuts requested by a caller — planKerbs asks for one where
+            // each exit kerb should stop, so the kerb can end at the length the
+            // donor's own straight-kerb share implies instead of being rounded
+            // to a whole MAX_STRAIGHT_SECTION piece. Without this the section
+            // grid is 32 TLU while a generated corner's inside kerb is ~10, so
+            // one piece overshoots threefold (measured: 69-80% of kerb TLU on
+            // straights against the originals' 16-66%) and the nearest
+            // alternative is no exit kerb at all.
+            if (anExtraCuts != null) {
+                for (int c = 0; c < anExtraCuts.length; c++) {
+                    int nRel = anExtraCuts[c] - nCum;
+                    if (nRel > 0 && nRel < nLen)
+                        cuts.add(new Integer(nRel));
                 }
             }
             // Even chunks: subdivide every stretch between existing cuts
