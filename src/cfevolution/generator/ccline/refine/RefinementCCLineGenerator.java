@@ -74,6 +74,10 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
         double dBest = dCurrent;
         double dSeedTotal = dCurrent;
 
+        // The seed's coaching-table usage, which the anneal must not worsen.
+        // See the hard rule in the loop below.
+        int nSeedCoaching = current.getCoachingEntryCount();
+
         int nIterations = Math.max(context.iterations, 100);
         Random rand = new Random(42); // reproducible runs
         double dStartTemp = Math.max(dCurrent * 0.001, 100.0);
@@ -98,6 +102,32 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
             // ratchet the line clean off the track through accepted
             // uphill steps (seen in-game with 1M iterations, 2026-07-19).
             if (candScore.outOfBounds > currentScore.outOfBounds)
+                continue;
+            // Hard rule: never push the game's 64-slot COACHING TABLE further
+            // over its limit than the seed already was. That table is what
+            // TCGenerateCCCoachingData fills and what RenderSuggestedGear reads
+            // for the cockpit's suggested gear, and overflowing it HANGS the
+            // game on the circuit preview (CLAUDE.md).
+            //
+            // Measured 2026-09-10: this generator seeds from a capped line and
+            // annealed without re-checking, so it could put the count back
+            // over — d8-s4 reached 55 entries at 20,000 iterations and d12-s3
+            // reached 60 at 500,000, against MAX_COACHING_ENTRIES of 54. The
+            // dialog's default of 2,000 never triggered it, which is why it was
+            // never seen, but the iterations field is free text and this file's
+            // own comment records a 1,000,000-iteration run being tried in game.
+            // The mechanism is the split mutation: halving a qualifying arc
+            // makes two table entries where there was one.
+            //
+            // A REJECTION is the right remedy rather than capping the finished
+            // line. Straightening arcs after the fact is exactly what commit
+            // 65c8bcc did, and it destroyed the line because the CCLine is
+            // stateful — the fix needed a downstream re-fit. Refusing the
+            // mutation needs none. The seed's own count is the ceiling rather
+            // than the cap itself, so a line handed in already over the limit
+            // can still be improved instead of blocking every move.
+            if (candidate.getCoachingEntryCount() > CCLine.MAX_COACHING_ENTRIES
+                && candidate.getCoachingEntryCount() > nSeedCoaching)
                 continue;
             double dCand = candScore.total();
             double dDelta = dCand - dCurrent;

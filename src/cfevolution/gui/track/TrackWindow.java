@@ -784,12 +784,58 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             "Repair Best Line", JOptionPane.INFORMATION_MESSAGE);
     }
     
+    /** Warns when the best line uses more of the game's 64-slot coaching table
+        than is known to be safe, checked on every save path.
+
+        WHY A CHECK HERE RATHER THAN A CAP. Only two of the five ways a line can
+        be produced or altered pass through CCLineQuantizer.capCoachingEntries:
+        the Fastest Lap generator and the data-fit one. Completion mode, Repair
+        Best Line After Edit and plain hand-editing in the property table do
+        not, and hand-editing never could. Saving is the one place they all
+        meet, so a check here covers every route (measured 2026-09-15: a single
+        hand edit plus the repair goes over on 41% of one test track's sectors).
+
+        WHY A WARNING RATHER THAN SILENT CORRECTION. Getting under the limit
+        means straightening curves out of the line. Doing that to a line the
+        user has just edited by hand would discard their work without asking,
+        and doing it without re-fitting the rest of the lap is exactly what
+        commit 65c8bcc did to generated lines. Telling them is the honest
+        option; the save then proceeds either way.
+
+        WHY IT IS NOT ALARMING. The 54 limit is deliberately conservative — the
+        game's real budget is 64 shared with the pit lane, whose contribution we
+        cannot compute. Measured in the game, tracks at 56 and 58 entries load
+        and race normally, so this is a risk notice, not a prediction of
+        failure. None of the 16 original circuits comes close (they carry
+        18-36), so no unmodified track can trip it. */
+    private void warnIfCoachingTableFull() {
+        if (currentTrack == null || currentTrack.getCCLine() == null)
+            return;
+        int nEntries = currentTrack.getCCLine().getCoachingEntryCount();
+        if (nEntries <= cfevolution.data.track.CCLine.MAX_COACHING_ENTRIES)
+            return;
+        JOptionPane.showMessageDialog(this,
+            "This best line uses " + nEntries + " entries of the game's coaching\n"
+            + "table, above the " + cfevolution.data.track.CCLine.MAX_COACHING_ENTRIES
+            + " this editor treats as safe.\n\n"
+            + "That table holds one entry per corner of the racing line and\n"
+            + "drives the suggested-gear display. It has 64 slots, shared with\n"
+            + "the pit lane, and a track that overflows it freezes the game on\n"
+            + "the circuit preview screen.\n\n"
+            + "The track has been saved. It may well load — circuits a little\n"
+            + "over this figure have been tested and race normally — but if it\n"
+            + "freezes, use fewer or gentler curves in the best line.",
+            "Best Line Uses a Lot of the Coaching Table",
+            JOptionPane.WARNING_MESSAGE);
+    }
+
     private void saveTrackItem(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveTrackItem
         // Saves the current track file to the same file it was loaded from
         // FUTURE: New track files will have no existing filename and therefore will need to be routed to saveTrackAs
         
         File trackFile = new File(fileName);
         currentTrack.save(trackFile);
+        warnIfCoachingTableFull();
            
     }//GEN-LAST:event_saveTrackItem
     
@@ -822,6 +868,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             {
                 File trackFile = new File(selectedFileName);
                 currentTrack.save(trackFile);
+                warnIfCoachingTableFull();
             }
         }
     }//GEN-LAST:event_saveTrackAs
