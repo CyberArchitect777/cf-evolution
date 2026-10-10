@@ -61,7 +61,13 @@ public class CCLineTrackGeometry {
         for line generation. */
     public final double[] physicalBound;
 
+    /** How many coaching-table entries the best line may use on this track
+        before the game hangs (Track.getCoachingEntryBudget): 63 less the
+        pit lane's own entries. */
+    public final int coachingBudget;
+
     public CCLineTrackGeometry(Track track) {
+        coachingBudget = track.getCoachingEntryBudget();
         TrackSegments segs = track.getTrackSegments();
         segCount = segs.getMaxTrackSegIndex() + 1;
 

@@ -485,8 +485,11 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
 
     /** Applies a generated random layout plus its best line to the open
         track and refreshes every view. Called on the EDT by the dialog. */
-    public void applyGeneratedTrack(cfevolution.generator.track.RandomTrackGenerator.Result layout,
-                                    CCLine newLine)
+    /** Returns how many scenery objects had to be dropped to keep the file
+        under the size the game loads (see TrackFileSize): 0 normally, -1 if
+        the track could not be brought under it. */
+    public int applyGeneratedTrack(cfevolution.generator.track.RandomTrackGenerator.Result layout,
+                                   CCLine newLine)
     {
         GenerateTrackDialog.applySegments(currentTrack, layout);
         cfevolution.generator.track.TrackCameraSection.emptyCameraAdjustments(currentTrack.getFooter());
@@ -496,6 +499,11 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         highlightSection(1, -1); // no track segment selected any more
         highlightSection(2, -1); // pit selection also stale
         replaceBestLine(newLine); // recalculates, rebuilds line nodes, map + title
+        // Last, because the size depends on the best line as well as the layout.
+        int nTrimmed = cfevolution.generator.track.TrackFileSize.trimSceneryToFit(currentTrack);
+        if (nTrimmed != 0)
+            treeWindow.rebuildTrackNodes();
+        return nTrimmed;
     }
 
     /** Tools > cuts the track down to the stretch carrying the pit lane,
@@ -784,49 +792,56 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             "Repair Best Line", JOptionPane.INFORMATION_MESSAGE);
     }
     
-    /** Warns when the best line uses more of the game's 64-slot coaching table
-        than is known to be safe, checked on every save path.
+    /** Warns, after every save, about the two ways a track can load as a
+        frozen circuit preview: an overfull coaching table and an oversized
+        file. Both are exact limits in the game, so both warnings mean the game
+        WILL hang, not that it might.
 
-        WHY A CHECK HERE RATHER THAN A CAP. Only two of the five ways a line can
-        be produced or altered pass through CCLineQuantizer.capCoachingEntries:
-        the Fastest Lap generator and the data-fit one. Completion mode, Repair
-        Best Line After Edit and plain hand-editing in the property table do
-        not, and hand-editing never could. Saving is the one place they all
-        meet, so a check here covers every route (measured 2026-09-15: a single
-        hand edit plus the repair goes over on 41% of one test track's sectors).
+        WHY A CHECK HERE RATHER THAN A CAP. Only some of the ways a line can be
+        produced pass through CCLineQuantizer.capCoachingEntries. Completion
+        mode, Repair Best Line After Edit and hand-editing do not, and
+        hand-editing never could. Saving is the one place they all meet, so a
+        check here covers every route.
 
-        WHY A WARNING RATHER THAN SILENT CORRECTION. Getting under the limit
-        means straightening curves out of the line. Doing that to a line the
-        user has just edited by hand would discard their work without asking,
-        and doing it without re-fitting the rest of the lap is exactly what
-        commit 65c8bcc did to generated lines. Telling them is the honest
-        option; the save then proceeds either way.
-
-        WHY IT IS NOT ALARMING. The 54 limit is deliberately conservative — the
-        game's real budget is 64 shared with the pit lane, whose contribution we
-        cannot compute. Measured in the game, tracks at 56 and 58 entries load
-        and race normally, so this is a risk notice, not a prediction of
-        failure. None of the 16 original circuits comes close (they carry
-        18-36), so no unmodified track can trip it. */
-    private void warnIfCoachingTableFull() {
-        if (currentTrack == null || currentTrack.getCCLine() == null)
+        WHY A WARNING RATHER THAN SILENT CORRECTION. Getting under either limit
+        means taking something out of the user's track, which should not happen
+        without asking. The save goes ahead either way. */
+    private void warnIfGameWillHang(File savedFile) {
+        if (currentTrack == null)
             return;
-        int nEntries = currentTrack.getCCLine().getCoachingEntryCount();
-        if (nEntries <= cfevolution.data.track.CCLine.MAX_COACHING_ENTRIES)
+        StringBuffer msg = new StringBuffer();
+
+        if (currentTrack.getCCLine() != null) {
+            int nEntries = currentTrack.getCCLine().getCoachingEntryCount();
+            int nBudget = currentTrack.getCoachingEntryBudget();
+            if (nEntries > nBudget) {
+                int nPit = currentTrack.getPitCoachingEntryCount();
+                msg.append("The best line uses ").append(nEntries)
+                   .append(" entries of the game's coaching table, and the pit lane\n")
+                   .append("uses ").append(nPit).append(". The table has 64 slots, so this track can have\n")
+                   .append("at most ").append(nBudget).append(" in its best line.\n\n")
+                   .append("The table holds one entry per corner of the racing line and\n")
+                   .append("drives the suggested-gear display. Remove or straighten ")
+                   .append(nEntries - nBudget).append(" curve(s)\n")
+                   .append("in the best line, or regenerate it.\n\n");
+            }
+        }
+
+        long lSize = savedFile != null ? savedFile.length() : 0;
+        if (lSize > Track.MAX_FILE_BYTES) {
+            msg.append("The file is ").append(lSize).append(" bytes. The game loads at most ")
+               .append(Track.MAX_FILE_BYTES).append(",\n")
+               .append("so it needs to shrink by ").append(lSize - Track.MAX_FILE_BYTES)
+               .append(" bytes. Removing scenery objects or\n")
+               .append("best line sectors is the easiest way.\n\n");
+        }
+
+        if (msg.length() == 0)
             return;
-        JOptionPane.showMessageDialog(this,
-            "This best line uses " + nEntries + " entries of the game's coaching\n"
-            + "table, above the " + cfevolution.data.track.CCLine.MAX_COACHING_ENTRIES
-            + " this editor treats as safe.\n\n"
-            + "That table holds one entry per corner of the racing line and\n"
-            + "drives the suggested-gear display. It has 64 slots, shared with\n"
-            + "the pit lane, and a track that overflows it freezes the game on\n"
-            + "the circuit preview screen.\n\n"
-            + "The track has been saved. It may well load — circuits a little\n"
-            + "over this figure have been tested and race normally — but if it\n"
-            + "freezes, use fewer or gentler curves in the best line.",
-            "Best Line Uses a Lot of the Coaching Table",
-            JOptionPane.WARNING_MESSAGE);
+        msg.append("The track has been saved, but the game will freeze on the circuit\n")
+           .append("preview screen if it is loaded as it is.");
+        JOptionPane.showMessageDialog(this, msg.toString(),
+            "This Track Will Not Load in the Game", JOptionPane.WARNING_MESSAGE);
     }
 
     private void saveTrackItem(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_saveTrackItem
@@ -835,7 +850,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         
         File trackFile = new File(fileName);
         currentTrack.save(trackFile);
-        warnIfCoachingTableFull();
+        warnIfGameWillHang(trackFile);
            
     }//GEN-LAST:event_saveTrackItem
     
@@ -868,7 +883,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             {
                 File trackFile = new File(selectedFileName);
                 currentTrack.save(trackFile);
-                warnIfCoachingTableFull();
+                warnIfGameWillHang(trackFile);
             }
         }
     }//GEN-LAST:event_saveTrackAs

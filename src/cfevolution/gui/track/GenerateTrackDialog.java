@@ -271,7 +271,7 @@ public class GenerateTrackDialog extends JDialog {
             return;
         }
 
-        trackWindow.applyGeneratedTrack(layout, line.ccLine);
+        int nTrimmed = trackWindow.applyGeneratedTrack(layout, line.ccLine);
 
         StringBuffer status = new StringBuffer();
         status.append("Applied: seed ").append(layout.seed)
@@ -283,6 +283,11 @@ public class GenerateTrackDialog extends JDialog {
                   .append(" road widths");
         for (int i = 0; i < layout.warnings.size(); i++)
             status.append(" — ").append(layout.warnings.get(i));
+        if (nTrimmed > 0)
+            status.append(" — ").append(nTrimmed)
+                  .append(" scenery objects dropped to fit the game's file size limit");
+        else if (nTrimmed < 0)
+            status.append(" — WARNING: too large for the game to load even without scenery");
         statusLabel.setText(status.toString());
         progressBar.setValue(100);
         // Leave the dialog open: "Generate & Apply" again rerolls the seed

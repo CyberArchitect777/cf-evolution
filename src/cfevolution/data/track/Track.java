@@ -275,6 +275,73 @@ public class Track {
         return m_CCLine;
     }
 
+    /** Coaching-table entries the game's pit pass will make for this track's
+        pit lane. Needs the layout calculated. See CCLine.countPitPassEntries. */
+    public int getPitCoachingEntryCount()
+    {
+        int nSegs = m_PitlaneSegments.getMaxTrackSegIndex() + 1;
+        if (nSegs < 3)
+            return 0;
+        int[] anHeading = new int[nSegs];
+        for (int i = 0; i < nSegs; i++)
+        {
+            Seg seg = m_PitlaneSegments.getSegAt(i);
+            anHeading[i] = seg == null ? 0 : seg.getAngleZ();
+        }
+        // The anchor is the Seg the parking command stands at: the sum of the
+        // pit sections before it. Its offset byte only moves the painted
+        // boxes, and if there are several the game keeps the last.
+        int nAnchor = -1, nTlu = 0;
+        for (Enumeration e = m_PitlaneSegments.elements(); e.hasMoreElements(); )
+        {
+            TrackSegment ts = (TrackSegment) e.nextElement();
+            if (ts.findCommand(0x88) != null || ts.findCommand(0x89) != null)
+                nAnchor = nTlu;
+            nTlu += ts.getTlu();
+        }
+        return CCLine.countPitPassEntries(anHeading, nAnchor);
+    }
+
+    /** The most coaching entries this track's BEST LINE may use before the
+        game hangs loading it: the 64-slot table, less one, less what the pit
+        lane takes. A track with no pit lane falls back to the old calibrated
+        CCLine.MAX_COACHING_ENTRIES, since nothing has been measured there. */
+    public int getCoachingEntryBudget()
+    {
+        if (m_PitlaneSegments.getMaxTrackSegIndex() + 1 < 3)
+            return CCLine.MAX_COACHING_ENTRIES;
+        return CCLine.COACHING_TABLE_SIZE - 1 - getPitCoachingEntryCount();
+    }
+
+    /** The largest track file the game accepts. TCDoHandleTrackFileStart
+        copies everything from 0x1010 to the checksum into a fixed buffer and
+        hangs (jmp $) if that length (word 0x1008) is 0x4010 or more, since a
+        longer copy would overwrite the game's own car model. 0x1010 + 0x400F
+        + the 4-byte checksum. Monaco, the largest original, is 20,497. */
+    public static final int MAX_FILE_BYTES = 0x1010 + 0x400F + 4;
+
+    /** The size this track would have on disk, found by saving a scratch
+        copy. Returns -1 if that fails. */
+    public long measureSavedSize()
+    {
+        File tmp = null;
+        try
+        {
+            tmp = File.createTempFile("cfe-size", ".dat");
+            save(tmp);
+            return tmp.length();
+        }
+        catch (IOException ioe)
+        {
+            return -1;
+        }
+        finally
+        {
+            if (tmp != null)
+                tmp.delete();
+        }
+    }
+
     public CCSetup getCCSetup()
     {
         return m_CCSetup;

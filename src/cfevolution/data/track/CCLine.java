@@ -183,14 +183,63 @@ public class CCLine extends Vector {
     /** Below this the sector is too gently curved to earn an entry. */
     private static final long COACHING_MIN_VALUE = 60L;
 
-    /** The game's coaching table holds 64 entries. We stay below that with
-        margin: measured against the real game across 12 generated tracks, the
-        three that hung counted 58, 62 and 66 while the nine that loaded
-        counted 56 or fewer — so the effective ceiling is lower than 64 by a
-        constant 6-8 that is not yet explained (the routine runs twice per
-        compile, and the pit lane is the likeliest second source). 54 sits
-        clear of the highest count that has ever been observed to load. */
+    /** The OLD calibrated limit, from before the pit lane's share could be
+        computed. Kept only as the fallback for a track with no pit lane to
+        measure and for harnesses that compare against it. Every production
+        path now uses the exact per-track budget,
+        Track.getCoachingEntryBudget(). */
     public static final int MAX_COACHING_ENTRIES = 54;
+
+    /** Slots in the game's coaching table (unk_21663). The track pass and the
+        pit pass fill it with one shared index, and the game hangs when that
+        index reaches this value — so track + pit entries must be at most 63.
+        Confirmed in the game 2026-10-10: a total of 63 loads, 64 hangs, and
+        the rule separates all twelve load-tested generated tracks. */
+    public static final int COACHING_TABLE_SIZE = 64;
+
+    /** The parking-zone angles GP.EXE writes into the pit lane's
+        wCCLineRAngle at anchor+23 .. anchor+34 BEFORE the pit pass
+        (TCModPitlaneParkZoneCCLineRAngle, table at seg003:0866h). Not in the
+        track file. They always add exactly two pit entries. */
+    private static final int[] PIT_PARKING_ANGLES =
+        { 0, 0, 0, 12000, 18000, 24000, -4000, -8000, -12000, -16000, 0, 0 };
+
+    /** Distance in Segs from the 0x88/0x89 parking command to the first
+        parking-zone angle. */
+    private static final int PIT_PARKING_OFFSET = 23;
+
+    /** How many coaching-table entries the game's PIT pass makes.
+
+        anHeading holds each pit Seg's wAngleZ; nParkingAnchor is the pit Seg
+        the 0x88/0x89 command stands at, or -1 if there is none. The rule is
+        the F1GP-SDL project's reading of TCGenerateCCCoachingData's pit
+        branch, reproduced here on all 16 originals: walk from Seg 1, find a
+        run of equal heading steps, make one entry if the step is at least
+        60, then skip the run AND the step after it. Seg 0 and the last Seg
+        are never read. Independent of the best line. */
+    public static int countPitPassEntries(int[] anHeading, int nParkingAnchor) {
+        int n = anHeading.length;
+        int[] h = new int[n];
+        for (int i = 0; i < n; i++)
+            h[i] = anHeading[i];
+        if (nParkingAnchor >= 0) {
+            for (int k = 0; k < PIT_PARKING_ANGLES.length; k++) {
+                int i = nParkingAnchor + PIT_PARKING_OFFSET + k;
+                if (i < n)
+                    h[i] = (short) (h[i] + PIT_PARKING_ANGLES[k]);
+            }
+        }
+        int nEnd = n - 2, j = 1, nEntries = 0;
+        while (j < nEnd) {
+            int nStep = (short) (h[j + 1] - h[j]), m = 1;
+            while (j + m < nEnd && (short) (h[j + m + 1] - h[j + m]) == nStep)
+                m++;
+            if (Math.abs(nStep) >= COACHING_MIN_VALUE)
+                nEntries++;
+            j += m + 1;
+        }
+        return nEntries;
+    }
 
     /** instance data members */
     protected int m_nCumTlu;

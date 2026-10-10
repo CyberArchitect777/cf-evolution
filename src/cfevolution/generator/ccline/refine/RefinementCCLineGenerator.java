@@ -112,7 +112,7 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
             // Measured 2026-09-10: this generator seeds from a capped line and
             // annealed without re-checking, so it could put the count back
             // over — d8-s4 reached 55 entries at 20,000 iterations and d12-s3
-            // reached 60 at 500,000, against MAX_COACHING_ENTRIES of 54. The
+            // reached 60 at 500,000, against the then-fixed limit of 54. The
             // dialog's default of 2,000 never triggered it, which is why it was
             // never seen, but the iterations field is free text and this file's
             // own comment records a 1,000,000-iteration run being tried in game.
@@ -126,7 +126,7 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
             // mutation needs none. The seed's own count is the ceiling rather
             // than the cap itself, so a line handed in already over the limit
             // can still be improved instead of blocking every move.
-            if (candidate.getCoachingEntryCount() > CCLine.MAX_COACHING_ENTRIES
+            if (candidate.getCoachingEntryCount() > context.geometry.coachingBudget
                 && candidate.getCoachingEntryCount() > nSeedCoaching)
                 continue;
             double dCand = candScore.total();

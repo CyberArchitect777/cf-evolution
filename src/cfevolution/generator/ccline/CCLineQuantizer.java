@@ -258,12 +258,14 @@ public class CCLineQuantizer {
         the partially-capped intermediate.
 
         Deliberately does nothing when the line is already inside the limit, so
-        every track that worked before still gets exactly the line it had. Note
-        that the limit carries a deliberate safety margin (54 against the game's
-        64, because the pit lane's share of the same table cannot be computed
-        here), so this DOES fire on tracks that would have loaded — two of the
-        twelve measured. That is another reason the re-fit is mandatory rather
-        than a refinement: a line that never needed capping must survive it.
+        every track that worked before still gets exactly the line it had.
+
+        The limit is the track's own exact budget, geo.coachingBudget: 63 less
+        the pit lane's entries (2026-10-10). Until then it was a fixed 54 with
+        a safety margin, because the pit lane's share could not be computed,
+        and it fired on tracks that would have loaded (two of the twelve
+        measured, at 56). Generated tracks' rebuilt pit lanes take 5-6
+        entries, so their budget is about 57-58.
 
         Returns the capped line, which is a NEW object whenever a repair
         succeeded; callers must use the return value.
@@ -277,7 +279,8 @@ public class CCLineQuantizer {
         calibrated default. */
     public static CCLine capCoachingEntries(CCLineTrackGeometry geo, CCLine ccLine,
                                             int nWindowTlu) {
-        if (ccLine.getCoachingEntryCount() <= CCLine.MAX_COACHING_ENTRIES)
+        int nBudget = geo.coachingBudget;
+        if (ccLine.getCoachingEntryCount() <= nBudget)
             return ccLine;
 
         // What the line does before any straightening — the profile every
@@ -286,9 +289,21 @@ public class CCLineQuantizer {
         double[] adTarget = new double[geo.segCount];
         for (int i = 0; i < geo.segCount && i < start.ccLine.length; i++)
             adTarget[i] = start.ccLine[i];
+        CapQuality startQuality = new CapQuality(geo, start);
+
+        // THE FIRST LINE UNDER BUDGET IS NOT ALWAYS A GOOD ONE. The window
+        // repair is path-dependent: measured 2026-10-10, the same track capped
+        // to 57 drove 122 Segs off the road, while capped to 54 it was clean.
+        // So each line under budget is checked against the uncapped one. The
+        // first that does no damage is returned. If none does, straightening
+        // continues up to CAP_SEARCH_DEPTH entries further, and the least
+        // damaged line is returned.
+        int nFloor = Math.max(0, nBudget - CAP_SEARCH_DEPTH);
+        CCLine best = null;
+        double dBestDamage = Double.MAX_VALUE;
 
         int nGuard = 0;
-        while (ccLine.getCoachingEntryCount() > CCLine.MAX_COACHING_ENTRIES
+        while (ccLine.getCoachingEntryCount() > nFloor
                && nGuard++ < MAX_CAP_PASSES) {
             int nGentlest = gentlestQualifyingSector(ccLine);
             if (nGentlest < 0)
@@ -310,13 +325,78 @@ public class CCLineQuantizer {
             if (repaired == null) {
                 // No room for a window — the sector is at or beyond the last
                 // boundary. There is nothing downstream left to displace, so
-                // straightening in place cannot cascade.
-                seg.setParam(nRadiusParam, 0);
-                continue;
+                // straightening in place cannot cascade. Copied first, because
+                // a kept candidate must not change underneath us.
+                ccLine = copyLine(ccLine);
+                ccLine.getAt(nGentlest).setParam(nRadiusParam, 0);
             }
-            ccLine = repaired;
+            else
+                ccLine = repaired;
+
+            if (ccLine.getCoachingEntryCount() > nBudget)
+                continue;
+            CapQuality q = new CapQuality(geo, new CCLineSimulator(geo).run(ccLine));
+            double dDamage = q.damageAgainst(startQuality);
+            if (dDamage == 0)
+                return ccLine;
+            if (dDamage < dBestDamage) {
+                dBestDamage = dDamage;
+                best = ccLine;
+            }
         }
-        return ccLine;
+        return best != null ? best : ccLine;
+    }
+
+    /** How far past the budget the cap may keep straightening while looking
+        for a line it does not damage. */
+    private static final int CAP_SEARCH_DEPTH = 8;
+
+    /** What the cap must not make worse, with the same thresholds LineGate and
+        SeamGate apply: Segs clear of the road (beyond 1.45x the half-width),
+        Segs off it (beyond 1.0x, where up to 21 is normal on the originals),
+        the worst single-Seg step (free below the AI's 640-unit dead-band) and
+        the start/finish handover (free up to 113, as the originals allow). */
+    private static class CapQuality {
+        int nClear, nOff, nStep, nHandover;
+
+        CapQuality(CCLineTrackGeometry geo, CCLineSimulator.Result r) {
+            for (int s = 0; s < geo.segCount && s < r.ccLine.length; s++) {
+                if (s > 0)
+                    nStep = Math.max(nStep, Math.abs(r.ccLine[s] - r.ccLine[s - 1]));
+                if (geo.physicalBound[s] <= 0)
+                    continue;
+                double dRatio = Math.abs(r.ccLine[s]) / geo.physicalBound[s];
+                if (dRatio > 1.0) nOff++;
+                if (dRatio > 1.45) nClear++;
+            }
+            int nSeam = geo.segCount > 0 ? r.walkedTlu % geo.segCount : 0;
+            if (nSeam > 0 && nSeam < r.ccLine.length)
+                nHandover = Math.abs(r.ccLine[nSeam] - r.ccLine[nSeam - 1]);
+        }
+
+        /** 0 when nothing got worse than the uncapped line allows, else a
+            weighted sum of how much did; going clear of the road dominates. */
+        double damageAgainst(CapQuality start) {
+            double d = 0;
+            d += 1e6 * Math.max(0, nClear - start.nClear);
+            d += 1e3 * Math.max(0, nOff - Math.max(start.nOff, 21));
+            d += Math.max(0, nStep - Math.max(start.nStep, 640));
+            d += Math.max(0, nHandover - Math.max(start.nHandover, 113));
+            return d;
+        }
+    }
+
+    private static CCLine copyLine(CCLine line) {
+        CCLine copy = new CCLine();
+        for (int i = 1; i <= line.size(); i++) {
+            CCLineSegment seg = line.getAt(i);
+            CCLineSegment c = new CCLineSegment(seg.getType());
+            c.setTlu(seg.getTlu());
+            for (int p = 0; p < 4; p++)
+                c.setParam(p, seg.getParam(p));
+            copy.add(c);
+        }
+        return copy;
     }
 
     /** The qualifying sector that bends least over its own length (1-based),
