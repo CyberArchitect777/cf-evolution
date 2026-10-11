@@ -197,13 +197,11 @@ public class MinimalTrackReducer {
         Feature entryConnect = findCommand(segs, nLast, anStart, 0x86);
         Feature exitConnect  = findCommand(segs, nLast, anStart, 0x87);
         if (entryConnect == null || exitConnect == null) {
-            r.failure = "No pit lane connect commands (0x86/0x87) found — "
-                      + "this tool needs a track with a pit lane.";
+            r.failure = "This tool needs a track with a pit lane, and this track has none.";
             return r;
         }
         if (exitConnect.section >= entryConnect.section) {
-            r.failure = "The pit exit is not before the pit entry in the file, "
-                      + "so there is no middle section to remove.";
+            r.failure = "This track's pit lane is laid out in a way this tool cannot cut around.";
             return r;
         }
 
@@ -240,8 +238,8 @@ public class MinimalTrackReducer {
         r.keepHead = Math.min(nLast - 1, endFeature.section + 1);
 
         if (r.keepHead >= r.keepTail - 1) {
-            r.failure = "The pit lane and grid already span the whole lap — "
-                      + "there is nothing between them to remove.";
+            r.failure = "The pit lane and grid already take up the whole lap, so there is\n"
+                      + "nothing to cut.";
             return r;
         }
 

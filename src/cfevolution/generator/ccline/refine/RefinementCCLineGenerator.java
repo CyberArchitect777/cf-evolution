@@ -87,7 +87,7 @@ public class RefinementCCLineGenerator implements CCLineGenerator {
                 if (listener.isCancelled())
                     return null;
                 listener.progress(iter * 100 / nIterations,
-                    "Annealing... score " + (long) dBest);
+                    "Improving the line...");
             }
             double dTemp = dStartTemp * (1.0 - (double) iter / nIterations);
 

@@ -60,6 +60,14 @@ public class GenerateTrackDialog extends JDialog {
         replaced by a fresh one; the status line shows the seed used. */
     private static final int MAX_GENERATIONS = 10;
 
+    /** A fresh seed, short enough to note down and type back in. */
+    private long nextSeed() {
+        return 1 + seedRoller.nextInt(999999);
+    }
+
+    /** 1 TLU = 16 feet. */
+    private static final double METRES_PER_TLU = 4.8768;
+
     public GenerateTrackDialog(TrackWindow parentWindow, String trackFileName) {
         super((Frame) null, "Generate Random Track", false);
         trackWindow = parentWindow;
@@ -149,7 +157,7 @@ public class GenerateTrackDialog extends JDialog {
         final double dMaxElevation;
         try {
             String sSeed = seedField.getText().trim();
-            lSeed = sSeed.length() == 0 ? seedRoller.nextLong() : Long.parseLong(sSeed);
+            lSeed = sSeed.length() == 0 ? nextSeed() : Long.parseLong(sSeed);
             nTargetTlu = Integer.parseInt(lengthField.getText().trim());
             nCorners = Integer.parseInt(cornersField.getText().trim());
             dMaxElevation = Double.parseDouble(elevationField.getText().trim());
@@ -173,7 +181,7 @@ public class GenerateTrackDialog extends JDialog {
 
         fCancelled = false;
         generateButton.setEnabled(false);
-        statusLabel.setText("Generating (seed " + lSeed + ")...");
+        statusLabel.setText("Generating...");
 
         final TrackProgressListener listener = new TrackProgressListener() {
             public void progress(final int percent, final String message) {
@@ -195,7 +203,7 @@ public class GenerateTrackDialog extends JDialog {
                 CCLineGenerationResult line = null;
                 String error = null;
                 for (int nTry = 0; nTry < MAX_GENERATIONS && !fCancelled; nTry++) {
-                    long lTrySeed = nTry == 0 ? lSeed : seedRoller.nextLong();
+                    long lTrySeed = nTry == 0 ? lSeed : nextSeed();
                     error = null;
                     try {
                         // Scratch 1: closure iterations
@@ -207,7 +215,7 @@ public class GenerateTrackDialog extends JDialog {
 
                         if (layout != null) {
                             // Scratch 2: carry the final layout, generate the best line on it
-                            listener.progress(85, "Generating best line...");
+                            listener.progress(85, "Working out the best line...");
                             Track lineTrack = new Track();
                             lineTrack.load(new File(fileName));
                             applySegments(lineTrack, layout);
@@ -290,26 +298,21 @@ public class GenerateTrackDialog extends JDialog {
 
         int nTrimmed = trackWindow.applyGeneratedTrack(layout, line.ccLine);
 
+        // Plain language only (owner, 2026-10-11): the closure gap, clearance
+        // and donor-command notes meant nothing to users. The seed stays, so
+        // a track can be made again.
         StringBuffer status = new StringBuffer();
-        status.append("Applied: seed ").append(layout.seed)
-              .append(", ").append(layout.totalTlu).append(" TLU, closure gap ")
-              .append((long) layout.closureGap).append(" units");
-        if (layout.clearanceRoadWidths < 100)
-            status.append(", closest approach ")
-                  .append(Math.round(layout.clearanceRoadWidths * 10) / 10.0)
-                  .append(" road widths");
-        for (int i = 0; i < layout.warnings.size(); i++)
-            status.append(" — ").append(layout.warnings.get(i));
+        status.append("Track generated from seed ").append(layout.seed).append(": a ")
+              .append(Math.round(layout.totalTlu * METRES_PER_TLU / 100.0) / 10.0)
+              .append(" km lap.");
         if (nTrimmed > 0)
-            status.append(" — ").append(nTrimmed)
-                  .append(" scenery objects dropped to fit the game's file size limit");
+            status.append(" Some scenery was left out so the game can load it.");
         else if (nTrimmed < 0)
-            status.append(" — WARNING: too large for the game to load even without scenery");
+            status.append(" Warning: this track is too large for the game to load.");
         // The fitter only ever shortens the donor's pit lane, so this needs a
         // donor already over the limit; no original is (Mexico 205).
         if (trackWindow.getPitSegCount() > cfevolution.data.track.Track.MAX_PIT_SEGS)
-            status.append(" — WARNING: pit lane longer than the game's ")
-                  .append(cfevolution.data.track.Track.MAX_PIT_SEGS).append(" TLU limit");
+            status.append(" Warning: the pit lane is too long for the game to load.");
         statusLabel.setText(status.toString());
         progressBar.setValue(100);
         // Leave the dialog open: "Generate & Apply" again rerolls the seed

@@ -64,7 +64,7 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         if (listener != null) {
             if (listener.isCancelled())
                 return null;
-            listener.progress(85, "Quantising into CCLine segments...");
+            listener.progress(85, "Converting to best line segments...");
         }
 
         // Keep the line out of the way of cars rejoining from the pits.

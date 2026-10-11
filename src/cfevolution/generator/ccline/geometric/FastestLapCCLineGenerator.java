@@ -46,14 +46,14 @@ public class FastestLapCCLineGenerator implements CCLineGenerator {
         CCLineTrackGeometry geo = context.geometry;
 
         if (listener != null)
-            listener.progress(5, "Constructing seed racing line...");
+            listener.progress(5, "Drawing a first racing line...");
         CCLineLateralProfile profile =
             RacingLineProfileBuilder.build(geo, context.edgeStandoff);
 
         if (listener != null) {
             if (listener.isCancelled())
                 return null;
-            listener.progress(20, "Simulating for the fastest lap...");
+            listener.progress(20, "Searching for the fastest lap...");
         }
         LapTimeOptimizer optimizer = new LapTimeOptimizer(geo);
         double[] adTimes = optimizer.optimize(profile.offset, context.edgeStandoff,

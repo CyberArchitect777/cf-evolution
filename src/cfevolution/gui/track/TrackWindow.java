@@ -469,10 +469,8 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             return "The last segment does not face the way the first one does —\n"
                  + "they are " + (Math.round(Math.abs(dDegrees) * 10) / 10.0)
                  + " degrees apart.\n\n"
-                 + "The game wraps from the last segment straight back to the first,\n"
-                 + "and the best line is built in world coordinates, so it needs the\n"
-                 + "two ends to line up. Run Tools > \"Add Segment to Match Start/End\n"
-                 + "Heading\" first, then generate the line.";
+                 + "A best line needs the two ends to line up. Run Tools > \"Add Segment\n"
+                 + "to Match Start/End Heading\" first, then generate the line.";
         }
         return null;
     }
@@ -528,18 +526,11 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         }
 
         StringBuffer ask = new StringBuffer();
-        ask.append("Cut this track back to a straight starting canvas — the pit lane,\n")
-           .append("the grid and the start/finish line, with the rest of the lap removed?\n\n")
-           .append("Keeping sections 1-").append(plan.keepHead).append(" and ")
-           .append(plan.keepTail).append("-end; removing ").append(plan.removedSections)
-           .append(" sections (").append(plan.removedTlu).append(" TLU).\n")
-           .append("Every remaining corner is straightened, and the result padded to ")
-           .append(plan.resultTlu).append(" TLU\n")
-           .append("— a whole 512 TLU coordinate period, which is what keeps the road\n")
-           .append("drawn at its true size rather than squashed.\n\n")
-           .append("The grid and start/finish line are kept; the pit lane's entry and exit\n")
-           .append("are rebuilt to suit a straight track.\n")
-           .append("The best line will be cleared — build the track out, then generate one.\n\n")
+        ask.append("Cut this track down to a straight that keeps only the pit lane,\n")
+           .append("the starting grid and the start/finish line?\n\n")
+           .append("The rest of the lap is removed and any remaining corners are\n")
+           .append("straightened. The best line is cleared too: build the track back\n")
+           .append("up, then generate a new one.\n\n")
            .append("This cannot be undone. Continue?");
         if (JOptionPane.showConfirmDialog(this, ask.toString(), "Reduce to Minimal Track",
                                           JOptionPane.YES_NO_OPTION,
@@ -564,25 +555,12 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         updateTrackMap();
 
         StringBuffer msg = new StringBuffer();
-        msg.append("Reduced to ").append(currentTrack.getTrackTlu()).append(" TLU (")
-           .append(result.removedSections).append(" sections removed).\n\n")
-           .append("Kept: pit entry, grid, start/finish line, pit exit.\n")
-           .append("Straightened ").append(result.straightenedSections)
-           .append(" sections, and added ").append(result.padTlu)
-           .append(" TLU of straight so the length is a whole 512 TLU\n")
-           .append("coordinate period — which is what keeps the road drawn at its")
-           .append(" true size.\n")
-           .append("The pit lane's entry and exit were rebuilt to suit a straight track.\n")
-           .append("Road is drawn within ").append(Math.round(result.drawnError * 100))
-           .append("% of its true length, the pit lane within ")
-           .append(Math.round(result.pitDrawnError * 100))
-           .append("% (the originals sit at 3-5%).\n");
-        if (result.startAngleChanged)
-            msg.append("The start angle was squared up so the straight runs along an axis.\n");
-        msg.append("\nThe best line was cleared. Build the track out first — a line is")
-           .append("\nonly worth generating once the track is the shape you want.");
-        for (int i = 0; i < result.notes.size(); i++)
-            msg.append('\n').append(result.notes.get(i));
+        // Plain language only (owner, 2026-10-11): the cut, padding and
+        // drawn-length figures are in MinimalTrackReducer.Result for harnesses.
+        msg.append("The track is now a straight carrying the pit lane, the starting\n")
+           .append("grid and the start/finish line.\n\n")
+           .append("The best line was cleared. Once the track is the shape you want,\n")
+           .append("use Tools > Generate Best Line.");
         JOptionPane.showMessageDialog(this, msg.toString(), "Reduce to Minimal Track",
                                       JOptionPane.INFORMATION_MESSAGE);
     }
@@ -603,12 +581,8 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         if (plan.alreadyMatching)
         {
             StringBuffer msg = new StringBuffer();
-            msg.append("The last segment already faces the way the first does — ")
-               .append("net winding ").append(plan.turnsTarget).append(" turns");
-            if (plan.headingNeeded != 0)
-                msg.append(", out by ").append(Math.abs(plan.headingNeeded))
-                   .append(" angle units (the original tracks are out by 2 to 165)");
-            msg.append(". Nothing needs adding.\n");
+            msg.append("The end of the track already lines up with the start.\n")
+               .append("Nothing needs adding.\n");
             appendGapReport(msg);
             JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
                                           JOptionPane.INFORMATION_MESSAGE);
@@ -618,14 +592,11 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         double dDegrees = plan.headingNeeded * 360.0
                         / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN;
         StringBuffer ask = new StringBuffer();
-        ask.append("The last segment faces ")
+        ask.append("The end of the track faces ")
            .append(Math.round(Math.abs(dDegrees) * 10) / 10.0)
-           .append(" degrees away from the first.\n\n")
-           .append("Add one segment of ").append(plan.addedTlu)
-           .append(" TLU, curvature ").append(plan.addedCurvature)
-           .append(", at the end of the track to bring them into line?\n\n")
-           .append("The track becomes ").append(plan.trackTluBefore).append(" + ")
-           .append(plan.addedTlu).append(" TLU. Continue?");
+           .append(" degrees away from the start.\n\n")
+           .append("Add one curved segment, ").append(plan.addedTlu)
+           .append(" TLU long, at the end of the track to line them up?");
         if (JOptionPane.showConfirmDialog(this, ask.toString(), "Match Start/End Heading",
                                           JOptionPane.YES_NO_OPTION,
                                           JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
@@ -640,23 +611,13 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         updateTrackMap();
 
         StringBuffer msg = new StringBuffer();
-        msg.append("Added a ").append(result.addedTlu).append(" TLU segment, curvature ")
-           .append(result.addedCurvature).append(".\n")
-           .append("Track is now ").append(result.trackTluAfter).append(" TLU; net winding ")
-           .append(result.netWindingAfter
-                   / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN)
-           .append(" turns");
-        if (result.headingResidual != 0)
-            msg.append(", ").append(Math.abs(result.headingResidual))
-               .append(" angle units short (under a tenth of a degree — no whole-TLU")
-               .append(" segment lands on it exactly)");
-        msg.append(".\n");
+        msg.append("Added a ").append(result.addedTlu).append(" TLU segment at the end.\n")
+           .append("The end of the track now lines up with the start.\n");
         appendGapReport(msg);
         int nCcTlu = currentTrack.getCCLineTlu();
         if (nCcTlu > 0 && nCcTlu < currentTrack.getTrackTlu())
-            msg.append("\nThe best line now covers ").append(nCcTlu).append(" of ")
-               .append(currentTrack.getTrackTlu())
-               .append(" TLU — use Tools > Generate Best Line (Complete existing line).");
+            msg.append("\nThe best line no longer reaches the end of the track. Use\n")
+               .append("Tools > Generate Best Line with \"Complete existing line\" selected.");
         JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
                                       JOptionPane.INFORMATION_MESSAGE);
     }
@@ -668,10 +629,19 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     {
         double dGap = cfevolution.generator.track.TrackHeadingClosure.gapTlu(currentTrack);
         double dRatio = currentTrack.getTrackTlu() > 0 ? dGap / currentTrack.getTrackTlu() : 0;
-        msg.append("Start-to-end gap: ").append(Math.round(dGap)).append(" TLU, ")
-           .append(Math.round(dRatio * 100)).append("% of the lap — ")
-           .append(cfevolution.generator.track.TrackHeadingClosure.describeGap(dRatio))
-           .append(".\n");
+        // Plain-language bands of TrackHeadingClosure.describeGap (owner, 2026-10-11).
+        if (dRatio <= 0.02)
+            return;
+        if (dRatio <= cfevolution.generator.track.TrackHeadingClosure.MONZA_GAP_RATIO * 1.2)
+            msg.append("\nThe end of the track does not quite meet the start. The game\n")
+               .append("joins them by stretching the road slightly, which works fine.\n");
+        else if (dRatio <= 0.5)
+            msg.append("\nThe end of the track is some way from the start. The game joins\n")
+               .append("them by stretching the road, which may look odd: worth checking\n")
+               .append("in the game.\n");
+        else
+            msg.append("\nThe end of the track is far from the start. The game will stretch\n")
+               .append("the road a lot to join them, so expect visible distortion.\n");
     }
 
     public void showBestLinePreview(double[] adOffsets)
@@ -784,17 +754,15 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         if (repaired == null)
         {
             JOptionPane.showMessageDialog(this,
-                "Could not repair: there is no room after the edited segment\n"
-                + "(it is at the very end of the best line).",
+                "There is nothing to repair: the edited segment is the last one\n"
+                + "in the best line.",
                 "Repair Best Line", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int nOldCount = line.size();
         replaceBestLine(repaired); // also clears the snapshot
         JOptionPane.showMessageDialog(this,
-            "The sectors following your edit were refitted onto the previous\n"
-            + "line so the rest of the lap is unaffected ("
-            + nOldCount + " > " + repaired.size() + " sectors).",
+            "The best line after your edit has been adjusted to follow its\n"
+            + "previous path, so the rest of the lap is unaffected.",
             "Repair Best Line", JOptionPane.INFORMATION_MESSAGE);
     }
     

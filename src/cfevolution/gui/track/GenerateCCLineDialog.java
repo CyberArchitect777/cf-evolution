@@ -349,17 +349,14 @@ public class GenerateCCLineDialog extends JDialog {
         result = generated;
         progressBar.setValue(100);
 
-        StringBuffer status = new StringBuffer();
-        status.append(result.ccLine.size()).append(" segments, score ")
-              .append((long) result.score.total());
-        if (result.score.outOfBounds > 0)
-            status.append(", ").append(result.score.outOfBounds).append(" Seg(s) out of bounds");
-        for (int i = 0; i < result.warnings.size(); i++)
-            status.append(" — ").append(result.warnings.get(i));
-        String warning = lineQualityWarning(result);
-        if (warning != null)
-            status.append(" — ").append(warning);
-        statusLabel.setText(status.toString());
+        // Plain language only (owner, 2026-10-11). The score, the out-of-bounds
+        // count and the generators' own diagnostics meant nothing to users;
+        // the one judgement that matters is whether the line stays on the road.
+        if (lineQualityWarning(result) != null)
+            statusLabel.setText("Done, but parts of this line run well off the road."
+                + " Check the preview on the map before applying.");
+        else
+            statusLabel.setText("Done. Check the preview on the map, then Apply or Discard.");
 
         trackWindow.showBestLinePreview(result.previewOffsets);
         applyButton.setEnabled(true);

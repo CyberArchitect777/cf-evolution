@@ -180,7 +180,7 @@ public class RandomTrackGenerator {
             if (listener != null) {
                 if (listener.isCancelled())
                     return null;
-                listener.progress(Math.min(nAttempt / 4, 75), "Layout attempt " + nAttempt + "...");
+                listener.progress(Math.min(nAttempt / 4, 75), "Designing the layout...");
             }
             prims = buildPrimitives(rand, nTargetTlu, nCorners);
             int nHeadResidual = TrackLayoutClosure.closeHeading(prims, 0x10000);
@@ -214,7 +214,7 @@ public class RandomTrackGenerator {
                                 + nRejectedOverlap + " rejected for overlapping themselves)");
 
         if (listener != null)
-            listener.progress(80, "Layout closed (gap " + (long) dGap + " units)");
+            listener.progress(80, "Layout ready");
 
         // Materialise the final segment list with commands attached
         Result result = new Result();

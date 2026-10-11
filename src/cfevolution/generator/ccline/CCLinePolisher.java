@@ -98,7 +98,7 @@ public class CCLinePolisher {
                     return null;
                 listener.progress(nProgressFrom
                     + iter * (nProgressTo - nProgressFrom) / nIterations,
-                    "Smoothing line... ");
+                    "Smoothing the line...");
             }
             CCLine candidate;
             boolean fConversion = false;
