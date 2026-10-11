@@ -154,6 +154,13 @@ public class ExportMapImageDialog extends JDialog {
         }
         catch (Exception e) {
             statusLabel.setText("Export failed: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, "The image could not be exported:\n" + e.getMessage(),
+                "Export Track Map", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+        // A status line alone left users unsure the export had happened.
+        JOptionPane.showMessageDialog(this, "Exported " + file.getName() + " (" + nWidth + "×" + nHeight
+            + ")\nto " + file.getParent(), "Export Track Map", JOptionPane.INFORMATION_MESSAGE);
+        dispose();
     }
 }

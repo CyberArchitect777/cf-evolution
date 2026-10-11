@@ -55,6 +55,11 @@ public class GenerateTrackDialog extends JDialog {
     private boolean fConfirmed;
     private final java.util.Random seedRoller = new java.util.Random();
 
+    /** Whole generations to try before reporting a failure. A seed whose
+        layout cannot be closed, or whose line cannot be built, is simply
+        replaced by a fresh one; the status line shows the seed used. */
+    private static final int MAX_GENERATIONS = 10;
+
     public GenerateTrackDialog(TrackWindow parentWindow, String trackFileName) {
         super((Frame) null, "Generate Random Track", false);
         trackWindow = parentWindow;
@@ -189,29 +194,41 @@ public class GenerateTrackDialog extends JDialog {
                 RandomTrackGenerator.Result layout = null;
                 CCLineGenerationResult line = null;
                 String error = null;
-                try {
-                    // Scratch 1: closure iterations
-                    Track scratch = new Track();
-                    if (!scratch.load(new File(fileName)))
-                        throw new Exception("Could not reload " + fileName + " as scratch track");
-                    layout = new RandomTrackGenerator(scratch)
-                        .generate(lSeed, nTargetTlu, nCorners, dMaxElevation, listener);
+                for (int nTry = 0; nTry < MAX_GENERATIONS && !fCancelled; nTry++) {
+                    long lTrySeed = nTry == 0 ? lSeed : seedRoller.nextLong();
+                    error = null;
+                    try {
+                        // Scratch 1: closure iterations
+                        Track scratch = new Track();
+                        if (!scratch.load(new File(fileName)))
+                            throw new Exception("Could not reload " + fileName + " as scratch track");
+                        layout = new RandomTrackGenerator(scratch)
+                            .generate(lTrySeed, nTargetTlu, nCorners, dMaxElevation, listener);
 
-                    if (layout != null) {
-                        // Scratch 2: carry the final layout, generate the best line on it
-                        listener.progress(85, "Generating best line...");
-                        Track lineTrack = new Track();
-                        lineTrack.load(new File(fileName));
-                        applySegments(lineTrack, layout);
-                        lineTrack.setLayoutMode(false);
-                        lineTrack.calculateTrackLayout();
-                        CCLineGeneratorContext ctx = new CCLineGeneratorContext(lineTrack);
-                        ctx.seamOvershoot = 8;
-                        line = new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator().generate(ctx, null);
+                        if (layout != null) {
+                            // Scratch 2: carry the final layout, generate the best line on it
+                            listener.progress(85, "Generating best line...");
+                            Track lineTrack = new Track();
+                            lineTrack.load(new File(fileName));
+                            applySegments(lineTrack, layout);
+                            lineTrack.setLayoutMode(false);
+                            lineTrack.calculateTrackLayout();
+                            CCLineGeneratorContext ctx = new CCLineGeneratorContext(lineTrack);
+                            ctx.seamOvershoot = 8;
+                            line = new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator().generate(ctx, null);
+                        }
+                        break; // success, or cancelled (layout null)
+                    }
+                    catch (Exception e) {
+                        // Retry silently with a fresh seed; only the last failure is reported.
+                        error = e.getMessage();
+                        layout = null;
+                        line = null;
                     }
                 }
-                catch (Exception e) {
-                    error = e.getMessage();
+                if (fCancelled) {
+                    layout = null; // reported as "Cancelled.", not as a failure
+                    error = null;
                 }
                 final RandomTrackGenerator.Result finalLayout = layout;
                 final CCLineGenerationResult finalLine = line;
