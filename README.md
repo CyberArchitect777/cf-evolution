@@ -11,7 +11,7 @@ CF-Evolution supports editing two types of F1GP/WC data:
 
 - Track files
     - Full editing capability is provided up to our knowledge and understanding of the game data. It is possible to create playable tracks with full computer car lines.
-    - Computer car lines can be generated automatically for any track by simulating laps and keeping the fastest line. An incomplete line can also be completed, leaving hand-edited sectors untouched.
+    - Computer car lines can be generated automatically for any track by simulating laps and keeping the fastest line. An incomplete line can also be completed, leaving hand-edited sectors untouched. After editing a sector by hand, the rest of the line can be repaired so the lap keeps its shape.
     - Complete random circuits can be generated, including elevation, kerbs, pit lane, starting grid, countdown boards and scenery taken from the base track.
     - Track shaping tools are provided: reducing a track to a short straight canvas to build on, and squaring up a track whose start and end headings do not match.
     - Direct clicking on the track map is supported for element selection.

@@ -4,7 +4,8 @@
 0.3.0
 
 - Random playable tracks can now be generated with changeable parameters. An AI drivable best line is also generated.
-- Best lines can also be generated on existing tracks, either creating a completely new line or adding segments onto the existing line.
+- Best lines can also be generated on existing tracks, either creating a completely new line, adding segments onto the existing line or refitting the rest of the line after an edit.
+- The older best line generation methods are now hidden by default. They can be shown again by enabling legacy options under File -> Options.
 - A minimal track mode has been created, cutting a circuit back to the bare basics for further user development.
 - A circuit can be automatically joined up to ensure that the first and last track segments face the same way.
 - A track map can now be exported to PNG.
@@ -12,6 +13,8 @@
 - The window title now warns when the best line is shorter than the track, which would leave the end of the lap without an AI line.
 - Project website added under `web/`, published automatically to GitHub Pages.
 - Several track editing process fixes, including resolving a best line length truncation error.
+- Saving now warns when a track would freeze the game on loading, either because the best line has too many corners for the game's coaching table or because the file is too large.
+- Generated tracks keep more of their best line's corners and drop scenery objects if needed to stay under the game's file size limit.
 
 0.2.0
 
