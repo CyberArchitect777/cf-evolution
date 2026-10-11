@@ -488,6 +488,12 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     /** Returns how many scenery objects had to be dropped to keep the file
         under the size the game loads (see TrackFileSize): 0 normally, -1 if
         the track could not be brought under it. */
+    /** Pit lane Segs of the open track (see Track.MAX_PIT_SEGS). */
+    public int getPitSegCount()
+    {
+        return currentTrack == null ? 0 : currentTrack.getPitSegCount();
+    }
+
     public int applyGeneratedTrack(cfevolution.generator.track.RandomTrackGenerator.Result layout,
                                    CCLine newLine)
     {
@@ -825,6 +831,14 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
                    .append(nEntries - nBudget).append(" curve(s)\n")
                    .append("in the best line, or regenerate it.\n\n");
             }
+        }
+
+        int nPitSegs = currentTrack.getPitSegCount();
+        if (nPitSegs > Track.MAX_PIT_SEGS) {
+            msg.append("The pit lane is ").append(nPitSegs).append(" TLU long. The game allows at most ")
+               .append(Track.MAX_PIT_SEGS).append(",\n")
+               .append("so it needs to lose ").append(nPitSegs - Track.MAX_PIT_SEGS)
+               .append(" TLU. Shorten its straight sections.\n\n");
         }
 
         long lSize = savedFile != null ? savedFile.length() : 0;

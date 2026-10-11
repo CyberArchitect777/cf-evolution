@@ -320,6 +320,20 @@ public class Track {
         + the 4-byte checksum. Monaco, the largest original, is 20,497. */
     public static final int MAX_FILE_BYTES = 0x1010 + 0x400F + 4;
 
+    /** The most pit lane Segs the game accepts. GP.EXE declares arPitSegs as
+        220 Segs at a fixed address (seg005:D7AE), and TCCompileTrack hangs
+        (jmp $) once the pit lane runs past it, on every circuit. Measured by
+        F1GP-SDL on Mexico: 220 compiles, 221 hangs. Mexico, the longest
+        original, has 205. */
+    public static final int MAX_PIT_SEGS = 220;
+
+    /** Pit lane Segs as the game compiles them, one per TLU. Needs the
+        layout calculated. */
+    public int getPitSegCount()
+    {
+        return m_PitlaneSegments.getMaxTrackSegIndex() + 1;
+    }
+
     /** The size this track would have on disk, found by saving a scratch
         copy. Returns -1 if that fails. */
     public long measureSavedSize()

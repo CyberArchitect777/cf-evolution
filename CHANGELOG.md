@@ -15,6 +15,7 @@
 - Several track editing process fixes, including resolving a best line length truncation error.
 - Saving now warns when a track would freeze the game on loading, either because the best line has too many corners for the game's coaching table or because the file is too large.
 - Generated tracks keep more of their best line's corners and drop scenery objects if needed to stay under the game's file size limit.
+- Saving now warns if the pit lane is longer than 220 TLU, which freezes the game.
 
 0.2.0
 

@@ -288,6 +288,11 @@ public class GenerateTrackDialog extends JDialog {
                   .append(" scenery objects dropped to fit the game's file size limit");
         else if (nTrimmed < 0)
             status.append(" — WARNING: too large for the game to load even without scenery");
+        // The fitter only ever shortens the donor's pit lane, so this needs a
+        // donor already over the limit; no original is (Mexico 205).
+        if (trackWindow.getPitSegCount() > cfevolution.data.track.Track.MAX_PIT_SEGS)
+            status.append(" — WARNING: pit lane longer than the game's ")
+                  .append(cfevolution.data.track.Track.MAX_PIT_SEGS).append(" TLU limit");
         statusLabel.setText(status.toString());
         progressBar.setValue(100);
         // Leave the dialog open: "Generate & Apply" again rerolls the seed
