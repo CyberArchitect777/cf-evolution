@@ -1088,10 +1088,10 @@ public class Track {
                 dMinY = dY;
         } // for
         // Put data into rectangle
-        Rectangle r = new Rectangle( new Double(dMinX).intValue(),
-                                     new Double(dMinY).intValue(),
-                                     new Double(dMaxX - dMinX).intValue(),
-                                     new Double(dMaxY - dMinY).intValue() );
+        Rectangle r = new Rectangle( (int) dMinX,
+                                     (int) dMinY,
+                                     (int) (dMaxX - dMinX),
+                                     (int) (dMaxY - dMinY) );
         return r;
     }
 
@@ -1135,10 +1135,10 @@ public class Track {
                 dMinY = dY;
         } // for
         // Put data into rectangle
-        Rectangle r = new Rectangle( new Double(dMinX).intValue(),
-                                     new Double(dMinY).intValue(),
-                                     new Double(dMaxX - dMinX).intValue(),
-                                     new Double(dMaxY - dMinY).intValue() );
+        Rectangle r = new Rectangle( (int) dMinX,
+                                     (int) dMinY,
+                                     (int) (dMaxX - dMinX),
+                                     (int) (dMaxY - dMinY) );
         return r;
     }
 }

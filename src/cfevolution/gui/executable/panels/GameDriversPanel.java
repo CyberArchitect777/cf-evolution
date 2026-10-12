@@ -45,8 +45,8 @@ public class GameDriversPanel extends javax.swing.JPanel
         initComponents();
         driverSelectionHistory = new int[2];
         gameDrivers = passedGameDrivers;
-        qualifyingGripField.setText(new Integer(gameDrivers.getQualifyingGrip(0)).toString());
-        raceGripField.setText(new Integer(gameDrivers.getRaceGrip(0)).toString());
+        qualifyingGripField.setText(Integer.toString(gameDrivers.getQualifyingGrip(0)));
+        raceGripField.setText(Integer.toString(gameDrivers.getRaceGrip(0)));
         driverList.setListData(gameDrivers.getAllDriverNames());
         driverList.setSelectedIndex(0);
         driverSelectionHistory[0] = 0;
@@ -58,8 +58,8 @@ public class GameDriversPanel extends javax.swing.JPanel
     {
         // Updates the program values stored in memory based on those displayed on the interface. 
         
-        gameDrivers.setQualifyingGrip(driverIndex, new Integer(qualifyingGripField.getText()).intValue());
-        gameDrivers.setRaceGrip(driverIndex, new Integer(raceGripField.getText()).intValue());
+        gameDrivers.setQualifyingGrip(driverIndex, Integer.parseInt(qualifyingGripField.getText()));
+        gameDrivers.setRaceGrip(driverIndex, Integer.parseInt(raceGripField.getText()));
                         
     }
     
@@ -252,27 +252,27 @@ public class GameDriversPanel extends javax.swing.JPanel
 
     private void qualifyingFieldChange(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_qualifyingFieldChange
 
-        int currentQualifyingGrip = new Integer(qualifyingGripField.getText()).intValue();
-        qualifyingGripField.setText(new Integer(currentQualifyingGrip).toString());
+        int currentQualifyingGrip = Integer.parseInt(qualifyingGripField.getText());
+        qualifyingGripField.setText(Integer.toString(currentQualifyingGrip));
         updateFromCurrentValues(driverSelectionHistory[0]);
                 
     }//GEN-LAST:event_qualifyingFieldChange
 
     private void raceFieldChange(java.awt.event.FocusEvent evt) {//GEN-FIRST:event_raceFieldChange
 
-        int currentRaceGrip = new Integer(raceGripField.getText()).intValue();
-        raceGripField.setText(new Integer(currentRaceGrip).toString());
+        int currentRaceGrip = Integer.parseInt(raceGripField.getText());
+        raceGripField.setText(Integer.toString(currentRaceGrip));
         updateFromCurrentValues(driverSelectionHistory[0]);
                 
     }//GEN-LAST:event_raceFieldChange
 
     private void raceGripPlusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_raceGripPlusActionPerformed
 
-        int currentRaceGrip = new Integer(raceGripField.getText()).intValue();
+        int currentRaceGrip = Integer.parseInt(raceGripField.getText());
         if (currentRaceGrip < 255)
         {
             currentRaceGrip++;
-            raceGripField.setText(new Integer(currentRaceGrip).toString());
+            raceGripField.setText(Integer.toString(currentRaceGrip));
             updateFromCurrentValues(driverSelectionHistory[0]);
         }
         
@@ -280,11 +280,11 @@ public class GameDriversPanel extends javax.swing.JPanel
 
     private void raceGripMinusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_raceGripMinusActionPerformed
 
-        int currentRaceGrip = new Integer(raceGripField.getText()).intValue();
+        int currentRaceGrip = Integer.parseInt(raceGripField.getText());
         if (currentRaceGrip > 1)
         {
             currentRaceGrip--;
-            raceGripField.setText(new Integer(currentRaceGrip).toString());
+            raceGripField.setText(Integer.toString(currentRaceGrip));
             updateFromCurrentValues(driverSelectionHistory[0]);
         }
         
@@ -292,11 +292,11 @@ public class GameDriversPanel extends javax.swing.JPanel
 
     private void qualifyingGripPlusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_qualifyingGripPlusActionPerformed
 
-        int currentQualifyingGrip = new Integer(qualifyingGripField.getText()).intValue();
+        int currentQualifyingGrip = Integer.parseInt(qualifyingGripField.getText());
         if (currentQualifyingGrip < 255)
         {
             currentQualifyingGrip++;
-            qualifyingGripField.setText(new Integer(currentQualifyingGrip).toString());
+            qualifyingGripField.setText(Integer.toString(currentQualifyingGrip));
             updateFromCurrentValues(driverSelectionHistory[0]);
         }
         
@@ -304,11 +304,11 @@ public class GameDriversPanel extends javax.swing.JPanel
 
     private void qualifyingGripMinusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_qualifyingGripMinusActionPerformed
 
-        int currentQualifyingGrip = new Integer(qualifyingGripField.getText()).intValue();
+        int currentQualifyingGrip = Integer.parseInt(qualifyingGripField.getText());
         if (currentQualifyingGrip > 1)
         {
             currentQualifyingGrip--;
-            qualifyingGripField.setText(new Integer(currentQualifyingGrip).toString());
+            qualifyingGripField.setText(Integer.toString(currentQualifyingGrip));
             updateFromCurrentValues(driverSelectionHistory[0]);
         }
             
@@ -319,8 +319,8 @@ public class GameDriversPanel extends javax.swing.JPanel
         driverSelectionHistory[1] = driverSelectionHistory[0];
         driverSelectionHistory[0] = driverList.getSelectedIndex();
         updateFromCurrentValues(driverSelectionHistory[1]);
-        qualifyingGripField.setText(new Integer(gameDrivers.getQualifyingGrip(driverList.getSelectedIndex())).toString());
-        raceGripField.setText(new Integer(gameDrivers.getRaceGrip(driverList.getSelectedIndex())).toString());
+        qualifyingGripField.setText(Integer.toString(gameDrivers.getQualifyingGrip(driverList.getSelectedIndex())));
+        raceGripField.setText(Integer.toString(gameDrivers.getRaceGrip(driverList.getSelectedIndex())));
         driverNameField.setText(gameDrivers.getDriverName(driverList.getSelectedIndex()));
         
         

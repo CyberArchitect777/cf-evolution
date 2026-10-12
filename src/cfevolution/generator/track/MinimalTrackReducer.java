@@ -405,7 +405,7 @@ public class MinimalTrackReducer {
             boolean fKept = i <= r.keepHead || i >= r.keepTail;
             Vector cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Integer type = new Integer(((Command) cmds.get(c)).getType());
+                Integer type = Integer.valueOf(((Command) cmds.get(c)).getType());
                 if (fKept) {
                     kept.add(type);
                 } else {

@@ -73,11 +73,11 @@ public class StandardTableModel extends AbstractTableModel
         {
             if (((Boolean)aValue).booleanValue() == true)
             {
-                tableData[row][column] = new Boolean(true);
+                tableData[row][column] = Boolean.TRUE;
             }
             else
             {
-                tableData[row][column] = new Boolean(false);
+                tableData[row][column] = Boolean.FALSE;
             }
         }
         else

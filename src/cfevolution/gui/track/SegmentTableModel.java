@@ -55,11 +55,11 @@ public class SegmentTableModel extends StandardTableModel
     {
         // Updates the track data held in memory with the information currently displayed in the table
         
-        currentSegment.setTlu(new Integer((String)getValueAt(0,1)).intValue());
-        currentSegment.setCurvature(new Integer((String)getValueAt(1,1)).intValue());
-        currentSegment.setHeightChange(new Integer((String)getValueAt(2,1)).intValue());
-        currentSegment.setFenceDistL(new Integer((String)getValueAt(3,1)).intValue());
-        currentSegment.setFenceDistR(new Integer((String)getValueAt(4,1)).intValue());
+        currentSegment.setTlu(Integer.parseInt((String)getValueAt(0,1)));
+        currentSegment.setCurvature(Integer.parseInt((String)getValueAt(1,1)));
+        currentSegment.setHeightChange(Integer.parseInt((String)getValueAt(2,1)));
+        currentSegment.setFenceDistL(Integer.parseInt((String)getValueAt(3,1)));
+        currentSegment.setFenceDistR(Integer.parseInt((String)getValueAt(4,1)));
         StringBuffer newBinaryCode = new StringBuffer();
         for (int x=0;x<16;x++)
         {
@@ -86,15 +86,15 @@ public class SegmentTableModel extends StandardTableModel
         String binaryCode = currentSegment.getDetailedFlags();
                 
         setValueAt("Segment Length",0,0);
-        setValueAt(new String(new Integer(currentSegment.getTlu()).toString()),0,1);
+        setValueAt(new String(Integer.toString(currentSegment.getTlu())),0,1);
         setValueAt("Curvature",1,0);
-        setValueAt(new String(new Integer(currentSegment.getCurvature()).toString()),1,1);
+        setValueAt(new String(Integer.toString(currentSegment.getCurvature())),1,1);
         setValueAt("Height Difference",2,0);
-        setValueAt(new String(new Integer(currentSegment.getHeightChange()).toString()),2,1);
+        setValueAt(new String(Integer.toString(currentSegment.getHeightChange())),2,1);
         setValueAt("Left Run-Off Area",3,0);
-        setValueAt(new String(new Integer(currentSegment.getFenceDistL()).toString()),3,1);
+        setValueAt(new String(Integer.toString(currentSegment.getFenceDistL())),3,1);
         setValueAt("Right Run-Off Area",4,0);
-        setValueAt(new String(new Integer(currentSegment.getFenceDistR()).toString()),4,1);
+        setValueAt(new String(Integer.toString(currentSegment.getFenceDistR())),4,1);
         setValueAt("Unknown 1 (0x8000)",5,0);
         setValueAt(getTrackFlagState(binaryCode, 0),5,1);
         setValueAt("Unknown 2 (0x4000)",6,0);
@@ -139,11 +139,11 @@ public class SegmentTableModel extends StandardTableModel
         char uniqueCode = binaryCode.charAt(flagNo);
         if (uniqueCode == '1')
         {
-            return new Boolean(true);
+            return Boolean.TRUE;
         }
         else
         {
-            return new Boolean(false);
+            return Boolean.FALSE;
         }       
     }    
 }

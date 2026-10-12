@@ -75,7 +75,7 @@ public class BestLineTableModel extends StandardTableModel
         
         // The file stores the length as a single byte; save() would silently
         // truncate anything larger, so keep the value within 1-255 here.
-        int nLength = new Integer((String)getValueAt(1,1)).intValue();
+        int nLength = Integer.parseInt((String)getValueAt(1,1));
         if (nLength < 1 || nLength > 255)
         {
             int nClamped = Math.min(255, Math.max(1, nLength));
@@ -91,29 +91,29 @@ public class BestLineTableModel extends StandardTableModel
                 
         if (currentList.getSelectedIndex() == 0 || currentList.getSelectedIndex() == 1)
         {
-            currentLineSegment.setParam(0, new Integer((String)getValueAt(2,1)).intValue());
+            currentLineSegment.setParam(0, Integer.parseInt((String)getValueAt(2,1)));
             if (currentList.getSelectedIndex() == 0)
             {
-                currentLineSegment.setParam(1, new Integer((String)getValueAt(3,1)).intValue());
+                currentLineSegment.setParam(1, Integer.parseInt((String)getValueAt(3,1)));
             }
             else
             {
-                currentLineSegment.setParam(1, new Integer((String)getValueAt(3,1)).intValue());
-                currentLineSegment.setParam(2, new Integer((String)getValueAt(4,1)).intValue());
+                currentLineSegment.setParam(1, Integer.parseInt((String)getValueAt(3,1)));
+                currentLineSegment.setParam(2, Integer.parseInt((String)getValueAt(4,1)));
             }
         }
         else
         {
-            currentLineSegment.setParam(0, new Integer((String)getValueAt(2,1)).intValue());
-            currentLineSegment.setParam(1, new Integer((String)getValueAt(3,1)).intValue());
+            currentLineSegment.setParam(0, Integer.parseInt((String)getValueAt(2,1)));
+            currentLineSegment.setParam(1, Integer.parseInt((String)getValueAt(3,1)));
             if (currentList.getSelectedIndex() == 2)
             {
-                currentLineSegment.setParam(2, new Integer((String)getValueAt(4,1)).intValue());
+                currentLineSegment.setParam(2, Integer.parseInt((String)getValueAt(4,1)));
             }
             else
             {
-                currentLineSegment.setParam(2, new Integer((String)getValueAt(4,1)).intValue());
-                currentLineSegment.setParam(3, new Integer((String)getValueAt(5,1)).intValue());
+                currentLineSegment.setParam(2, Integer.parseInt((String)getValueAt(4,1)));
+                currentLineSegment.setParam(3, Integer.parseInt((String)getValueAt(5,1)));
             }
         }        
     }
@@ -150,42 +150,42 @@ public class BestLineTableModel extends StandardTableModel
         setValueAt("Best Line Type",0,0);
         setValueAt(typeList,0,1);
         setValueAt("Best Line Length",1,0);
-        setValueAt(new String(new Integer(currentLineSegment.getTlu()).toString()),1,1);
+        setValueAt(new String(Integer.toString(currentLineSegment.getTlu())),1,1);
         
         if ((segmentType == 0) || (segmentType == 1))
         {
             setValueAt("Best Line Correction",2,0);
-            setValueAt(new String(new Integer(currentLineSegment.getParam(0)).toString()),2,1);
+            setValueAt(new String(Integer.toString(currentLineSegment.getParam(0))),2,1);
             if (segmentType == 0)
             {
                 setValueAt("Best Line Radius",3,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(1)).toString()),3,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(1))),3,1);
             }
             else
             {
                 setValueAt("Best Line High Radius",3,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(1)).toString()),3,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(1))),3,1);
                 setValueAt("Best Line Low Radius",4,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(2)).toString()),4,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(2))),4,1);
             }
         }
         else
         {
             setValueAt("Best Line Displacement",2,0);
-            setValueAt(new String(new Integer(currentLineSegment.getParam(0)).toString()),2,1);
+            setValueAt(new String(Integer.toString(currentLineSegment.getParam(0))),2,1);
             setValueAt("Best Line Correction",3,0);
-            setValueAt(new String(new Integer(currentLineSegment.getParam(1)).toString()),3,1);
+            setValueAt(new String(Integer.toString(currentLineSegment.getParam(1))),3,1);
             if (segmentType == 2)
             {
                 setValueAt("Best Line Radius",4,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(2)).toString()),4,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(2))),4,1);
             }
             else
             {
                 setValueAt("Best Line High Radius",4,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(2)).toString()),4,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(2))),4,1);
                 setValueAt("Best Line Low Radius",5,0);
-                setValueAt(new String(new Integer(currentLineSegment.getParam(3)).toString()),5,1);
+                setValueAt(new String(Integer.toString(currentLineSegment.getParam(3))),5,1);
             }
         }
         this.fireTableDataChanged();

@@ -60,7 +60,7 @@ public class CmdParamTableModel extends StandardTableModel
         
         for (int x=0;x<paramText.length;x++)
         {
-            currentCommand.setParam(x, new Integer((String)getValueAt(x,1)).intValue());
+            currentCommand.setParam(x, Integer.parseInt((String)getValueAt(x,1)));
         }
         
     }
@@ -73,7 +73,7 @@ public class CmdParamTableModel extends StandardTableModel
         for (int x=0;x<paramText.length;x++)
         {
             setValueAt(paramText[x],x, 0);
-            setValueAt(new String(new Integer(currentCommand.getParam(x)).toString()),x,1);
+            setValueAt(new String(Integer.toString(currentCommand.getParam(x))),x,1);
         }        
     }
     

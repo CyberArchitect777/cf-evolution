@@ -45,7 +45,7 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         teamSelectionHistory = new int[2];
         gameTeams = passedGameTeams;
         gameDrivers = passedGameDrivers;
-        bhpSettingField.setText(new Integer(gameTeams.getBHPSetting(0)).toString());
+        bhpSettingField.setText(Integer.toString(gameTeams.getBHPSetting(0)));
         teamList.setListData(gameTeams.getAllTeamNames());
         teamList.setSelectedIndex(0);
         teamSelectionHistory[0] = 0;
@@ -223,22 +223,22 @@ public class GameTeamsPanel extends javax.swing.JPanel {
 
     private void bhpSettingPlusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bhpSettingPlusActionPerformed
 
-        int currentBHPSetting = new Integer(bhpSettingField.getText()).intValue();
+        int currentBHPSetting = Integer.parseInt(bhpSettingField.getText());
         if (currentBHPSetting < 1300) // Not the maximal limit possible, but the one used by F1ED
         {
             currentBHPSetting++;
-            bhpSettingField.setText(new Integer(currentBHPSetting).toString());
+            bhpSettingField.setText(Integer.toString(currentBHPSetting));
             updateFromCurrentValues(teamSelectionHistory[0]);
         }        
     }//GEN-LAST:event_bhpSettingPlusActionPerformed
 
     private void bhpSettingMinusActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bhpSettingMinusActionPerformed
 
-        int currentBHPSetting = new Integer(bhpSettingField.getText()).intValue();
+        int currentBHPSetting = Integer.parseInt(bhpSettingField.getText());
         if (currentBHPSetting > 0)
         {
             currentBHPSetting--;
-            bhpSettingField.setText(new Integer(currentBHPSetting).toString());
+            bhpSettingField.setText(Integer.toString(currentBHPSetting));
             updateFromCurrentValues(teamSelectionHistory[0]);
         }
         
@@ -266,7 +266,7 @@ public class GameTeamsPanel extends javax.swing.JPanel {
     {
         // Updates the program values stored in memory based on those displayed on the interface. 
         
-        gameTeams.setBHPSetting(teamIndex, new Integer(bhpSettingField.getText()).intValue());
+        gameTeams.setBHPSetting(teamIndex, Integer.parseInt(bhpSettingField.getText()));
                                 
     }
     
@@ -274,7 +274,7 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         teamSelectionHistory[1] = teamSelectionHistory[0];
         teamSelectionHistory[0] = teamList.getSelectedIndex();
         updateFromCurrentValues(teamSelectionHistory[1]);
-        bhpSettingField.setText(new Integer(gameTeams.getBHPSetting(teamList.getSelectedIndex())).toString());
+        bhpSettingField.setText(Integer.toString(gameTeams.getBHPSetting(teamList.getSelectedIndex())));
         teamNameField.setText(gameTeams.getTeamName(teamList.getSelectedIndex()));
         engineNameField.setText(gameTeams.getEngineName(teamList.getSelectedIndex()));
     }//GEN-LAST:event_teamListSelectionChange

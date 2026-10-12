@@ -72,7 +72,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         for (int x=0;x<currentTrackSegments.size();x++)
         {
             TrackSegment selectedTrackSegment = currentTrackSegments.getAt(x+1);
-            trackSegmentNode[x] = new DefaultMutableTreeNode(new Integer(x+1).toString() + " " + getSegmentDirection(selectedTrackSegment));
+            trackSegmentNode[x] = new DefaultMutableTreeNode(Integer.toString(x+1) + " " + getSegmentDirection(selectedTrackSegment));
             mainTrackSegmentNode.add(trackSegmentNode[x]);
         }       
         TrackSegments currentPitSegments = currentTrack.getPitlaneSegments();
@@ -80,7 +80,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         for (int x=0;x<currentPitSegments.size();x++)
         {
             TrackSegment selectedPitSegment = currentPitSegments.getAt(x+1);
-            pitSegmentNode[x] = new DefaultMutableTreeNode(new Integer(x+1).toString() + " " + getSegmentDirection(selectedPitSegment));
+            pitSegmentNode[x] = new DefaultMutableTreeNode(Integer.toString(x+1) + " " + getSegmentDirection(selectedPitSegment));
             mainPitSegmentNode.add(pitSegmentNode[x]);
         }    
         CCLine currentLineSegments = currentTrack.getCCLine();
@@ -88,7 +88,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         for (int x=0;x<currentLineSegments.size();x++)
         {
             CCLineSegment selectedLineSegment = currentLineSegments.getAt(x+1);
-            lineSegmentNode[x] = new DefaultMutableTreeNode(new Integer(x+1).toString() + " " + getBestLineDirection(selectedLineSegment));
+            lineSegmentNode[x] = new DefaultMutableTreeNode(Integer.toString(x+1) + " " + getBestLineDirection(selectedLineSegment));
             mainLineSegmentNode.add(lineSegmentNode[x]);
         }
     }
@@ -335,7 +335,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                 TreePath parentPath = fullPath.getParentPath();
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+                int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
                 if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
                 {
                     TrackSegments currentTrackSegments = new TrackSegments();
@@ -441,7 +441,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                 TreePath parentPath = fullPath.getParentPath();
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+                int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
                 if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
                 {
                     TrackSegments currentTrackSegments = new TrackSegments();
@@ -449,7 +449,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                     {
                        currentTrackSegments = currentTrack.getTrackSegments();
                        TrackSegment newTrackSegment = currentTrackSegments.insertAt(segmentNo+positionCorrection);
-                       mainTrackSegmentNode.insert(new DefaultMutableTreeNode(new Integer(200).toString() + " " + getSegmentDirection(newTrackSegment)),(segmentNo-1)+positionCorrection);
+                       mainTrackSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getSegmentDirection(newTrackSegment)),(segmentNo-1)+positionCorrection);
                        int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                        ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainTrackSegmentNode, entryAdditions);
                        reIndexNodes(0);
@@ -458,7 +458,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                     {
                        currentTrackSegments = currentTrack.getPitlaneSegments();
                        TrackSegment newPitSegment = currentTrackSegments.insertAt(segmentNo+positionCorrection);
-                       mainPitSegmentNode.insert(new DefaultMutableTreeNode(new Integer(200).toString() + " " + getSegmentDirection(newPitSegment)),(segmentNo-1)+positionCorrection);
+                       mainPitSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getSegmentDirection(newPitSegment)),(segmentNo-1)+positionCorrection);
                        int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                        ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainPitSegmentNode, entryAdditions);
                        reIndexNodes(1);
@@ -468,7 +468,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                 {
                     CCLine currentLines = currentTrack.getCCLine();
                     CCLineSegment newLineSegment = currentLines.insertAt(segmentNo+positionCorrection);
-                    mainLineSegmentNode.insert(new DefaultMutableTreeNode(new Integer(200).toString() + " " + getBestLineDirection(newLineSegment)),(segmentNo-1)+positionCorrection);
+                    mainLineSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getBestLineDirection(newLineSegment)),(segmentNo-1)+positionCorrection);
                     int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                     ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainLineSegmentNode, entryAdditions);
                     reIndexNodes(2);
@@ -508,7 +508,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
             {
                 DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)mainTrackSegmentNode.getChildAt(x);
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                selectedNode.setUserObject(new String(new Integer(x+1).toString() + " " + (selectedNode.toString()).substring(spaceIndex+1)));
+                selectedNode.setUserObject(new String(Integer.toString(x+1) + " " + (selectedNode.toString()).substring(spaceIndex+1)));
                 try
                 {
                     ((DefaultTreeModel)(trackDetails.getModel())).nodeChanged(selectedNode);
@@ -528,7 +528,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                 {
                     DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)mainPitSegmentNode.getChildAt(x);
                     int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                    selectedNode.setUserObject(new String(new Integer(x+1).toString() + " " + (selectedNode.toString()).substring(spaceIndex+1)));
+                    selectedNode.setUserObject(new String(Integer.toString(x+1) + " " + (selectedNode.toString()).substring(spaceIndex+1)));
                     try
                     {
                         ((DefaultTreeModel)(trackDetails.getModel())).nodeChanged(selectedNode);
@@ -548,7 +548,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                     {
                         DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)mainLineSegmentNode.getChildAt(x);
                         int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                        selectedNode.setUserObject(new String(new Integer(x+1).toString() + " " + (selectedNode.toString()).substring(spaceIndex+1)));
+                        selectedNode.setUserObject(new String(Integer.toString(x+1) + " " + (selectedNode.toString()).substring(spaceIndex+1)));
                         try
                         {
                             ((DefaultTreeModel)(trackDetails.getModel())).nodeChanged(selectedNode);
@@ -582,7 +582,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                     TreePath parentPath = fullPath.getParentPath();
                     DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                     int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                    int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+                    int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
                     if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
                     {
                         TrackSegments currentTrackSegments = new TrackSegments();
@@ -671,7 +671,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                     TreePath parentPath = fullPath.getParentPath();
                     DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                     int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                    int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+                    int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
                     if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
                     {
                         TrackSegments currentTrackSegments = new TrackSegments();
@@ -746,7 +746,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         TreePath fullPath = trackDetails.getSelectionPath();
         DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)fullPath.getLastPathComponent();
         int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-        int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+        int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
         TreePath parentPath = fullPath.getParentPath();
         DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
         if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
@@ -790,7 +790,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         {
             TrackSegment selectedTrackSegment = currentTrackSegments.getAt(x + 1);
             mainTrackSegmentNode.add(new DefaultMutableTreeNode(
-                new Integer(x + 1).toString() + " " + getSegmentDirection(selectedTrackSegment)));
+                Integer.toString(x + 1) + " " + getSegmentDirection(selectedTrackSegment)));
         }
         ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainTrackSegmentNode);
     }
@@ -807,7 +807,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         {
             CCLineSegment selectedLineSegment = currentLineSegments.getAt(x + 1);
             mainLineSegmentNode.add(new DefaultMutableTreeNode(
-                new Integer(x + 1).toString() + " " + getBestLineDirection(selectedLineSegment)));
+                Integer.toString(x + 1) + " " + getBestLineDirection(selectedLineSegment)));
         }
         ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainLineSegmentNode);
     }
@@ -838,7 +838,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
             try
             {
                 int spaceIndex = nodeText.indexOf(" ");
-                if (new Integer(nodeText.substring(0, spaceIndex)).intValue() == segmentNo)
+                if (Integer.parseInt(nodeText.substring(0, spaceIndex)) == segmentNo)
                 {
                     TreePath segmentPath = new TreePath(segmentNode.getPath());
                     trackDetails.setSelectionPath(segmentPath);
@@ -866,7 +866,7 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
                 TreePath parentPath = fullPath.getParentPath();
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                int segmentNo = new Integer((selectedNode.toString()).substring(0,spaceIndex)).intValue();
+                int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
                 if (parentNode.toString() == "Track Segments")
                 {
                     parentTrackWindow.highlightSection(1, segmentNo);

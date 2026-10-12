@@ -886,8 +886,8 @@ public class RandomTrackGenerator {
             for (int c = 0; c < anConnects.length; c++) {
                 int nRel = anConnects[c] - nCum;
                 if (nRel - WALL_WINDOW_BEFORE > 0 && nRel + WALL_WINDOW_AFTER < nLen) {
-                    cuts.add(new Integer(nRel - WALL_WINDOW_BEFORE));
-                    cuts.add(new Integer(nRel + WALL_WINDOW_AFTER));
+                    cuts.add(Integer.valueOf(nRel - WALL_WINDOW_BEFORE));
+                    cuts.add(Integer.valueOf(nRel + WALL_WINDOW_AFTER));
                 }
             }
             // Extra cuts requested by a caller — planKerbs asks for one where
@@ -902,15 +902,15 @@ public class RandomTrackGenerator {
                 for (int c = 0; c < anExtraCuts.length; c++) {
                     int nRel = anExtraCuts[c] - nCum;
                     if (nRel > 0 && nRel < nLen)
-                        cuts.add(new Integer(nRel));
+                        cuts.add(Integer.valueOf(nRel));
                 }
             }
             // Even chunks: subdivide every stretch between existing cuts
             java.util.Vector bounds = new java.util.Vector();
-            bounds.add(new Integer(0));
+            bounds.add(Integer.valueOf(0));
             for (java.util.Iterator it = cuts.iterator(); it.hasNext(); )
                 bounds.add(it.next());
-            bounds.add(new Integer(nLen));
+            bounds.add(Integer.valueOf(nLen));
             java.util.TreeSet all = new java.util.TreeSet(bounds);
             for (int b = 0; b + 1 < bounds.size(); b++) {
                 int a = ((Integer) bounds.get(b)).intValue();
@@ -919,7 +919,7 @@ public class RandomTrackGenerator {
                 if (nSpan > MAX_STRAIGHT_SECTION) {
                     int nPieces = (nSpan + MAX_STRAIGHT_SECTION - 1) / MAX_STRAIGHT_SECTION;
                     for (int k = 1; k < nPieces; k++)
-                        all.add(new Integer(a + nSpan * k / nPieces));
+                        all.add(Integer.valueOf(a + nSpan * k / nPieces));
                 }
             }
 

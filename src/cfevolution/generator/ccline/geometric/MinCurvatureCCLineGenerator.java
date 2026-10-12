@@ -105,7 +105,7 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         CCLineGenerationResult result = new CCLineGenerationResult(ccLine, score);
         if (adLapTimes != null)
             result.addWarning(String.format("Lap time model: %.2fs seed -> %.2fs optimised",
-                new Object[] { new Double(adLapTimes[0]), new Double(adLapTimes[1]) }));
+                new Object[] { Double.valueOf(adLapTimes[0]), Double.valueOf(adLapTimes[1]) }));
         if (!score.isValid()) {
             if (score.outOfBounds > 0)
                 result.addWarning(score.outOfBounds + " Seg(s) outside the drivable bound");

@@ -105,7 +105,7 @@ public class GamePointsPanel extends javax.swing.JPanel
         ((CardLayout)pointsPanel.getLayout()).show(pointsPanel, "First Page");
         for (int x=0;x<26;x++)
         {
-            pointsField[x].setText(new String(new Integer(gamePoints.getPointValue(x)).toString()));
+            pointsField[x].setText(new String(Integer.toString(gamePoints.getPointValue(x))));
         }
         //unlimitedTyres.setSelected(gameSettings.getQualifyingTyres());
     }
@@ -128,7 +128,7 @@ public class GamePointsPanel extends javax.swing.JPanel
         
         for (int x=0;x<26;x++)
         {
-            gamePoints.setPointValue(x, new Integer(pointsField[x].getText()).intValue());
+            gamePoints.setPointValue(x, Integer.parseInt(pointsField[x].getText()));
         }
                 
     }

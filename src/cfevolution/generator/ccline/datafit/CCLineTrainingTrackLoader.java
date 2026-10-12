@@ -79,7 +79,7 @@ public class CCLineTrainingTrackLoader {
                     if (target > 1.0) target = 1.0;
                     if (target < -1.0) target = -1.0;
                     featList.add(trackFeatures[i]);
-                    targList.add(new Double(target));
+                    targList.add(Double.valueOf(target));
                 }
                 trackNames.add(f.getName());
             }
