@@ -34,21 +34,21 @@ import java.util.ArrayList;
 public class CommandDataStore 
 {
     
-    private ArrayList commandCollection;
+    private ArrayList<CommandData> commandCollection;
     
     /** Creates a new instance of CommandDataStore */
     public CommandDataStore() 
     {
         // Initialises the command data collection
         
-        commandCollection = new ArrayList();
+        commandCollection = new ArrayList<CommandData>();
         populateDataStore();
         
     }
     
-    public ArrayList createCollectionFromArray(String[] stringData)
+    public ArrayList<String> createCollectionFromArray(String[] stringData)
     {
-        ArrayList newCollection = new ArrayList();
+        ArrayList<String> newCollection = new ArrayList<String>();
         for (int x=0;x<stringData.length;x++)
         {
             newCollection.add(stringData[x]);
@@ -56,26 +56,26 @@ public class CommandDataStore
         return newCollection;
     }
     
-    public ArrayList createCollectionFromArray(String stringData)
+    public ArrayList<String> createCollectionFromArray(String stringData)
     {
-        ArrayList newCollection = new ArrayList();
+        ArrayList<String> newCollection = new ArrayList<String>();
         newCollection.add(stringData);
         return newCollection;
     }
     
     public CommandData getCommandByIndex(int commandIndex)
     {
-        CommandData selectedCommand = (CommandData)commandCollection.get(commandIndex);
+        CommandData selectedCommand = commandCollection.get(commandIndex);
         return selectedCommand;        
     }
     
     public CommandData getCommandByType(int commandType)
     {
-        CommandData selectedCommand = (CommandData)commandCollection.get(0);
+        CommandData selectedCommand = commandCollection.get(0);
         
         for (int x=0;x<commandCollection.size();x++)
         {
-            CommandData currentCommand = (CommandData)commandCollection.get(x);
+            CommandData currentCommand = commandCollection.get(x);
             if (currentCommand.getCommandType() == commandType)
             {
                 selectedCommand = currentCommand;

@@ -292,9 +292,9 @@ public class Track {
         // pit sections before it. Its offset byte only moves the painted
         // boxes, and if there are several the game keeps the last.
         int nAnchor = -1, nTlu = 0;
-        for (Enumeration e = m_PitlaneSegments.elements(); e.hasMoreElements(); )
+        for (Enumeration<TrackSegment> e = m_PitlaneSegments.elements(); e.hasMoreElements(); )
         {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+            TrackSegment ts = e.nextElement();
             if (ts.findCommand(0x88) != null || ts.findCommand(0x89) != null)
                 nAnchor = nTlu;
             nTlu += ts.getTlu();
@@ -808,8 +808,8 @@ public class Track {
         CCLineSegment cclineSeg;
         int nCCLineSector = 0;
 
-        for (Enumeration e = m_CCLine.elements(); e.hasMoreElements(); ) {
-                cclineSeg = (CCLineSegment) e.nextElement();
+        for (Enumeration<CCLineSegment> e = m_CCLine.elements(); e.hasMoreElements(); ) {
+                cclineSeg = e.nextElement();
 
                 int nShift;
                 int nParam = 0;

@@ -34,12 +34,12 @@ import java.util.ArrayList;
 public class CommandData {
     
     private int commandType;
-    private ArrayList paramInfo;
+    private ArrayList<String> paramInfo;
     private String commandDesc;
     
         
     /** Creates a new instance of CommandData */
-    public CommandData(int newCommandType, ArrayList newParamInfo, String newCommandDesc)
+    public CommandData(int newCommandType, ArrayList<String> newParamInfo, String newCommandDesc)
     {
         // Constructor. Initialises a new CommandData object.
         
@@ -66,7 +66,7 @@ public class CommandData {
     {
         // Returns the specified command parameter.
         
-        return (String)paramInfo.get(paramIndex);
+        return paramInfo.get(paramIndex);
     }
     
     public String[] getParamArray()
@@ -76,7 +76,7 @@ public class CommandData {
         String[] paramText = new String[paramInfo.size()];
         for (int x=0;x<paramInfo.size();x++)
         {
-            paramText[x] = (String)paramInfo.get(x);
+            paramText[x] = paramInfo.get(x);
         }
         
         return paramText;        

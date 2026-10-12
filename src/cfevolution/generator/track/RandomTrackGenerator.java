@@ -951,7 +951,7 @@ public class RandomTrackGenerator {
             // Command migration: collect the original's commands once,
             // then deal to pieces by offset
             Vector cmds = new Vector(ts.getCommands());
-            ts.setCommands(new Vector());
+            ts.setCommands(new Vector<Command>());
             int nPieceIndexBase = split.size() - (anBounds.length - 1);
             for (int ci = 0; ci < cmds.size(); ci++) {
                 Command cmd = (Command) cmds.get(ci);

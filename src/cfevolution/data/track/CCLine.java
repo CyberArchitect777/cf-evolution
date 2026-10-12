@@ -33,7 +33,7 @@ import java.util.*;
  *
  * @author Klaus
  */
-public class CCLine extends Vector {
+public class CCLine extends Vector<CCLineSegment> {
 
     /** Creates a new instance of CCLine */
     public CCLine() {
@@ -73,9 +73,9 @@ public class CCLine extends Vector {
     public int save(FileOutputStream fos) throws IOException
     {
         int nBytesWritten = 0;
-        for( Enumeration e = elements(); e.hasMoreElements(); )
+        for( Enumeration<CCLineSegment> e = elements(); e.hasMoreElements(); )
         {
-            nBytesWritten += ((CCLineSegment) e.nextElement()).save(fos);
+            nBytesWritten += (e.nextElement()).save(fos);
         }
         // save end of list pattern
         fos.write( 0 ); // Type
@@ -92,7 +92,7 @@ public class CCLine extends Vector {
         else
             //return (CCLineSegment) elementAt( nIndex + 1 );
             // Code bug found above by barrie. Suspected line is below
-            return (CCLineSegment) elementAt( nIndex - 1);
+            return elementAt( nIndex - 1);
     }
 
     /** inserts new CCline segment at given index (1-based).
@@ -133,8 +133,8 @@ public class CCLine extends Vector {
 
     public int getCumTlu() {
         int total = 0;
-        for (Enumeration e = elements(); e.hasMoreElements(); )
-            total += ((CCLineSegment) e.nextElement()).getTlu();
+        for (Enumeration<CCLineSegment> e = elements(); e.hasMoreElements(); )
+            total += (e.nextElement()).getTlu();
         return total;
     }
 
@@ -155,8 +155,8 @@ public class CCLine extends Vector {
         line reached 66. See CLAUDE.md, "A malformed track HANGS the game". */
     public int getCoachingEntryCount() {
         int nEntries = 0;
-        for (Enumeration e = elements(); e.hasMoreElements(); ) {
-            if (countsTowardsCoachingTable((CCLineSegment) e.nextElement()))
+        for (Enumeration<CCLineSegment> e = elements(); e.hasMoreElements(); ) {
+            if (countsTowardsCoachingTable(e.nextElement()))
                 nEntries++;
         }
         return nEntries;

@@ -36,7 +36,7 @@ import cfevolution.data.f1gp.F1GPMath;
  *
  * @author Klaus
  */
-public class TrackSegments extends Vector {
+public class TrackSegments extends Vector<TrackSegment> {
     final int const2PI_mul_4k = 25736; // 2 * PI * 4k
 
     /** Creates a new instance of TrackSegments */
@@ -67,8 +67,8 @@ public class TrackSegments extends Vector {
     public int save( FileOutputStream fos ) throws IOException
     {
         int nWritten = 0;
-        for ( Enumeration e = elements(); e.hasMoreElements(); )
-            nWritten += ((TrackSegment) e.nextElement()).save(fos);
+        for ( Enumeration<TrackSegment> e = elements(); e.hasMoreElements(); )
+            nWritten += (e.nextElement()).save(fos);
         try
         {
             fos.write( 0xFF );  // write end-of-track-segments indication
@@ -94,10 +94,10 @@ public class TrackSegments extends Vector {
     {
         int nSegsProcessed = 0;
         int nSector = 1;
-        for ( Enumeration e = elements(); e.hasMoreElements(); )
+        for ( Enumeration<TrackSegment> e = elements(); e.hasMoreElements(); )
         {
             // get the next element
-            TrackSegment ts = (TrackSegment) e.nextElement();
+            TrackSegment ts = e.nextElement();
             // Process commands
             ProcessTrackCommands( ts, nSegStart, bTrackCompilePass2 );
             // Process layout
@@ -120,11 +120,11 @@ public class TrackSegments extends Vector {
     protected void ProcessTrackCommands( TrackSegment ts, int nSegStart, boolean bTrackCompilePass2 )
     {
         int nSegNr = nSegStart; // Seg index to which command applies (including offset from command)
-        Vector commands = ts.getCommands();
+        Vector<Command> commands = ts.getCommands();
         fTC0xa5 = false;
-        for ( Enumeration e = commands.elements(); e.hasMoreElements(); )
+        for ( Enumeration<Command> e = commands.elements(); e.hasMoreElements(); )
         {
-            Command cmd = (Command) e.nextElement();
+            Command cmd = e.nextElement();
 
             if ( bTrackCompilePass2 )
             {
@@ -626,10 +626,10 @@ public class TrackSegments extends Vector {
         dPosX = nPosX;
         dPosY = nPosY;
 
-        for ( Enumeration e = elements(); e.hasMoreElements(); )
+        for ( Enumeration<TrackSegment> e = elements(); e.hasMoreElements(); )
         {
             // get the next element
-            TrackSegment ts = (TrackSegment) e.nextElement();
+            TrackSegment ts = e.nextElement();
             // calculate its layout
             ts.calculateLayout(
                 dPosX, dPosY,
@@ -660,10 +660,10 @@ public class TrackSegments extends Vector {
         int nEntrySector = 0, nEntrySegOffset = 0;
         int nExitSector = 0, nExitSegOffset = 0;
         int idx = 0;
-        for (Enumeration e = trackSegments.elements(); e.hasMoreElements(); )
+        for (Enumeration<TrackSegment> e = trackSegments.elements(); e.hasMoreElements(); )
         {
             idx++;
-            TrackSegment ts = (TrackSegment) e.nextElement();
+            TrackSegment ts = e.nextElement();
             Command cmd86 = ts.findCommand(0x86);
             Command cmd87 = ts.findCommand(0x87);
             if (cmd86 != null && nEntrySector == 0)
@@ -748,10 +748,10 @@ public class TrackSegments extends Vector {
     */
     public TrackSegment findPitlaneEntry()
     {
-        for ( Enumeration e = elements(); e.hasMoreElements(); )
+        for ( Enumeration<TrackSegment> e = elements(); e.hasMoreElements(); )
         {
             // get the next element
-            TrackSegment ts = (TrackSegment) e.nextElement();
+            TrackSegment ts = e.nextElement();
             // check if it contains pit lane entry
             if ( ts.findCommand(0x86) != null )
                 // found
@@ -789,7 +789,7 @@ public class TrackSegments extends Vector {
         if ( ( i > elementCount ) || ( i < 1 ) )
             return null;
         else
-            return (TrackSegment) elementAt( i - 1 );
+            return elementAt( i - 1 );
     }
 
     /** insert segment at given position (1-based).

@@ -136,7 +136,7 @@ public class TrackLayoutClosure {
         // Preserve the donor's dummy terminator segment (last element),
         // stripped of its commands.
         TrackSegment dummy = (TrackSegment) segs.get(segs.size() - 1);
-        dummy.setCommands(new Vector());
+        dummy.setCommands(new Vector<cfevolution.data.track.Command>());
 
         segs.clear();
         for (int i = 0; i < prims.size(); i++) {

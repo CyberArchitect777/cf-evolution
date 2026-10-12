@@ -46,7 +46,7 @@ public class TrackSegment extends CFDataObject {
         m_nFenceDistL = 0;
         m_nFenceDistR = 0;
         m_nSign = 0;
-        m_Commands = new Vector();
+        m_Commands = new Vector<Command>();
         m_dPosXStart = 0.0;
         m_dPosYStart = 0.0;
         m_dPosXEnd = 0.0;
@@ -118,8 +118,8 @@ public class TrackSegment extends CFDataObject {
     {
         int nWritten = 0;
         // first, save the command list.
-        for ( Enumeration e = m_Commands.elements(); e.hasMoreElements(); )
-            nWritten += ((Command) e.nextElement()).save(fos);
+        for ( Enumeration<Command> e = m_Commands.elements(); e.hasMoreElements(); )
+            nWritten += (e.nextElement()).save(fos);
         // save own properties
         if (m_nType != 0xFF)
         {
@@ -231,9 +231,9 @@ public class TrackSegment extends CFDataObject {
     }
 
     public Command findCommand(int nType) {
-        for ( Enumeration e = m_Commands.elements(); e.hasMoreElements(); )
+        for ( Enumeration<Command> e = m_Commands.elements(); e.hasMoreElements(); )
         {
-            Command cmd = (Command) e.nextElement();
+            Command cmd = e.nextElement();
             if ( cmd.getType() == nType )
                 return cmd;
         }
@@ -278,10 +278,10 @@ public class TrackSegment extends CFDataObject {
     { m_nFlags = nFlags; }
 
     // can only be read
-    public Vector getCommands()
+    public Vector<Command> getCommands()
     { return m_Commands; }
     
-    public void setCommands(Vector newCommands)
+    public void setCommands(Vector<Command> newCommands)
     {
         // Written by Barrie. New routine to allow the integration of new track commands.
         
@@ -390,7 +390,7 @@ public class TrackSegment extends CFDataObject {
     protected int m_nHeightChange; // Curvature in Z direction
     protected int m_nFlags;     // bit coded attributes like kerbs, fences etc.
     protected int m_nFenceDistL, m_nFenceDistR; // distance between track and fence
-    protected Vector m_Commands; // List of command objects associated with track segment
+    protected Vector<Command> m_Commands; // List of command objects associated with track segment
 
     // calculated values
     protected double m_dPosXStart, m_dPosYStart;   // coordinates for start of segment

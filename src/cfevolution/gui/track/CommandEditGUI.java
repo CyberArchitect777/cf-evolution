@@ -41,7 +41,7 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
     private Vector currentListData;
     private CommandDataStore availableDataset;
     private TrackSegment trackSegment;
-    private Vector currentSegmentCommands;
+    private Vector<Command> currentSegmentCommands;
     private JDesktopPane parentFrame;
     private TrackWindow parentTrackWindow;
     private TrackTreeSelector parentObjectWindow;
@@ -53,12 +53,12 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
         parentFrame = containerFrame;
         availableListData = new Vector();
         currentListData = new Vector();
-        currentSegmentCommands = new Vector();
+        currentSegmentCommands = new Vector<Command>();
         availableDataset = new CommandDataStore();
         trackSegment = currentSegment;
         for (int x=0;x<trackSegment.getCommands().size();x++)
         {
-            currentSegmentCommands.add((Command)trackSegment.getCommands().get(x));
+            currentSegmentCommands.add(trackSegment.getCommands().get(x));
         }
         parentTrackWindow = currentTrackWindow;
         parentObjectWindow = currentObjectWindow;
@@ -186,7 +186,7 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
             }
             else
             {
-                Command selectedCommand = (Command)currentSegmentCommands.get(currentList.getSelectedIndex());
+                Command selectedCommand = currentSegmentCommands.get(currentList.getSelectedIndex());
                 SegmentEditGUI cmdParamEditor = new SegmentEditGUI(parentTrackWindow, parentObjectWindow);
                 cmdParamEditor.editCmdParams(selectedCommand, commandData.getParamArray());
                 cmdParamEditor.setVisible(true);
