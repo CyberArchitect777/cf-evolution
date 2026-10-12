@@ -78,7 +78,7 @@ public class OptionsWindow extends javax.swing.JInternalFrame
     private void initComponents() {
         lookFeelPanel = new javax.swing.JPanel();
         interfaceModeLabel = new javax.swing.JLabel();
-        interfaceModeSelector = new javax.swing.JComboBox();
+        interfaceModeSelector = new javax.swing.JComboBox<>();
         executablePanel = new javax.swing.JPanel();
         executableLabelPanel = new javax.swing.JPanel();
         executableLabel = new javax.swing.JLabel();
@@ -269,7 +269,7 @@ public class OptionsWindow extends javax.swing.JInternalFrame
     private javax.swing.JPanel executablePanel;
     private javax.swing.JButton executableSelector;
     private javax.swing.JLabel interfaceModeLabel;
-    private javax.swing.JComboBox interfaceModeSelector;
+    private javax.swing.JComboBox<String> interfaceModeSelector;
     private javax.swing.JPanel lookFeelPanel;
     private javax.swing.JButton okButton;
     // End of variables declaration//GEN-END:variables

@@ -34,7 +34,7 @@ public class CCLineGenerationResult {
     public final CCLineEvaluator.Score score;
     /** Simulated lateral offset per Seg (wCCLine units) for preview drawing. */
     public final double[] previewOffsets;
-    public final Vector warnings = new Vector();
+    public final Vector<String> warnings = new Vector<String>();
 
     public CCLineGenerationResult(CCLine ccLine, CCLineEvaluator.Score score) {
         this.ccLine = ccLine;

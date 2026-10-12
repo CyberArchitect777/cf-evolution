@@ -148,7 +148,7 @@ public class MinimalTrackReducer {
         public int exitConnectTlu = -1;
 
         /** Human-readable notes for the result dialog. */
-        public final Vector notes = new Vector();
+        public final Vector<String> notes = new Vector<String>();
     }
 
     /** One located feature: where it is and which section carries it. */
@@ -385,9 +385,9 @@ public class MinimalTrackReducer {
     private int widthAt(TrackSegments segs, int nSection) {
         int nWidth = track.getTrackDataHeader().getStartWidth();
         for (int i = 1; i < nSection && i < segs.size(); i++) {
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Command cmd = (Command) cmds.get(c);
+                Command cmd = cmds.get(c);
                 if (cmd.getType() == 0x85)
                     nWidth = (short) cmd.getParam(2);
             }
@@ -398,14 +398,14 @@ public class MinimalTrackReducer {
     /** Records command types the cut removes from the track entirely, so
         the user can judge whether any of them mattered. */
     private void noteLostCommands(TrackSegments segs, int nLast, Result r) {
-        java.util.TreeSet kept = new java.util.TreeSet();
-        java.util.TreeSet cut = new java.util.TreeSet();
+        java.util.TreeSet<Integer> kept = new java.util.TreeSet<Integer>();
+        java.util.TreeSet<Integer> cut = new java.util.TreeSet<Integer>();
         int nCutCommands = 0;
         for (int i = 1; i <= nLast; i++) {
             boolean fKept = i <= r.keepHead || i >= r.keepTail;
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Integer type = Integer.valueOf(((Command) cmds.get(c)).getType());
+                Integer type = Integer.valueOf(cmds.get(c).getType());
                 if (fKept) {
                     kept.add(type);
                 } else {
@@ -419,8 +419,8 @@ public class MinimalTrackReducer {
             r.notes.add(nCutCommands + " commands removed with the cut sections.");
         if (!cut.isEmpty()) {
             StringBuffer sb = new StringBuffer("Command types no longer present anywhere: ");
-            for (java.util.Iterator it = cut.iterator(); it.hasNext(); ) {
-                sb.append("0x").append(Integer.toHexString(((Integer) it.next()).intValue()).toUpperCase());
+            for (java.util.Iterator<Integer> it = cut.iterator(); it.hasNext(); ) {
+                sb.append("0x").append(Integer.toHexString(it.next().intValue()).toUpperCase());
                 if (it.hasNext()) sb.append(' ');
             }
             r.notes.add(sb.toString());
@@ -449,9 +449,9 @@ public class MinimalTrackReducer {
 
     private static Feature findCommand(TrackSegments segs, int nLast, int[] anStart, int nType) {
         for (int i = 1; i <= nLast; i++) {
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Command cmd = (Command) cmds.get(c);
+                Command cmd = cmds.get(c);
                 if (cmd.getType() == nType)
                     return new Feature(anStart[i] + cmd.getParam(0), i);
             }
@@ -465,9 +465,9 @@ public class MinimalTrackReducer {
                                                int[] anStart, int nTlu) {
         Feature best = null;
         for (int i = 1; i <= nLast; i++) {
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Command cmd = (Command) cmds.get(c);
+                Command cmd = cmds.get(c);
                 if (!isMarking(cmd) || cmd.getParam(1) != MARKING_TYPE_PIT_PAINT)
                     continue;
                 int nAt = anStart[i] + cmd.getParam(0);
@@ -481,9 +481,9 @@ public class MinimalTrackReducer {
     private static Feature findGrid(TrackSegments segs, int nLast, int[] anStart) {
         Feature best = null;
         for (int i = 1; i <= nLast; i++) {
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Command cmd = (Command) cmds.get(c);
+                Command cmd = cmds.get(c);
                 if (!isMarking(cmd) || cmd.getParam(2) < GRID_MIN_DOTTED_LINES)
                     continue;
                 int nAt = anStart[i] + cmd.getParam(0);
@@ -496,9 +496,9 @@ public class MinimalTrackReducer {
 
     private static Feature findSfLine(TrackSegments segs, int nLast, int[] anStart, int nTotalTlu) {
         for (int i = nLast; i >= 1; i--) {
-            Vector cmds = segs.getAt(i).getCommands();
+            Vector<Command> cmds = segs.getAt(i).getCommands();
             for (int c = 0; c < cmds.size(); c++) {
-                Command cmd = (Command) cmds.get(c);
+                Command cmd = cmds.get(c);
                 if (!isMarking(cmd) || cmd.getParam(2) != 1 || (short) cmd.getParam(3) != 0)
                     continue;
                 int nAt = anStart[i] + cmd.getParam(0);

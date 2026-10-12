@@ -37,8 +37,8 @@ import javax.swing.*;
 public class CommandEditGUI extends javax.swing.JInternalFrame 
 {
     
-    private Vector availableListData;
-    private Vector currentListData;
+    private Vector<String> availableListData;
+    private Vector<String> currentListData;
     private CommandDataStore availableDataset;
     private TrackSegment trackSegment;
     private Vector<Command> currentSegmentCommands;
@@ -51,8 +51,8 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
     {
         initComponents();
         parentFrame = containerFrame;
-        availableListData = new Vector();
-        currentListData = new Vector();
+        availableListData = new Vector<String>();
+        currentListData = new Vector<String>();
         currentSegmentCommands = new Vector<Command>();
         availableDataset = new CommandDataStore();
         trackSegment = currentSegment;
@@ -73,11 +73,11 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
         currentPanel = new javax.swing.JPanel();
         currentText = new javax.swing.JLabel();
         currentScrollPane = new javax.swing.JScrollPane();
-        currentList = new javax.swing.JList();
+        currentList = new javax.swing.JList<>();
         availablePanel = new javax.swing.JPanel();
         availableText = new javax.swing.JLabel();
         availableScrollPane = new javax.swing.JScrollPane();
-        availableList = new javax.swing.JList();
+        availableList = new javax.swing.JList<>();
         buttonPanel = new javax.swing.JPanel();
         addCommand = new javax.swing.JButton();
         removeCommand = new javax.swing.JButton();
@@ -178,7 +178,7 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
         }
         else
         {
-            String commandString = (String)currentListData.get(currentList.getSelectedIndex());
+            String commandString = currentListData.get(currentList.getSelectedIndex());
             CommandData commandData = availableDataset.getCommandByType(convertHexToInt(commandString.substring(0,4)));
             if (commandData.getNumberOfParams() == 0)
             {
@@ -248,7 +248,7 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
         }
         else
         {
-            String commandString = (String)availableListData.get(availableList.getSelectedIndex());
+            String commandString = availableListData.get(availableList.getSelectedIndex());
             Command newCommand = new Command(convertHexToInt(commandString.substring(0,4)), 0, 0, 0, 0, 0, 0);
             currentListData.add(commandString);
             currentSegmentCommands.add(newCommand);
@@ -282,11 +282,11 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
         
         availableList.setListData(availableListData);
         
-        Vector segmentCommands = trackSegment.getCommands();
+        Vector<Command> segmentCommands = trackSegment.getCommands();
         
         for (int x=0;x<segmentCommands.size();x++)
         {
-            Command selectedCommand = (Command)segmentCommands.get(x);
+            Command selectedCommand = segmentCommands.get(x);
             CommandData detectedCommand = availableDataset.getCommandByType(selectedCommand.getType());
             currentListData.add(convertIntToHex(detectedCommand.getCommandType()) + " " + "(" + detectedCommand.getNumberOfParams() + ") - " + detectedCommand.getCommandDesc());
         }
@@ -311,13 +311,13 @@ public class CommandEditGUI extends javax.swing.JInternalFrame
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton EditParams;
     private javax.swing.JButton addCommand;
-    private javax.swing.JList availableList;
+    private javax.swing.JList<String> availableList;
     private javax.swing.JPanel availablePanel;
     private javax.swing.JScrollPane availableScrollPane;
     private javax.swing.JLabel availableText;
     private javax.swing.JPanel buttonPanel;
     private javax.swing.JButton cancelChanges;
-    private javax.swing.JList currentList;
+    private javax.swing.JList<String> currentList;
     private javax.swing.JPanel currentPanel;
     private javax.swing.JScrollPane currentScrollPane;
     private javax.swing.JLabel currentText;

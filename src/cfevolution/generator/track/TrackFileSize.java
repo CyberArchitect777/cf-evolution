@@ -23,7 +23,6 @@ import java.util.Vector;
 
 import cfevolution.data.track.Command;
 import cfevolution.data.track.Track;
-import cfevolution.data.track.TrackSegment;
 import cfevolution.data.track.TrackSegments;
 
 /**
@@ -74,13 +73,13 @@ public class TrackFileSize {
     /** Removes the last removable object from the section that has the
         most. Returns false if there are none left. */
     private static boolean removeOneObject(TrackSegments segs) {
-        Vector best = null;
+        Vector<Command> best = null;
         int nBestCount = 0;
         for (int i = 0; i < segs.size(); i++) {
-            Vector cmds = ((TrackSegment) segs.get(i)).getCommands();
+            Vector<Command> cmds = segs.get(i).getCommands();
             int nCount = 0;
             for (int c = 0; c < cmds.size(); c++)
-                if (isRemovableObject((Command) cmds.get(c)))
+                if (isRemovableObject(cmds.get(c)))
                     nCount++;
             if (nCount > nBestCount) {
                 nBestCount = nCount;
@@ -90,7 +89,7 @@ public class TrackFileSize {
         if (best == null)
             return false;
         for (int c = best.size() - 1; c >= 0; c--) {
-            if (isRemovableObject((Command) best.get(c))) {
+            if (isRemovableObject(best.get(c))) {
                 best.remove(c);
                 return true;
             }

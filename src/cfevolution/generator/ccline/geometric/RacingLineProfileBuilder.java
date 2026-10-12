@@ -75,7 +75,7 @@ public class RacingLineProfileBuilder {
         for (int i = 0; i < n; i++)
             dA[i] = (short) (geo.angleZ[(i + 1) % n] - geo.angleZ[i]);
 
-        Vector corners = new Vector(); // int[]{start, end, totalTurn}
+        Vector<int[]> corners = new Vector<int[]>(); // int[]{start, end, totalTurn}
         int i = 0;
         while (i < n) {
             if (Math.abs(dA[i]) < CORNER_RATE) {
@@ -117,8 +117,8 @@ public class RacingLineProfileBuilder {
         for (int c = 0; c < nCorners; c++)
             adScale[c] = 1.0;
         for (int c = 0; c < nCorners; c++) {
-            int[] run = (int[]) corners.get(c);
-            int[] next = (int[]) corners.get((c + 1) % nCorners);
+            int[] run = corners.get(c);
+            int[] next = corners.get((c + 1) % nCorners);
             if ((run[2] > 0) == (next[2] > 0))
                 continue; // same-direction corners keep full amplitude
             int gap = ((next[0] - run[1]) % n + n) % n;
@@ -137,12 +137,12 @@ public class RacingLineProfileBuilder {
         int[] kfTlu = new int[nCorners * 3];
         double[] kfFrac = new double[nCorners * 3];
         for (int c = 0; c < nCorners; c++) {
-            int[] run = (int[]) corners.get(c);
+            int[] run = corners.get(c);
             int mid = midpointOfTurn(dA, run[0], run[1], n);
             double inside = insideSign(geo, run[0], run[1], mid, n);
 
-            int[] prev = (int[]) corners.get((c + nCorners - 1) % nCorners);
-            int[] next = (int[]) corners.get((c + 1) % nCorners);
+            int[] prev = corners.get((c + nCorners - 1) % nCorners);
+            int[] next = corners.get((c + 1) % nCorners);
             int gapBefore = ((run[0] - prev[1]) % n + n) % n;
             int gapAfter = ((next[0] - run[1]) % n + n) % n;
             int tIn = Math.min(MAX_TRANSITION, Math.max(0, gapBefore / 2 - 1));

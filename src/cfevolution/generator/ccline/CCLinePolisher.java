@@ -194,7 +194,7 @@ public class CCLinePolisher {
         if (nCount < 2)
             return null;
         // Straight sectors long enough to split, ranked by kick size
-        java.util.Vector big = new java.util.Vector();
+        java.util.Vector<int[]> big = new java.util.Vector<int[]>();
         for (int i = 1; i <= nCount; i++) {
             cfevolution.data.track.CCLineSegment sg = line.getAt(i);
             if (CCLineEvaluator.rawRadius(sg) != 0 || sg.getTlu() < 4)
@@ -208,11 +208,11 @@ public class CCLinePolisher {
             return null;
         for (int a = 0; a < big.size(); a++) // selection sort, descending
             for (int b = a + 1; b < big.size(); b++)
-                if (((int[]) big.get(b))[1] > ((int[]) big.get(a))[1]) {
-                    Object tmp = big.get(a); big.set(a, big.get(b)); big.set(b, tmp);
+                if (big.get(b)[1] > big.get(a)[1]) {
+                    int[] tmp = big.get(a); big.set(a, big.get(b)); big.set(b, tmp);
                 }
         int nPick = Math.min(rand.nextInt(3), big.size() - 1);
-        int nIndex = ((int[]) big.get(nPick))[0];
+        int nIndex = big.get(nPick)[0];
 
         cfevolution.data.track.CCLineSegment sg = line.getAt(nIndex);
         int ci = ((sg.getType() & 0x80) != 0) ? 1 : 0;

@@ -95,9 +95,9 @@ public class PitLaneFitter {
     public static void adjustPitLength(TrackSegments pitSegments, int nDelta) {
         if (nDelta == 0)
             return;
-        java.util.Vector eligible = new java.util.Vector();
-        for (Enumeration e = pitSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        java.util.Vector<TrackSegment> eligible = new java.util.Vector<TrackSegment>();
+        for (Enumeration<TrackSegment> e = pitSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             if (ts.getCurvature() != 0 || ts.getTlu() < 3)
                 continue;
             if (hasCommand(ts, 0x88) || hasCommand(ts, 0x89))
@@ -111,7 +111,7 @@ public class PitLaneFitter {
         while (nRemaining != 0 && nGuard++ < 1000) {
             boolean fChanged = false;
             for (int i = 0; i < eligible.size() && nRemaining != 0; i++) {
-                TrackSegment ts = (TrackSegment) eligible.get(i);
+                TrackSegment ts = eligible.get(i);
                 if (nRemaining > 0 && ts.getTlu() < 191) {
                     ts.setTlu(ts.getTlu() + 1);
                     nRemaining--;
@@ -227,10 +227,10 @@ public class PitLaneFitter {
     public static void neutralizeCurvature(TrackSegments pitSegments, int nSide,
                                            double dTargetOffset) {
         // Real sections in order (skip the trailing dummy, TLU 0)
-        java.util.Vector sections = new java.util.Vector();
+        java.util.Vector<TrackSegment> sections = new java.util.Vector<TrackSegment>();
         int nGarage = -1;
-        for (Enumeration e = pitSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        for (Enumeration<TrackSegment> e = pitSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             if (ts.getTlu() <= 0)
                 continue;
             if (hasCommand(ts, 0x88) || hasCommand(ts, 0x89))
@@ -244,7 +244,7 @@ public class PitLaneFitter {
             nGarage = nCount / 2;
 
         for (int i = 0; i < nCount; i++)
-            ((TrackSegment) sections.get(i)).setCurvature(0);
+            sections.get(i).setCurvature(0);
 
         // Entry S: bend out on the first pre-garage section pair, bend
         // back straight on the pair before the garage. Exit mirrored.
@@ -265,16 +265,16 @@ public class PitLaneFitter {
 
         which is what keeps the offset tied to where the pit belongs rather
         than to how far apart these two sections happen to be. */
-    private static void bendPair(java.util.Vector sections, int a, int b, int nSide,
+    private static void bendPair(java.util.Vector<TrackSegment> sections, int a, int b, int nSide,
                                  double dTargetOffset) {
-        TrackSegment tsA = (TrackSegment) sections.get(a);
-        TrackSegment tsB = (TrackSegment) sections.get(b);
+        TrackSegment tsA = sections.get(a);
+        TrackSegment tsB = sections.get(b);
 
         int nPeak = S_BEND_PEAK;
         if (dTargetOffset > 0) {
             double dSpanTlu = tsA.getTlu() / 2.0 + tsB.getTlu() / 2.0;
             for (int i = a + 1; i < b; i++)
-                dSpanTlu += ((TrackSegment) sections.get(i)).getTlu();
+                dSpanTlu += sections.get(i).getTlu();
 
             if (dSpanTlu > 0) {
                 double dSin = dTargetOffset / (dSpanTlu * UNITS_PER_TLU);
@@ -313,8 +313,8 @@ public class PitLaneFitter {
     public static void flattenHeights(TrackSegments pitSegments) {
         if (pitSegments == null)
             return;
-        for (Enumeration e = pitSegments.elements(); e.hasMoreElements(); )
-            ((TrackSegment) e.nextElement()).setHeightChange(0);
+        for (Enumeration<TrackSegment> e = pitSegments.elements(); e.hasMoreElements(); )
+            e.nextElement().setHeightChange(0);
     }
 
     /**
@@ -350,8 +350,8 @@ public class PitLaneFitter {
         // Per-TLU height field of the road.
         int[] anHeight = new int[nTotal];
         int nAt = 0;
-        for (Enumeration e = trackSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        for (Enumeration<TrackSegment> e = trackSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             for (int k = 0; k < ts.getTlu() && nAt < nTotal; k++)
                 anHeight[nAt++] = ts.getHeightChange();
         }
@@ -372,8 +372,8 @@ public class PitLaneFitter {
         int nWorst = 0;
         int nPitAt = 0;
         long lApplied = 0;
-        for (Enumeration e = pitSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        for (Enumeration<TrackSegment> e = pitSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             if (ts.getTlu() <= 0)
                 continue;
 
@@ -392,10 +392,10 @@ public class PitLaneFitter {
     /** TLU of the first command of this type in a segment list. */
     private static int findConnectTlu(TrackSegments segments, int nType) {
         int nAt = 0;
-        for (Enumeration e = segments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
-            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
-                Command cmd = (Command) c.nextElement();
+        for (Enumeration<TrackSegment> e = segments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
+            for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = c.nextElement();
                 if (cmd.getType() == nType)
                     return nAt + cmd.getParam(0);
             }
@@ -407,14 +407,14 @@ public class PitLaneFitter {
     /** Total TLU of the pit lane sections. */
     public static int pitTlu(TrackSegments pitSegments) {
         int nTotal = 0;
-        for (Enumeration e = pitSegments.elements(); e.hasMoreElements(); )
-            nTotal += ((TrackSegment) e.nextElement()).getTlu();
+        for (Enumeration<TrackSegment> e = pitSegments.elements(); e.hasMoreElements(); )
+            nTotal += e.nextElement().getTlu();
         return nTotal;
     }
 
     private static boolean hasCommand(TrackSegment ts, int nType) {
-        for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); )
-            if (((Command) c.nextElement()).getType() == nType)
+        for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); )
+            if (c.nextElement().getType() == nType)
                 return true;
         return false;
     }

@@ -143,7 +143,7 @@ public class CCLineQuantizer {
         }
         // Extend each corner outward while the profile still curves gently
         // (ease-in/ease-out capture)
-        boolean[] extended = (boolean[]) turning.clone();
+        boolean[] extended = turning.clone();
         for (int i = 0; i < n; i++) {
             if (!turning[i])
                 continue;

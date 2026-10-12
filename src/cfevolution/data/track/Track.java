@@ -887,10 +887,10 @@ public class Track {
         tmp6 += pSeg.getPosX();
 
         // wTmpAngleZ and shiftx are values of current ccLine sector.
-        tmp5 += (F1GPMath.LookupCos((short) wTmpAngleZ) * shiftx) >> 14;
+        tmp5 += (F1GPMath.LookupCos(wTmpAngleZ) * shiftx) >> 14;
         tmpY = tmp5;
 
-        tmp6 += (F1GPMath.LookupSin((short) wTmpAngleZ) * shiftx) >> 14;
+        tmp6 += (F1GPMath.LookupSin(wTmpAngleZ) * shiftx) >> 14;
         tmpX = tmp6;
 
         if (radius != 0) {

@@ -40,7 +40,7 @@ public class BestLineTableModel extends StandardTableModel
 {
     
     private CCLineSegment currentLineSegment;
-    private JComboBox typeList;
+    private JComboBox<String> typeList;
     
     /** Creates a new instance of BestLineTableModel */
     public BestLineTableModel(CCLineSegment selectedLineSegment) 
@@ -51,7 +51,7 @@ public class BestLineTableModel extends StandardTableModel
         tableDimension(4,2);
         
         currentLineSegment = selectedLineSegment;
-        typeList = new JComboBox();
+        typeList = new JComboBox<String>();
         
         populateTable(); 
     }
@@ -65,7 +65,7 @@ public class BestLineTableModel extends StandardTableModel
     {
         // Updates the track data held in memory with the information currently displayed in the table
         
-        JComboBox currentList = (JComboBox)getValueAt(0,1);
+        JComboBox<?> currentList = (JComboBox<?>)getValueAt(0,1);
         switch (currentList.getSelectedIndex())
         {
             case 0: currentLineSegment.setType(0); break;

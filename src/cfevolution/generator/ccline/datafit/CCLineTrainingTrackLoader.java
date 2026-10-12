@@ -41,7 +41,7 @@ public class CCLineTrainingTrackLoader {
     /** Curvature summing horizons (in Segs / TLU). */
     private static final int[] HORIZONS = { 16, 64, 128 };
 
-    public final Vector trackNames = new Vector();
+    public final Vector<String> trackNames = new Vector<String>();
     public double[][] features = new double[0][];
     public double[] targets = new double[0];
 
@@ -49,8 +49,8 @@ public class CCLineTrainingTrackLoader {
         one file name (for leave-one-out testing). Returns the number of
         tracks loaded. */
     public int load(File folder, String skipFileName) {
-        Vector featList = new Vector();
-        Vector targList = new Vector();
+        Vector<double[]> featList = new Vector<double[]>();
+        Vector<Double> targList = new Vector<Double>();
 
         File[] files = folder.listFiles();
         if (files == null)
@@ -91,8 +91,8 @@ public class CCLineTrainingTrackLoader {
         features = new double[featList.size()][];
         targets = new double[targList.size()];
         for (int i = 0; i < featList.size(); i++) {
-            features[i] = (double[]) featList.get(i);
-            targets[i] = ((Double) targList.get(i)).doubleValue();
+            features[i] = featList.get(i);
+            targets[i] = targList.get(i).doubleValue();
         }
         return trackNames.size();
     }

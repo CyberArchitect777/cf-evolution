@@ -165,7 +165,7 @@ public class CCLineCorridor {
         for (int i = 1; i <= segs.size() - 1; i++) {
             TrackSegment seg = segs.getAt(i);
             for (int c = 0; c < seg.getCommands().size(); c++) {
-                Command cmd = (Command) seg.getCommands().get(c);
+                Command cmd = seg.getCommands().get(c);
                 if (cmd.getType() == nType)
                     return nCum + cmd.getParam(0);
             }

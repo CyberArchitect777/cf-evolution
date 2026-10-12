@@ -36,12 +36,12 @@ import java.awt.*;
 public class SelectionTableCellRenderer extends DefaultTableCellRenderer implements TableCellRenderer
 {
     
-    private JComboBox selectionList;
+    private JComboBox<?> selectionList;
         
     /** Creates a new instance of SelectionTableCellRenderer */
     public SelectionTableCellRenderer() 
     {
-        selectionList = new JComboBox();
+        selectionList = new JComboBox<Object>();
     }
     
      public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
@@ -49,7 +49,7 @@ public class SelectionTableCellRenderer extends DefaultTableCellRenderer impleme
         
         if (value instanceof JComboBox)
         {
-            selectionList = (JComboBox)value;
+            selectionList = (JComboBox<?>)value;
             selectionList.setAlignmentX(SwingConstants.CENTER);
             selectionList.setOpaque(true);
             selectionList.setForeground(table.getForeground());

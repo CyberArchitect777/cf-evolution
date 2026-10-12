@@ -40,15 +40,15 @@ import java.nio.ByteBuffer;
 public class GameTeams 
 {
     
-    private Vector teamNames;
-    private Vector engineNames;
+    private Vector<String> teamNames;
+    private Vector<String> engineNames;
     private int[] bhpSetting;
         
     /** Creates a new instance of GameTeams */
     public GameTeams() 
     {
-        teamNames = new Vector();
-        engineNames = new Vector();
+        teamNames = new Vector<String>();
+        engineNames = new Vector<String>();
         bhpSetting = new int[20];
         for (int x=0;x<20;x++)
         {
@@ -59,12 +59,12 @@ public class GameTeams
     
     public String getTeamName(int nameIndex)
     {
-        return (String)teamNames.get(nameIndex);
+        return teamNames.get(nameIndex);
     }
     
     public String getEngineName(int nameIndex)
     {
-        return (String)engineNames.get(nameIndex);
+        return engineNames.get(nameIndex);
     }
     
     public int getBHPSetting(int bhpIndex)
@@ -77,7 +77,7 @@ public class GameTeams
         bhpSetting[bhpIndex] = bhpValue;
     }
     
-    public Vector getAllTeamNames()
+    public Vector<String> getAllTeamNames()
     {
         return teamNames;
     }
@@ -136,11 +136,11 @@ public class GameTeams
             StringBuffer currentString;
             if (x < 20)
             {
-                currentString = new StringBuffer((String)teamNames.get(x));
+                currentString = new StringBuffer(teamNames.get(x));
             }
             else
             {
-                currentString = new StringBuffer((String)engineNames.get(x-20));
+                currentString = new StringBuffer(engineNames.get(x-20));
             }
             for (int y=0;y<12;y++)
             {

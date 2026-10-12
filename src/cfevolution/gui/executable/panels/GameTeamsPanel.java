@@ -62,7 +62,7 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         descText = new javax.swing.JLabel();
         teamsPanel = new javax.swing.JPanel();
         teamScrollPane = new javax.swing.JScrollPane();
-        teamList = new javax.swing.JList();
+        teamList = new javax.swing.JList<>();
         namePanel = new javax.swing.JPanel();
         nameDataPanel = new javax.swing.JPanel();
         teamNameLabel = new javax.swing.JLabel();
@@ -82,11 +82,11 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         firstDriverPanel = new javax.swing.JPanel();
         firstDriverLabel = new javax.swing.JLabel();
         firstDriverScrollPane = new javax.swing.JScrollPane();
-        firstDriverList = new javax.swing.JList();
+        firstDriverList = new javax.swing.JList<>();
         secondDriverPanel = new javax.swing.JPanel();
         secondDriverLabel = new javax.swing.JLabel();
         secondDriverScrollPane = new javax.swing.JScrollPane();
-        secondDriverList = new javax.swing.JList();
+        secondDriverList = new javax.swing.JList<>();
 
         setLayout(new java.awt.BorderLayout());
 
@@ -95,10 +95,10 @@ public class GameTeamsPanel extends javax.swing.JPanel {
 
         teamsPanel.setLayout(new java.awt.GridLayout(3, 1, 0, 10));
 
-        teamList.setModel(new javax.swing.AbstractListModel() {
+        teamList.setModel(new javax.swing.AbstractListModel<String>() {
             String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
             public int getSize() { return strings.length; }
-            public Object getElementAt(int i) { return strings[i]; }
+            public String getElementAt(int i) { return strings[i]; }
         });
         teamList.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
             public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
@@ -188,10 +188,10 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         firstDriverLabel.setText("First Driver");
         firstDriverPanel.add(firstDriverLabel);
 
-        firstDriverList.setModel(new javax.swing.AbstractListModel() {
+        firstDriverList.setModel(new javax.swing.AbstractListModel<String>() {
             String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
             public int getSize() { return strings.length; }
-            public Object getElementAt(int i) { return strings[i]; }
+            public String getElementAt(int i) { return strings[i]; }
         });
         firstDriverScrollPane.setViewportView(firstDriverList);
 
@@ -204,10 +204,10 @@ public class GameTeamsPanel extends javax.swing.JPanel {
         secondDriverLabel.setText("Second Driver");
         secondDriverPanel.add(secondDriverLabel);
 
-        secondDriverList.setModel(new javax.swing.AbstractListModel() {
+        secondDriverList.setModel(new javax.swing.AbstractListModel<String>() {
             String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
             public int getSize() { return strings.length; }
-            public Object getElementAt(int i) { return strings[i]; }
+            public String getElementAt(int i) { return strings[i]; }
         });
         secondDriverScrollPane.setViewportView(secondDriverList);
 
@@ -294,17 +294,17 @@ public class GameTeamsPanel extends javax.swing.JPanel {
     private javax.swing.JTextField engineNameField;
     private javax.swing.JLabel engineNameLabel;
     private javax.swing.JLabel firstDriverLabel;
-    private javax.swing.JList firstDriverList;
+    private javax.swing.JList<String> firstDriverList;
     private javax.swing.JPanel firstDriverPanel;
     private javax.swing.JScrollPane firstDriverScrollPane;
     private javax.swing.JPanel nameDataPanel;
     private javax.swing.JPanel namePanel;
     private javax.swing.JLabel secondDriverLabel;
-    private javax.swing.JList secondDriverList;
+    private javax.swing.JList<String> secondDriverList;
     private javax.swing.JPanel secondDriverPanel;
     private javax.swing.JScrollPane secondDriverScrollPane;
     private javax.swing.JButton teamChangeButton;
-    private javax.swing.JList teamList;
+    private javax.swing.JList<String> teamList;
     private javax.swing.JTextField teamNameField;
     private javax.swing.JLabel teamNameLabel;
     private javax.swing.JScrollPane teamScrollPane;

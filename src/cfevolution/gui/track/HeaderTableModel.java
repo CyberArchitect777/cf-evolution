@@ -39,7 +39,7 @@ public class HeaderTableModel extends StandardTableModel
 {
     
     private TrackDataHeader currentHeader;
-    private JComboBox curbType;
+    private JComboBox<String> curbType;
     
     /** Creates a new instance of HeaderTableModel */
     public HeaderTableModel(TrackDataHeader selectedHeader) 
@@ -50,7 +50,7 @@ public class HeaderTableModel extends StandardTableModel
         tableDimension(21,2);
         
         currentHeader = selectedHeader;
-        curbType = new JComboBox();
+        curbType = new JComboBox<String>();
         populateTable();
     }
     

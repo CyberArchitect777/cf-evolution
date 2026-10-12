@@ -75,7 +75,7 @@ public class GameDriversPanel extends javax.swing.JPanel
         descText = new javax.swing.JLabel();
         driversPanel = new javax.swing.JPanel();
         driverScrollPane = new javax.swing.JScrollPane();
-        driverList = new javax.swing.JList();
+        driverList = new javax.swing.JList<>();
         namePanel = new javax.swing.JPanel();
         nameDataPanel = new javax.swing.JPanel();
         driverNameLabel = new javax.swing.JLabel();
@@ -103,10 +103,10 @@ public class GameDriversPanel extends javax.swing.JPanel
 
         driversPanel.setLayout(new java.awt.GridLayout(3, 1));
 
-        driverList.setModel(new javax.swing.AbstractListModel() {
+        driverList.setModel(new javax.swing.AbstractListModel<String>() {
             String[] strings = { "Item 1", "Item 2", "Item 3", "Item 4", "Item 5" };
             public int getSize() { return strings.length; }
-            public Object getElementAt(int i) { return strings[i]; }
+            public String getElementAt(int i) { return strings[i]; }
         });
         driverList.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
             public void valueChanged(javax.swing.event.ListSelectionEvent evt) {
@@ -335,7 +335,7 @@ public class GameDriversPanel extends javax.swing.JPanel
     private javax.swing.JPanel buttonPanel;
     private javax.swing.JPanel dataPanel;
     private javax.swing.JLabel descText;
-    private javax.swing.JList driverList;
+    private javax.swing.JList<String> driverList;
     private javax.swing.JTextField driverNameField;
     private javax.swing.JLabel driverNameLabel;
     private javax.swing.JScrollPane driverScrollPane;

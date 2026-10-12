@@ -39,14 +39,14 @@ import java.util.Vector;
 public class GameDrivers 
 {
     
-    private Vector driverNames;
+    private Vector<String> driverNames;
     private int[] qualifyingGrip;
     private int[] raceGrip;
         
     /** Creates a new instance of GameDrivers */
     public GameDrivers() 
     {
-        driverNames = new Vector();
+        driverNames = new Vector<String>();
         qualifyingGrip = new int[40];
         raceGrip = new int[40];
         for (int x=0;x<40;x++)
@@ -59,7 +59,7 @@ public class GameDrivers
     
     public String getDriverName(int nameIndex)
     {
-        return (String)driverNames.get(nameIndex);
+        return driverNames.get(nameIndex);
     }
     
     public int getQualifyingGrip(int gripIndex)
@@ -82,7 +82,7 @@ public class GameDrivers
         raceGrip[gripIndex] = gripValue;
     }
     
-    public Vector getAllDriverNames()
+    public Vector<String> getAllDriverNames()
     {
         return driverNames;
     }
@@ -107,7 +107,7 @@ public class GameDrivers
         int currentOffset = 0;
         for (int x=0;x<40;x++)
         {
-            StringBuffer currentString = new StringBuffer((String)driverNames.get(x));
+            StringBuffer currentString = new StringBuffer(driverNames.get(x));
             for (int y=0;y<23;y++)
             {
                 if (y < currentString.length())

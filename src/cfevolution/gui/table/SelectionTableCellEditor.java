@@ -36,17 +36,17 @@ import javax.swing.table.*;
 public class SelectionTableCellEditor extends AbstractCellEditor implements TableCellEditor
 {
     
-    private JComboBox selectionList;
+    private JComboBox<?> selectionList;
     
     /** Creates a new instance of SelectionTableCellEditor */
     public SelectionTableCellEditor() 
     {
-        selectionList = new JComboBox();
+        selectionList = new JComboBox<Object>();
     }
     
     public Component getTableCellEditorComponent(JTable table, Object value, boolean isSelected, int row, int column)
     {
-        selectionList = (JComboBox)value;
+        selectionList = (JComboBox<?>)value;
         selectionList.setAlignmentX(SwingConstants.CENTER);
         selectionList.setOpaque(true);
         

@@ -57,7 +57,7 @@ public class StandardTableModel extends AbstractTableModel
         return tableData[0].length;
     }
     
-    public Class getColumnClass(int columnIndex)
+    public Class<?> getColumnClass(int columnIndex)
     {
         return tableData[0][columnIndex].getClass();
     }
@@ -84,7 +84,7 @@ public class StandardTableModel extends AbstractTableModel
         {
             if (aValue instanceof JComboBox)
             {
-                JComboBox comboList = (JComboBox)aValue;
+                JComboBox<?> comboList = (JComboBox<?>)aValue;
                 tableData[row][column] = comboList;
             }
             else

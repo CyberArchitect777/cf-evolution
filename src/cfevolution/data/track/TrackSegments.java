@@ -301,8 +301,8 @@ public class TrackSegments extends Vector<TrackSegment> {
     protected void TCInitSeg( int nSegIndex, int nSector )
     {
         Seg seg = m_segs[ nSegIndex ];
-        seg.wAngleZ = (short) wTCAbsAngleZ_2;
-        seg.wAngleXChase = (short) wTCAbsAngleX;
+        seg.wAngleZ = wTCAbsAngleZ_2;
+        seg.wAngleXChase = wTCAbsAngleX;
 
         TCInitSegPos( seg );
 
