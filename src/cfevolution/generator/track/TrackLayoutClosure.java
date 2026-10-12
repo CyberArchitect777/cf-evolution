@@ -86,11 +86,11 @@ public class TrackLayoutClosure {
 
     /** Drives the summed turn to the winding target by spreading integer
         curvature corrections over the arcs. Returns the residual. */
-    public static int closeHeading(Vector prims, int nTarget) {
+    public static int closeHeading(Vector<Prim> prims, int nTarget) {
         for (int pass = 0; pass < 64; pass++) {
             long lNet = 0;
             for (int i = 0; i < prims.size(); i++) {
-                Prim p = (Prim) prims.get(i);
+                Prim p = prims.get(i);
                 lNet += (long) p.tlu * p.curv;
             }
             long lDelta = nTarget - lNet;
@@ -98,7 +98,7 @@ public class TrackLayoutClosure {
                 return (int) lDelta;
             boolean fChanged = false;
             for (int i = 0; i < prims.size() && Math.abs(lDelta) > HEADING_TOLERANCE; i++) {
-                Prim p = (Prim) prims.get(i);
+                Prim p = prims.get(i);
                 if (p.curv == 0)
                     continue;
                 // Correcting this arc's curvature by d changes the net by tlu * d
@@ -122,7 +122,7 @@ public class TrackLayoutClosure {
         }
         long lNet = 0;
         for (int i = 0; i < prims.size(); i++) {
-            Prim p = (Prim) prims.get(i);
+            Prim p = prims.get(i);
             lNet += (long) p.tlu * p.curv;
         }
         return (int) (nTarget - lNet);
@@ -130,17 +130,17 @@ public class TrackLayoutClosure {
 
     /** Applies the primitives to the scratch track and compiles WITHOUT
         the closing correction. */
-    public void compile(Vector prims) {
+    public void compile(Vector<Prim> prims) {
         TrackSegments segs = scratch.getTrackSegments();
 
         // Preserve the donor's dummy terminator segment (last element),
         // stripped of its commands.
-        TrackSegment dummy = (TrackSegment) segs.get(segs.size() - 1);
+        TrackSegment dummy = segs.get(segs.size() - 1);
         dummy.setCommands(new Vector<cfevolution.data.track.Command>());
 
         segs.clear();
         for (int i = 0; i < prims.size(); i++) {
-            Prim p = (Prim) prims.get(i);
+            Prim p = prims.get(i);
             TrackSegment ts = new TrackSegment();
             ts.setTlu(p.tlu);
             ts.setCurvature(p.curv);
@@ -167,7 +167,7 @@ public class TrackLayoutClosure {
     /** Iteratively adjusts straight lengths until the compiled gap is at
         most GAP_TARGET. Returns the final gap length (may exceed the
         target if closure failed — caller retries with a new layout). */
-    public double closePosition(Vector prims) {
+    public double closePosition(Vector<Prim> prims) {
         double dGap = Double.MAX_VALUE;
         for (int iter = 0; iter < 12; iter++) {
             compile(prims);
@@ -183,7 +183,7 @@ public class TrackLayoutClosure {
             double dBestCross = 0;
             double[][] adDir = new double[prims.size()][];
             for (int i = 0; i < prims.size(); i++) {
-                Prim p = (Prim) prims.get(i);
+                Prim p = prims.get(i);
                 if (p.curv == 0 && i > 0 && p.tlu >= MIN_STRAIGHT) {
                     double dRad = segs.getSegAt(nCumTlu).getAngleZ() * 2.0 * Math.PI / 65536.0;
                     adDir[i] = new double[] { Math.sin(dRad) * 1024.0, Math.cos(dRad) * 1024.0 };
@@ -214,8 +214,8 @@ public class TrackLayoutClosure {
             double dLa = (g[0] * uB[1] - g[1] * uB[0]) / dDet;
             double dLb = (uA[0] * g[1] - uA[1] * g[0]) / dDet;
 
-            Prim pa = (Prim) prims.get(nBestA);
-            Prim pb = (Prim) prims.get(nBestB);
+            Prim pa = prims.get(nBestA);
+            Prim pb = prims.get(nBestB);
             int nLa = clampLength(pa.tlu + (int) Math.round(dLa));
             int nLb = clampLength(pb.tlu + (int) Math.round(dLb));
             if (nLa == pa.tlu && nLb == pb.tlu)

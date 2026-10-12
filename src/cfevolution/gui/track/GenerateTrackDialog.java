@@ -256,12 +256,11 @@ public class GenerateTrackDialog extends JDialog {
     static void applySegments(Track track, RandomTrackGenerator.Result layout) {
         cfevolution.data.track.TrackSegments segs = track.getTrackSegments();
 
-        cfevolution.data.track.TrackSegment dummy =
-            (cfevolution.data.track.TrackSegment) segs.get(segs.size() - 1);
+        cfevolution.data.track.TrackSegment dummy = segs.get(segs.size() - 1);
         dummy.setCommands(new java.util.Vector<cfevolution.data.track.Command>());
         segs.clear();
         for (int i = 0; i < layout.segments.size(); i++)
-            segs.add((cfevolution.data.track.TrackSegment) layout.segments.get(i));
+            segs.add(layout.segments.get(i));
         segs.add(dummy);
         cfevolution.generator.pitlane.PitLaneFitter.adjustPitLength(
             track.getPitlaneSegments(), layout.pitDelta);

@@ -55,7 +55,7 @@ public class RandomTrackGenerator {
     /** Result of one generation run. */
     public static class Result {
         /** Generated track segments (without the dummy terminator). */
-        public final Vector segments = new Vector();
+        public final Vector<TrackSegment> segments = new Vector<TrackSegment>();
         public int totalTlu;
         public double closureGap;
         public long seed;
@@ -71,7 +71,7 @@ public class RandomTrackGenerator {
             1.0 means the road surfaces just touch; the accepted layout is
             always above TrackLayoutClosure.CLEARANCE_ROAD_WIDTHS. */
         public double clearanceRoadWidths;
-        public final Vector warnings = new Vector();
+        public final Vector<String> warnings = new Vector<String>();
     }
 
     /** Commands harvested from the donor and re-attached to the new layout.
@@ -143,10 +143,10 @@ public class RandomTrackGenerator {
         // donor's own geometry is long gone.
         double dDonorPitOffset = cfevolution.generator.pitlane.PitLaneFitter.measurePitOffset(
             scratch.getTrackSegments(), scratch.getPitlaneSegments());
-        Vector donorCommands = harvestCommands(scratch.getTrackSegments());
-        Vector donorScenery = harvestPositionedCommands(scratch.getTrackSegments());
+        Vector<Command> donorCommands = harvestCommands(scratch.getTrackSegments());
+        Vector<PositionedCommand> donorScenery = harvestPositionedCommands(scratch.getTrackSegments());
         int nDonorTotalTlu = donorTotalTlu(scratch.getTrackSegments());
-        Vector donorSfMarkings = harvestSfMarkings(scratch.getTrackSegments(),
+        Vector<PositionedCommand> donorSfMarkings = harvestSfMarkings(scratch.getTrackSegments(),
                                                    nDonorTotalTlu);
         int[] anLaneTemplate = harvestLaneTemplate(scratch.getTrackSegments());
         double[] adKerbTemplate = harvestKerbTemplate(scratch.getTrackSegments());
@@ -170,7 +170,7 @@ public class RandomTrackGenerator {
         // nothing to measure.
         double dClearanceHalfRoad = dHalfRoad > 0 ? dHalfRoad : 1500.0;
 
-        Vector prims = null;
+        Vector<TrackLayoutClosure.Prim> prims = null;
         boolean fAccepted = false;
         double dGap = Double.MAX_VALUE;
         double dClearance = 0;
@@ -224,7 +224,7 @@ public class RandomTrackGenerator {
         result.totalTlu = totalTlu(prims);
         result.clearanceRoadWidths = dClearance / (2.0 * dClearanceHalfRoad);
         for (int i = 0; i < prims.size(); i++) {
-            TrackLayoutClosure.Prim p = (TrackLayoutClosure.Prim) prims.get(i);
+            TrackLayoutClosure.Prim p = prims.get(i);
             TrackSegment ts = new TrackSegment();
             ts.setTlu(p.tlu);
             ts.setCurvature(p.curv);
@@ -264,8 +264,8 @@ public class RandomTrackGenerator {
             scratch.getPitlaneSegments());
         cfevolution.generator.pitlane.PitLaneFitter.Plan pitPlan =
             cfevolution.generator.pitlane.PitLaneFitter.plan(
-                ((TrackLayoutClosure.Prim) prims.get(0)).tlu,
-                ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu,
+                prims.get(0).tlu,
+                prims.get(prims.size() - 1).tlu,
                 nPitTlu);
         result.pitDelta = pitPlan.pitDelta;
         if (pitPlan.pitDelta != 0)
@@ -288,7 +288,7 @@ public class RandomTrackGenerator {
         // sign forced to our left-side pit.
         int nExitTlu = pitPlan.exitOffset;
         int nEntryTlu = result.totalTlu
-            - ((TrackLayoutClosure.Prim) prims.get(prims.size() - 1)).tlu
+            - prims.get(prims.size() - 1).tlu
             + pitPlan.entryOffset;
         attachPitLaneMarkings(result, anLaneTemplate, nEntryTlu, nExitTlu);
 
@@ -315,7 +315,7 @@ public class RandomTrackGenerator {
         // the first get a FRESH flags word (only the wall-window bit), so a
         // kerb on a long straight would survive on the first piece and vanish
         // from the rest.
-        Vector kerbPlans = planKerbs(result, adKerbTemplate, dHalfRoad, rand);
+        Vector<KerbPlan> kerbPlans = planKerbs(result, adKerbTemplate, dHalfRoad, rand);
         splitSections(result, nExitTlu, nEntryTlu, kerbCutPositions(kerbPlans));
         applyExitKerbs(result, kerbPlans);
 
@@ -364,7 +364,7 @@ public class RandomTrackGenerator {
         double dCapMetres = Math.min(Math.max(dMaxMetres, 0.0), ELEVATION_HARD_CEILING_M);
         if (dCapMetres <= 0.5) {
             for (int i = 0; i < nCount; i++)
-                ((TrackSegment) result.segments.get(i)).setHeightChange(0);
+                result.segments.get(i).setHeightChange(0);
             return;
         }
         double dCapUnits = dCapMetres * Z_UNITS_PER_METRE;
@@ -384,7 +384,7 @@ public class RandomTrackGenerator {
         for (int nPass = 0; nPass < 8; nPass++) {
             int nCum = 0;
             for (int i = 0; i < nCount; i++) {
-                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                TrackSegment ts = result.segments.get(i);
                 double dMid = (nCum + ts.getTlu() / 2.0) / nTotal;
                 double h = 0.0;
                 for (int w = 0; w < nWaves; w++)
@@ -419,14 +419,14 @@ public class RandomTrackGenerator {
         int nCount = result.segments.size();
         long lResidual = 0;
         for (int i = 0; i < nCount; i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            TrackSegment ts = result.segments.get(i);
             lResidual += (long) ts.getTlu() * ts.getHeightChange();
         }
         int nGuard = 0;
         while (Math.abs(lResidual) > 16 && nGuard++ < 10000) {
             boolean fChanged = false;
             for (int i = 1; i < nCount - 1 && Math.abs(lResidual) > 16; i++) {
-                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                TrackSegment ts = result.segments.get(i);
                 int nLen = ts.getTlu();
                 if (nLen > Math.abs(lResidual))
                     continue; // too coarse; a finer section will fix it
@@ -456,11 +456,11 @@ public class RandomTrackGenerator {
         TLU and does not materially change the aggregate peak-to-trough
         range this is used to cap — this is an internal diagnostic for
         scaling, not a value stamped anywhere or gated for bit-fidelity. */
-    private static long[] simulateElevationRange(Vector segments) {
+    private static long[] simulateElevationRange(Vector<TrackSegment> segments) {
         int nAngleX = 0;
         long lZ = 0, lMin = 0, lMax = 0;
         for (int s = 0; s < segments.size(); s++) {
-            TrackSegment ts = (TrackSegment) segments.get(s);
+            TrackSegment ts = segments.get(s);
             int nH = ts.getHeightChange();
             for (int i = 0; i < ts.getTlu(); i++) {
                 nAngleX += nH;
@@ -490,8 +490,8 @@ public class RandomTrackGenerator {
         int nPrevSign = 0;
         boolean fPrevKerb = false;
         int nKerbTluStraight = 0, nKerbTluTotal = 0, nRunTluSum = 0;
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             if (ts.getTlu() <= 0)
                 continue;
             int nSign = ts.getCurvature() == 0 ? 0 : (ts.getCurvature() > 0 ? 1 : -1);
@@ -553,9 +553,9 @@ public class RandomTrackGenerator {
         Density is the donor's, drawn ONCE PER CORNER rather than once per
         section — with corners now spanning two sections a per-section draw
         would kerb half a corner at random. */
-    private Vector planKerbs(Result result, double[] adTemplate, double dHalfRoad,
+    private Vector<KerbPlan> planKerbs(Result result, double[] adTemplate, double dHalfRoad,
                              Random rand) {
-        Vector plans = new Vector();
+        Vector<KerbPlan> plans = new Vector<KerbPlan>();
         if (dHalfRoad < KERB_MIN_HALF_ROAD || adTemplate[0] <= 0.0)
             return plans;
         int n = result.segments.size();
@@ -566,20 +566,20 @@ public class RandomTrackGenerator {
         int nCum = 0;
         for (int i = 0; i < n; i++) {
             anStartTlu[i] = nCum;
-            nCum += ((TrackSegment) result.segments.get(i)).getTlu();
+            nCum += result.segments.get(i).getTlu();
         }
 
         for (int i = 0; i < n; i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            TrackSegment ts = result.segments.get(i);
             if (ts.getCurvature() == 0)
                 continue;
-            TrackSegment prev = (TrackSegment) result.segments.get((i - 1 + n) % n);
+            TrackSegment prev = result.segments.get((i - 1 + n) % n);
             if (prev.getCurvature() != 0
                 && (prev.getCurvature() > 0) == (ts.getCurvature() > 0))
                 continue;                             // mid-corner, not a start
             int nEnd = i;
             for (int k = i + 1; k < n; k++) {
-                TrackSegment u = (TrackSegment) result.segments.get(k);
+                TrackSegment u = result.segments.get(k);
                 if (u.getCurvature() == 0
                     || (u.getCurvature() > 0) != (ts.getCurvature() > 0))
                     break;
@@ -598,7 +598,7 @@ public class RandomTrackGenerator {
             int nApex = (i == nEnd) ? i : i + (nEnd - i + 1) / 2;
             int nInsideTlu = 0;
             for (int k = nApex; k <= nEnd; k++) {
-                TrackSegment u = (TrackSegment) result.segments.get(k);
+                TrackSegment u = result.segments.get(k);
                 u.setFlags(u.getFlags() | nInside);   // high: no 0x4
                 nInsideTlu += u.getTlu();
             }
@@ -630,7 +630,7 @@ public class RandomTrackGenerator {
             // an existing kerb — the plan must not run past either.
             int nAvail = 0;
             for (int k = nEnd + 1; k < nEnd + 1 + n; k++) {
-                TrackSegment u = (TrackSegment) result.segments.get(k % n);
+                TrackSegment u = result.segments.get(k % n);
                 if (u.getCurvature() != 0)
                     break;
                 if ((u.getFlags() & 0xC00) != 0)
@@ -644,7 +644,7 @@ public class RandomTrackGenerator {
 
             KerbPlan plan = new KerbPlan();
             plan.cornerEndTlu = anStartTlu[nEnd]
-                              + ((TrackSegment) result.segments.get(nEnd)).getTlu();
+                              + result.segments.get(nEnd).getTlu();
             plan.exitEndTlu = plan.cornerEndTlu + nWant;
             // low-kerb bit drawn once for the run, not per section
             plan.flags = nOutside | (rand.nextDouble() < adTemplate[1] ? 0x4 : 0);
@@ -655,28 +655,28 @@ public class RandomTrackGenerator {
 
     /** The TLU positions splitSections should cut at, so each exit kerb can
         end where it was planned to rather than at a 32 TLU piece boundary. */
-    private int[] kerbCutPositions(Vector plans) {
+    private int[] kerbCutPositions(Vector<KerbPlan> plans) {
         int[] an = new int[plans.size()];
         for (int i = 0; i < plans.size(); i++)
-            an[i] = ((KerbPlan) plans.get(i)).exitEndTlu;
+            an[i] = plans.get(i).exitEndTlu;
         return an;
     }
 
     /** Writes the outside exit kerbs planned by planKerbs, now that the split
         has created a section boundary at each planned end. Works in absolute
         TLU because the split renumbered everything. */
-    private void applyExitKerbs(Result result, Vector plans) {
+    private void applyExitKerbs(Result result, Vector<KerbPlan> plans) {
         int n = result.segments.size();
         int[] anStartTlu = new int[n];
         int nCum = 0;
         for (int i = 0; i < n; i++) {
             anStartTlu[i] = nCum;
-            nCum += ((TrackSegment) result.segments.get(i)).getTlu();
+            nCum += result.segments.get(i).getTlu();
         }
         for (int p = 0; p < plans.size(); p++) {
-            KerbPlan plan = (KerbPlan) plans.get(p);
+            KerbPlan plan = plans.get(p);
             for (int i = 0; i < n; i++) {
-                TrackSegment ts = (TrackSegment) result.segments.get(i);
+                TrackSegment ts = result.segments.get(i);
                 if (ts.getCurvature() != 0)
                     continue;
                 int nStart = anStartTlu[i];
@@ -729,8 +729,8 @@ public class RandomTrackGenerator {
     private double harvestSignFraction(TrackSegments donorSegments) {
         int nCorners = 0, nMarked = 0, nPrevSign = 0;
         boolean fMarked = false;
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
             if (ts.getTlu() <= 0)
                 continue;
             int nSign = ts.getCurvature() == 0 ? 0 : (ts.getCurvature() > 0 ? 1 : -1);
@@ -773,18 +773,17 @@ public class RandomTrackGenerator {
         int[] anRunway = new int[n];
         int nCorners = 0;
         for (int i = 0; i < n; i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            TrackSegment ts = result.segments.get(i);
             if (ts.getCurvature() == 0)
                 continue;
             int nPrev = (i - 1 + n) % n;
-            TrackSegment prev = (TrackSegment) result.segments.get(nPrev);
+            TrackSegment prev = result.segments.get(nPrev);
             if (prev.getCurvature() != 0
                 && (prev.getCurvature() > 0) == (ts.getCurvature() > 0))
                 continue;               // mid-corner, not a corner start
             int nRun = 0;
             for (int k = 1; k < n; k++) {
-                TrackSegment back = (TrackSegment)
-                    result.segments.get((i - k + n) % n);
+                TrackSegment back = result.segments.get((i - k + n) % n);
                 if (back.getCurvature() != 0)
                     break;
                 nRun += back.getTlu();
@@ -822,7 +821,7 @@ public class RandomTrackGenerator {
             int nFlags = SIGN_COMBO_BY_STEPS[nSteps];
             if (nFlags == 0)
                 continue;
-            TrackSegment ts = (TrackSegment) result.segments.get(anStart[nBest]);
+            TrackSegment ts = result.segments.get(anStart[nBest]);
             ts.setFlags(ts.getFlags() | nFlags);
         }
     }
@@ -831,10 +830,10 @@ public class RandomTrackGenerator {
         MarkingType-3 command; fallback 8 dashes at 400. Must run BEFORE
         the closure loop replaces the scratch's donor segments. */
     private int[] harvestLaneTemplate(TrackSegments donorSegments) {
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
-            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
-                Command cmd = (Command) c.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
+            for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = c.nextElement();
                 if ((cmd.getType() == 0x8A || cmd.getType() == 0x8B)
                     && cmd.getParam(1) == 3)
                     // loaded command params are unsigned 16-bit; sign via short
@@ -868,10 +867,10 @@ public class RandomTrackGenerator {
 
     private void splitSections(Result result, int nExitTlu, int nEntryTlu,
                                int[] anExtraCuts) {
-        Vector split = new Vector();
+        Vector<TrackSegment> split = new Vector<TrackSegment>();
         int nCum = 0;
         for (int i = 0; i < result.segments.size(); i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            TrackSegment ts = result.segments.get(i);
             int nLen = ts.getTlu();
             if (ts.getCurvature() != 0 || nLen <= MAX_STRAIGHT_SECTION
                 || nLen < 2 * WALL_WINDOW_BEFORE) {
@@ -881,7 +880,7 @@ public class RandomTrackGenerator {
             }
             // Cut points within this segment (relative): wall windows
             // that fall inside it, then even chunks between
-            java.util.TreeSet cuts = new java.util.TreeSet();
+            java.util.TreeSet<Integer> cuts = new java.util.TreeSet<Integer>();
             int[] anConnects = { nExitTlu, nEntryTlu };
             for (int c = 0; c < anConnects.length; c++) {
                 int nRel = anConnects[c] - nCum;
@@ -906,15 +905,15 @@ public class RandomTrackGenerator {
                 }
             }
             // Even chunks: subdivide every stretch between existing cuts
-            java.util.Vector bounds = new java.util.Vector();
+            java.util.Vector<Integer> bounds = new java.util.Vector<Integer>();
             bounds.add(Integer.valueOf(0));
-            for (java.util.Iterator it = cuts.iterator(); it.hasNext(); )
+            for (java.util.Iterator<Integer> it = cuts.iterator(); it.hasNext(); )
                 bounds.add(it.next());
             bounds.add(Integer.valueOf(nLen));
-            java.util.TreeSet all = new java.util.TreeSet(bounds);
+            java.util.TreeSet<Integer> all = new java.util.TreeSet<Integer>(bounds);
             for (int b = 0; b + 1 < bounds.size(); b++) {
-                int a = ((Integer) bounds.get(b)).intValue();
-                int z = ((Integer) bounds.get(b + 1)).intValue();
+                int a = bounds.get(b).intValue();
+                int z = bounds.get(b + 1).intValue();
                 int nSpan = z - a;
                 if (nSpan > MAX_STRAIGHT_SECTION) {
                     int nPieces = (nSpan + MAX_STRAIGHT_SECTION - 1) / MAX_STRAIGHT_SECTION;
@@ -924,7 +923,7 @@ public class RandomTrackGenerator {
             }
 
             // Materialise the pieces, migrating commands by offset
-            Integer[] anBounds = (Integer[]) all.toArray(new Integer[0]);
+            Integer[] anBounds = all.toArray(new Integer[0]);
             for (int b = 0; b + 1 < anBounds.length; b++) {
                 int a = anBounds[b].intValue();
                 int z = anBounds[b + 1].intValue();
@@ -950,18 +949,18 @@ public class RandomTrackGenerator {
             }
             // Command migration: collect the original's commands once,
             // then deal to pieces by offset
-            Vector cmds = new Vector(ts.getCommands());
+            Vector<Command> cmds = new Vector<Command>(ts.getCommands());
             ts.setCommands(new Vector<Command>());
             int nPieceIndexBase = split.size() - (anBounds.length - 1);
             for (int ci = 0; ci < cmds.size(); ci++) {
-                Command cmd = (Command) cmds.get(ci);
+                Command cmd = cmds.get(ci);
                 int nOff = Math.min(cmd.getParam(0), nLen - 1);
                 for (int b = 0; b + 1 < anBounds.length; b++) {
                     int a = anBounds[b].intValue();
                     int z = anBounds[b + 1].intValue();
                     if (nOff >= a && nOff < z) {
                         cmd.setParam(0, nOff - a);
-                        ((TrackSegment) split.get(nPieceIndexBase + b)).getCommands().add(cmd);
+                        split.get(nPieceIndexBase + b).getCommands().add(cmd);
                         break;
                     }
                 }
@@ -978,8 +977,8 @@ public class RandomTrackGenerator {
     /** Random primitive sequence: S/F straight, then corners alternating
         with straights. Curvatures within the engine limit; the sequence
         is intentionally rough — closure adjusts it afterwards. */
-    private Vector buildPrimitives(Random rand, int nTargetTlu, int nCorners) {
-        Vector prims = new Vector();
+    private Vector<TrackLayoutClosure.Prim> buildPrimitives(Random rand, int nTargetTlu, int nCorners) {
+        Vector<TrackLayoutClosure.Prim> prims = new Vector<TrackLayoutClosure.Prim>();
         int nSfLen = 120 + rand.nextInt(60);
         prims.add(new TrackLayoutClosure.Prim(nSfLen, 0));
         int nBudget = nTargetTlu - nSfLen;
@@ -1009,27 +1008,27 @@ public class RandomTrackGenerator {
         // markings (donor grids sit ~40 TLU before S/F) — keep it long
         // enough for both
         TrackLayoutClosure.Prim last =
-            (TrackLayoutClosure.Prim) prims.get(prims.size() - 1);
+            prims.get(prims.size() - 1);
         if (last.tlu < 60)
             last.tlu = 60;
         return prims;
     }
 
-    private static int totalTlu(Vector prims) {
+    private static int totalTlu(Vector<TrackLayoutClosure.Prim> prims) {
         int nTotal = 0;
         for (int i = 0; i < prims.size(); i++)
-            nTotal += ((TrackLayoutClosure.Prim) prims.get(i)).tlu;
+            nTotal += prims.get(i).tlu;
         return nTotal;
     }
 
     /** First instance of each command type found on the donor's segments. */
-    private Vector harvestCommands(TrackSegments donorSegments) {
-        Vector harvested = new Vector();
+    private Vector<Command> harvestCommands(TrackSegments donorSegments) {
+        Vector<Command> harvested = new Vector<Command>();
         boolean[] afSeen = new boolean[256];
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
-            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
-                Command cmd = (Command) c.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
+            for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = c.nextElement();
                 int nType = cmd.getType();
                 if (nType >= 0 && nType < 256 && !afSeen[nType]) {
                     afSeen[nType] = true;
@@ -1051,10 +1050,10 @@ public class RandomTrackGenerator {
         (the approach straight). Offsets (param 0) are clamped into the
         carrying segment's length; the pit connects (0x86/0x87) get the
         fitter's computed offsets so the pit length matches. */
-    private void attachCommands(Result result, Vector donorCommands,
+    private void attachCommands(Result result, Vector<Command> donorCommands,
                                 cfevolution.generator.pitlane.PitLaneFitter.Plan pitPlan) {
-        TrackSegment sfSegment = (TrackSegment) result.segments.get(0);
-        TrackSegment approach = (TrackSegment) result.segments.get(result.segments.size() - 1);
+        TrackSegment sfSegment = result.segments.get(0);
+        TrackSegment approach = result.segments.get(result.segments.size() - 1);
 
         for (int i = 0; i < SF_COMMANDS.length; i++) {
             Command cmd = findCommand(donorCommands, SF_COMMANDS[i]);
@@ -1090,13 +1089,13 @@ public class RandomTrackGenerator {
     }
 
     /** All donor scenery/view commands (0x80/0x81/0x82) with positions. */
-    private Vector harvestPositionedCommands(TrackSegments donorSegments) {
-        Vector list = new Vector();
+    private Vector<PositionedCommand> harvestPositionedCommands(TrackSegments donorSegments) {
+        Vector<PositionedCommand> list = new Vector<PositionedCommand>();
         int nCumTlu = 0;
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
-            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
-                Command cmd = (Command) c.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
+            for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = c.nextElement();
                 int nType = cmd.getType();
                 if (nType == 0x80 || nType == 0x81 || nType == 0x82)
                     list.add(new PositionedCommand(copyCommand(cmd),
@@ -1109,8 +1108,8 @@ public class RandomTrackGenerator {
 
     private static int donorTotalTlu(TrackSegments donorSegments) {
         int nTotal = 0;
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); )
-            nTotal += ((TrackSegment) e.nextElement()).getTlu();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); )
+            nTotal += e.nextElement().getTlu();
         return nTotal;
     }
 
@@ -1120,13 +1119,13 @@ public class RandomTrackGenerator {
         one object per Seg (TCAnchorObject stores a single bObjectID), so
         colliding object TLUs are nudged to a nearby free TLU instead of
         silently overwriting each other. */
-    private void attachScenery(Result result, Vector donorScenery,
+    private void attachScenery(Result result, Vector<PositionedCommand> donorScenery,
                                int nDonorTotalTlu) {
         if (donorScenery.isEmpty() || nDonorTotalTlu <= 0)
             return;
         boolean[] afObjectTlu = new boolean[result.totalTlu];
         for (int i = 0; i < donorScenery.size(); i++) {
-            PositionedCommand pc = (PositionedCommand) donorScenery.get(i);
+            PositionedCommand pc = donorScenery.get(i);
             int nNewTlu = (int) ((long) pc.tlu * result.totalTlu / nDonorTotalTlu);
             if (pc.cmd.getType() == 0x80) {
                 nNewTlu = findFreeObjectTlu(afObjectTlu, nNewTlu);
@@ -1157,14 +1156,14 @@ public class RandomTrackGenerator {
         grid as a marking group there — e.g. Monaco carries 0x8A (x +768)
         and 0x8B (x -768) with 13 dotted lines each (the two grid columns)
         about 40 TLU out, plus a single-line 0x8B on the line itself. */
-    private Vector harvestSfMarkings(TrackSegments donorSegments,
+    private Vector<PositionedCommand> harvestSfMarkings(TrackSegments donorSegments,
                                      int nDonorTotalTlu) {
-        Vector list = new Vector();
+        Vector<PositionedCommand> list = new Vector<PositionedCommand>();
         int nCumTlu = 0;
-        for (Enumeration e = donorSegments.elements(); e.hasMoreElements(); ) {
-            TrackSegment ts = (TrackSegment) e.nextElement();
-            for (Enumeration c = ts.getCommands().elements(); c.hasMoreElements(); ) {
-                Command cmd = (Command) c.nextElement();
+        for (Enumeration<TrackSegment> e = donorSegments.elements(); e.hasMoreElements(); ) {
+            TrackSegment ts = e.nextElement();
+            for (Enumeration<Command> c = ts.getCommands().elements(); c.hasMoreElements(); ) {
+                Command cmd = c.nextElement();
                 int nType = cmd.getType();
                 int nTlu = nCumTlu + cmd.getParam(0);
                 if ((nType == 0x8A || nType == 0x8B)
@@ -1178,14 +1177,14 @@ public class RandomTrackGenerator {
 
     /** Re-attaches the S/F marking group at the same distance before the
         new S/F line, i.e. on the approach straight. */
-    private void attachSfMarkings(Result result, Vector markings,
+    private void attachSfMarkings(Result result, Vector<PositionedCommand> markings,
                                   int nDonorTotalTlu) {
         if (markings.isEmpty()) {
             result.warnings.add("Donor has no grid markings near start/finish");
             return;
         }
         for (int i = 0; i < markings.size(); i++) {
-            PositionedCommand pc = (PositionedCommand) markings.get(i);
+            PositionedCommand pc = markings.get(i);
             placeCommandAt(result, copyCommand(pc.cmd),
                            result.totalTlu - (nDonorTotalTlu - pc.tlu));
         }
@@ -1199,7 +1198,7 @@ public class RandomTrackGenerator {
         nTlu = ((nTlu % nTotal) + nTotal) % nTotal;
         int nCum = 0;
         for (int i = 0; i < result.segments.size(); i++) {
-            TrackSegment ts = (TrackSegment) result.segments.get(i);
+            TrackSegment ts = result.segments.get(i);
             if (nTlu < nCum + ts.getTlu()) {
                 int nOffset = nTlu - nCum;
                 if (nOffset > 255)
@@ -1212,9 +1211,9 @@ public class RandomTrackGenerator {
         }
     }
 
-    private static Command findCommand(Vector commands, int nType) {
+    private static Command findCommand(Vector<Command> commands, int nType) {
         for (int i = 0; i < commands.size(); i++) {
-            Command cmd = (Command) commands.get(i);
+            Command cmd = commands.get(i);
             if (cmd.getType() == nType)
                 return cmd;
         }
