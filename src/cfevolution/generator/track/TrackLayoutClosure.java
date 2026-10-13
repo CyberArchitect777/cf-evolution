@@ -156,12 +156,61 @@ public class TrackLayoutClosure {
         one TLU beyond the last Seg to the first Seg. Returns {gapX, gapY}. */
     public double[] measureGap() {
         TrackSegments segs = scratch.getTrackSegments();
-        Seg first = segs.getSegAt(0);
-        Seg last = segs.getSegAt(segs.getMaxTrackSegIndex());
-        double dRad = last.getAngleZ() * 2.0 * Math.PI / 65536.0;
-        double dNextX = last.getPosX() + Math.sin(dRad) * 1024.0;
-        double dNextY = last.getPosY() + Math.cos(dRad) * 1024.0;
-        return new double[] { first.getPosX() - dNextX, first.getPosY() - dNextY };
+        int nLast = segs.getMaxTrackSegIndex();
+        double[][] p = unwrappedPositions();
+        double dRad = segs.getSegAt(nLast).getAngleZ() * 2.0 * Math.PI / 65536.0;
+        double dNextX = p[0][nLast] + Math.sin(dRad) * 1024.0;
+        double dNextY = p[1][nLast] + Math.cos(dRad) * 1024.0;
+        return new double[] { p[0][0] - dNextX, p[1][0] - dNextY };
+    }
+
+    /** World X/Y span of the 19-bit coordinate space (512 TLU). */
+    private static final int WRAP = 1 << 19;
+
+    /** Seg positions {x[], y[]} with the game's 19-bit wraparound removed,
+        so they run on continuously from Seg 0. A layout that crosses the
+        edge of the coordinate space jumps by 512 TLU there; read raw, that
+        jump made every check below see a broken layout. It is why the
+        Germany and Belgium donors, whose start sits near the edge, never
+        produced a track (2026-10-13). Consecutive Segs are at most 1 TLU
+        apart, so each step is simply taken the short way round. */
+    public double[][] unwrappedPositions() {
+        TrackSegments segs = scratch.getTrackSegments();
+        int n = segs.getMaxTrackSegIndex() + 1;
+        double[] px = new double[n], py = new double[n];
+        Seg s = segs.getSegAt(0);
+        int nPrevX = s.getPosX(), nPrevY = s.getPosY();
+        double x = nPrevX, y = nPrevY;
+        px[0] = x;
+        py[0] = y;
+        for (int i = 1; i < n; i++) {
+            s = segs.getSegAt(i);
+            x += shortWay(s.getPosX() - nPrevX);
+            y += shortWay(s.getPosY() - nPrevY);
+            nPrevX = s.getPosX();
+            nPrevY = s.getPosY();
+            px[i] = x;
+            py[i] = y;
+        }
+        return new double[][] { px, py };
+    }
+
+    private static int shortWay(int nDelta) {
+        return ((nDelta + WRAP / 2) & (WRAP - 1)) - WRAP / 2;
+    }
+
+    /** Centre of the layout's bounding box, in unwrapped world units. */
+    public double[] centre() {
+        double[][] p = unwrappedPositions();
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
+        double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (int i = 0; i < p[0].length; i++) {
+            minX = Math.min(minX, p[0][i]);
+            maxX = Math.max(maxX, p[0][i]);
+            minY = Math.min(minY, p[1][i]);
+            maxY = Math.max(maxY, p[1][i]);
+        }
+        return new double[] { (minX + maxX) / 2.0, (minY + maxY) / 2.0 };
     }
 
     /** Iteratively adjusts straight lengths until the compiled gap is at
@@ -243,11 +292,11 @@ public class TrackLayoutClosure {
         int nPts = segs.getMaxTrackSegIndex() / 4;
         if (nPts < 4)
             return false;
+        double[][] p = unwrappedPositions();
         double[] px = new double[nPts], py = new double[nPts];
         for (int i = 0; i < nPts; i++) {
-            Seg s = segs.getSegAt(i * 4);
-            px[i] = s.getPosX();
-            py[i] = s.getPosY();
+            px[i] = p[0][i * 4];
+            py[i] = p[1][i * 4];
         }
         // Sample i joins sample (i+1) % nPts, so the run back to the S/F
         // line is part of the ring — a crossing there was invisible to
@@ -300,11 +349,11 @@ public class TrackLayoutClosure {
         int nPts = nLast / CLEARANCE_STEP + 1;
         if (nPts < 8)
             return Double.MAX_VALUE;
+        double[][] p = unwrappedPositions();
         double[] px = new double[nPts], py = new double[nPts];
         for (int i = 0; i < nPts; i++) {
-            Seg s = segs.getSegAt(i * CLEARANCE_STEP);
-            px[i] = s.getPosX();
-            py[i] = s.getPosY();
+            px[i] = p[0][i * CLEARANCE_STEP];
+            py[i] = p[1][i * CLEARANCE_STEP];
         }
         int nWindow = Math.max(1, nWindowTlu / CLEARANCE_STEP);
         if (nWindow * 2 >= nPts)
@@ -337,15 +386,14 @@ public class TrackLayoutClosure {
     /** Bounding-box aspect ratio of the compiled layout (>= 1). Session 7
         exports showed v1 layouts stretched ~5:1 by maximal straights. */
     public double aspectRatio() {
-        TrackSegments segs = scratch.getTrackSegments();
+        double[][] p = unwrappedPositions();
         double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE;
         double minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (int i = 0; i <= segs.getMaxTrackSegIndex(); i++) {
-            Seg s = segs.getSegAt(i);
-            minX = Math.min(minX, s.getPosX());
-            maxX = Math.max(maxX, s.getPosX());
-            minY = Math.min(minY, s.getPosY());
-            maxY = Math.max(maxY, s.getPosY());
+        for (int i = 0; i < p[0].length; i++) {
+            minX = Math.min(minX, p[0][i]);
+            maxX = Math.max(maxX, p[0][i]);
+            minY = Math.min(minY, p[1][i]);
+            maxY = Math.max(maxY, p[1][i]);
         }
         double w = Math.max(maxX - minX, 1), h = Math.max(maxY - minY, 1);
         return Math.max(w, h) / Math.min(w, h);

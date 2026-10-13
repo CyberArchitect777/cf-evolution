@@ -74,6 +74,10 @@ public class GenerateTrackDialog extends JDialog {
         fileName = trackFileName;
         buildUI();
         pack();
+        // The number boxes sit in a GridBagLayout, which shrinks them to
+        // nothing once the window is smaller than they need; so the window
+        // may not be made smaller than its packed size.
+        setMinimumSize(getSize());
         setLocationRelativeTo(parentWindow);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
@@ -90,32 +94,42 @@ public class GenerateTrackDialog extends JDialog {
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(2, 2, 2, 2);
         gc.anchor = GridBagConstraints.WEST;
+        // Labels keep their width; the boxes take any extra as the window grows.
+        gc.fill = GridBagConstraints.HORIZONTAL;
 
         gc.gridy = 0;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Seed (blank = random):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         seedField = new JTextField("", 10);
         params.add(seedField, gc);
 
         gc.gridy = 1;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Lap length (TLU, 300-1300):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         lengthField = new JTextField("900", 10);
         params.add(lengthField, gc);
 
         gc.gridy = 2;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Corners (4-30):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         cornersField = new JTextField("12", 10);
         params.add(cornersField, gc);
 
         gc.gridy = 3;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Max elevation change (metres, 0 = flat):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         elevationField = new JTextField("25", 10);
         params.add(elevationField, gc);
 
@@ -262,6 +276,10 @@ public class GenerateTrackDialog extends JDialog {
         for (int i = 0; i < layout.segments.size(); i++)
             segs.add(layout.segments.get(i));
         segs.add(dummy);
+        if (layout.moveStart) {
+            track.getTrackDataHeader().setStartPos(0, layout.startPos[0]);
+            track.getTrackDataHeader().setStartPos(1, layout.startPos[1]);
+        }
         cfevolution.generator.pitlane.PitLaneFitter.adjustPitLength(
             track.getPitlaneSegments(), layout.pitDelta);
         // Generated laps wind right (interior on the right), so the pit

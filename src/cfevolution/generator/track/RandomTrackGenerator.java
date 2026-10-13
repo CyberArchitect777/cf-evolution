@@ -71,6 +71,12 @@ public class RandomTrackGenerator {
             1.0 means the road surfaces just touch; the accepted layout is
             always above TrackLayoutClosure.CLEARANCE_ROAD_WIDTHS. */
         public double clearanceRoadWidths;
+        /** True when the layout, drawn from the donor's start point, would
+            run over the edge of the game's 19-bit coordinate space. The start
+            point (header units, world / 8) is then moved to startPos so the
+            layout sits centred in it. */
+        public boolean moveStart;
+        public final int[] startPos = new int[2];
         public final Vector<String> warnings = new Vector<String>();
     }
 
@@ -223,6 +229,21 @@ public class RandomTrackGenerator {
         result.closureGap = dGap;
         result.totalTlu = totalTlu(prims);
         result.clearanceRoadWidths = dClearance / (2.0 * dClearanceHalfRoad);
+        // A donor whose start sits near the edge of the coordinate space
+        // (Germany, Belgium) puts many layouts across it. The game copes, but
+        // the editor's map and line generation assume a track that does not
+        // wrap, so such a layout is moved to the middle of the space.
+        double[][] adPos = closure.unwrappedPositions();
+        boolean fCrossesEdge = false;
+        for (int i = 0; i < adPos[0].length && !fCrossesEdge; i++)
+            fCrossesEdge = adPos[0][i] < -(1 << 18) || adPos[0][i] >= (1 << 18)
+                        || adPos[1][i] < -(1 << 18) || adPos[1][i] >= (1 << 18);
+        if (fCrossesEdge) {
+            double[] adCentre = closure.centre();
+            result.moveStart = true;
+            result.startPos[0] = (int) Math.round((adPos[0][0] - adCentre[0]) / 8.0);
+            result.startPos[1] = (int) Math.round((adPos[1][0] - adCentre[1]) / 8.0);
+        }
         for (int i = 0; i < prims.size(); i++) {
             TrackLayoutClosure.Prim p = prims.get(i);
             TrackSegment ts = new TrackSegment();

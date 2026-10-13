@@ -68,6 +68,10 @@ public class GenerateCCLineDialog extends JDialog {
         fNeedsTrainingFolder = lineGenerator instanceof DataFitCCLineGenerator;
         buildUI();
         pack();
+        // The number boxes sit in a GridBagLayout, which shrinks them to
+        // nothing once the window is smaller than they need; so the window
+        // may not be made smaller than its packed size.
+        setMinimumSize(getSize());
         setLocationRelativeTo(parentWindow);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new java.awt.event.WindowAdapter() {
@@ -83,33 +87,43 @@ public class GenerateCCLineDialog extends JDialog {
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(2, 2, 2, 2);
         gc.anchor = GridBagConstraints.WEST;
+        // Labels keep their width; the boxes take any extra as the window grows.
+        gc.fill = GridBagConstraints.HORIZONTAL;
         int row = 0;
 
         gc.gridy = row++;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Iterations:"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         iterationsField = new JTextField("2000", 8);
         params.add(iterationsField, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Seam overshoot (TLU):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         overshootField = new JTextField("8", 8);
         params.add(overshootField, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Edge standoff (% of half-width):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         standoffField = new JTextField("15", 8);
         params.add(standoffField, gc);
 
         gc.gridy = row++;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Mode:"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         replaceModeButton = new JRadioButton("Replace whole line", true);
         completeModeButton = new JRadioButton("Complete existing line");
         ButtonGroup modeGroup = new ButtonGroup();
@@ -123,12 +137,15 @@ public class GenerateCCLineDialog extends JDialog {
         if (fNeedsTrainingFolder) {
             gc.gridy = row++;
             gc.gridx = 0;
+        gc.weightx = 0;
             params.add(new JLabel("Original tracks folder:"), gc);
             gc.gridx = 1;
+        gc.weightx = 1;
             folderField = new JTextField(
                 Preferences.userRoot().node("cfevolution").get(PREF_TRAINING_FOLDER, ""), 20);
             params.add(folderField, gc);
             gc.gridx = 2;
+        gc.weightx = 0;
             JButton browse = new JButton("Browse...");
             browse.addActionListener(new java.awt.event.ActionListener() {
                 public void actionPerformed(java.awt.event.ActionEvent e) {

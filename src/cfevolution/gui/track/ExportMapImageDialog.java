@@ -48,6 +48,10 @@ public class ExportMapImageDialog extends JDialog {
         mapWindow = mapViewer;
         buildUI();
         pack();
+        // The number boxes sit in a GridBagLayout, which shrinks them to
+        // nothing once the window is smaller than they need; so the window
+        // may not be made smaller than its packed size.
+        setMinimumSize(getSize());
         setLocationRelativeTo(parentWindow);
     }
 
@@ -57,18 +61,24 @@ public class ExportMapImageDialog extends JDialog {
         GridBagConstraints gc = new GridBagConstraints();
         gc.insets = new Insets(2, 2, 2, 2);
         gc.anchor = GridBagConstraints.WEST;
+        // Labels keep their width; the boxes take any extra as the window grows.
+        gc.fill = GridBagConstraints.HORIZONTAL;
 
         gc.gridy = 0;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Width (pixels):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         widthField = new JTextField("2000", 8);
         params.add(widthField, gc);
 
         gc.gridy = 1;
         gc.gridx = 0;
+        gc.weightx = 0;
         params.add(new JLabel("Height (pixels):"), gc);
         gc.gridx = 1;
+        gc.weightx = 1;
         heightField = new JTextField("2000", 8);
         params.add(heightField, gc);
 
@@ -79,6 +89,7 @@ public class ExportMapImageDialog extends JDialog {
         group.add(currentViewButton);
         gc.gridy = 2;
         gc.gridx = 0;
+        gc.weightx = 0;
         gc.gridwidth = 2;
         params.add(wholeTrackButton, gc);
         gc.gridy = 3;
