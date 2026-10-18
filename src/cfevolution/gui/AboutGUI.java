@@ -89,7 +89,7 @@ public class AboutGUI extends javax.swing.JInternalFrame {
 
         versionText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         versionText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
-        versionText.setText("Version 0.3.0");
+        versionText.setText("Version 0.3.1");
 
         okButton.setText("OK");
         okButton.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);

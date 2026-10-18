@@ -64,7 +64,7 @@
     <Component class="javax.swing.JLabel" name="versionText">
       <Properties>
         <Property name="horizontalAlignment" type="int" value="0"/>
-        <Property name="text" type="java.lang.String" value="Version 0.1.1"/>
+        <Property name="text" type="java.lang.String" value="Version 0.3.1"/>
       </Properties>
     </Component>
     <Component class="javax.swing.JButton" name="okButton">

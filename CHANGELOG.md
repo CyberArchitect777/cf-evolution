@@ -1,6 +1,11 @@
 
 # Changelog
 
+0.3.1
+
+- Fixed generation failure issues, particularly with the Germany and Belgium tracks.
+- Fixed sizing issues in the Generate Random Track, Generate Best Line and Export Map Image dialogs.
+
 0.3.0
 
 - Random playable tracks can now be generated with changeable parameters. An AI drivable best line is also generated.
