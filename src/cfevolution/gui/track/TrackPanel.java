@@ -484,14 +484,14 @@ public class TrackPanel extends javax.swing.JPanel {
             double dYDiff = seg.getTrackWidthY() >> 3;
             double dXDiffNext = segNext.getTrackWidthX() >> 3;
             double dYDiffNext = segNext.getTrackWidthY() >> 3;
-            aXPoints[ 0 ] = scale( seg.getPosX() + dXDiff );
-            aYPoints[ 0 ] = scale( seg.getPosY() - dYDiff );
-            aXPoints[ 1 ] = scale( segNext.getPosX() + dXDiffNext );
-            aYPoints[ 1 ] = scale( segNext.getPosY() - dYDiffNext );
-            aXPoints[ 2 ] = scale( segNext.getPosX() - dXDiffNext );
-            aYPoints[ 2 ] = scale( segNext.getPosY() + dYDiffNext );
-            aXPoints[ 3 ] = scale( seg.getPosX() - dXDiff );
-            aYPoints[ 3 ] = scale( seg.getPosY() + dYDiff );
+            aXPoints[ 0 ] = scale( seg.getDisplayX() + dXDiff );
+            aYPoints[ 0 ] = scale( seg.getDisplayY() - dYDiff );
+            aXPoints[ 1 ] = scale( segNext.getDisplayX() + dXDiffNext );
+            aYPoints[ 1 ] = scale( segNext.getDisplayY() - dYDiffNext );
+            aXPoints[ 2 ] = scale( segNext.getDisplayX() - dXDiffNext );
+            aYPoints[ 2 ] = scale( segNext.getDisplayY() + dYDiffNext );
+            aXPoints[ 3 ] = scale( seg.getDisplayX() - dXDiff );
+            aYPoints[ 3 ] = scale( seg.getDisplayY() + dYDiff );
             g2d.drawPolygon( aXPoints, aYPoints, 4 );
 
             if ( !m_track.getLayoutMode() )
@@ -540,14 +540,14 @@ public class TrackPanel extends javax.swing.JPanel {
                 double dYDiff     = seg.getTrackWidthY()     >> 3;
                 double dXDiffNext = segNext.getTrackWidthX() >> 3;
                 double dYDiffNext = segNext.getTrackWidthY() >> 3;
-                aXPoints[0] = scale(seg.getPosX()     + dXDiff);
-                aYPoints[0] = scale(seg.getPosY()     - dYDiff);
-                aXPoints[1] = scale(segNext.getPosX() + dXDiffNext);
-                aYPoints[1] = scale(segNext.getPosY() - dYDiffNext);
-                aXPoints[2] = scale(segNext.getPosX() - dXDiffNext);
-                aYPoints[2] = scale(segNext.getPosY() + dYDiffNext);
-                aXPoints[3] = scale(seg.getPosX()     - dXDiff);
-                aYPoints[3] = scale(seg.getPosY()     + dYDiff);
+                aXPoints[0] = scale(seg.getDisplayX()     + dXDiff);
+                aYPoints[0] = scale(seg.getDisplayY()     - dYDiff);
+                aXPoints[1] = scale(segNext.getDisplayX() + dXDiffNext);
+                aYPoints[1] = scale(segNext.getDisplayY() - dYDiffNext);
+                aXPoints[2] = scale(segNext.getDisplayX() - dXDiffNext);
+                aYPoints[2] = scale(segNext.getDisplayY() + dYDiffNext);
+                aXPoints[3] = scale(seg.getDisplayX()     - dXDiff);
+                aYPoints[3] = scale(seg.getDisplayY()     + dYDiff);
                 g2d.drawPolygon(aXPoints, aYPoints, 4);
             }
         }
@@ -829,10 +829,10 @@ public class TrackPanel extends javax.swing.JPanel {
             double dXDiffNext = segNext.getTrackWidthX() >> 3;
             double dYDiffNext = segNext.getTrackWidthY() >> 3;
             poly.reset();
-            poly.moveTo( (seg.getPosX()     + dXDiff)     * m_scale, (seg.getPosY()     - dYDiff)     * m_scale );
-            poly.lineTo( (segNext.getPosX() + dXDiffNext) * m_scale, (segNext.getPosY() - dYDiffNext) * m_scale );
-            poly.lineTo( (segNext.getPosX() - dXDiffNext) * m_scale, (segNext.getPosY() + dYDiffNext) * m_scale );
-            poly.lineTo( (seg.getPosX()     - dXDiff)     * m_scale, (seg.getPosY()     + dYDiff)     * m_scale );
+            poly.moveTo( (seg.getDisplayX()     + dXDiff)     * m_scale, (seg.getDisplayY()     - dYDiff)     * m_scale );
+            poly.lineTo( (segNext.getDisplayX() + dXDiffNext) * m_scale, (segNext.getDisplayY() - dYDiffNext) * m_scale );
+            poly.lineTo( (segNext.getDisplayX() - dXDiffNext) * m_scale, (segNext.getDisplayY() + dYDiffNext) * m_scale );
+            poly.lineTo( (seg.getDisplayX()     - dXDiff)     * m_scale, (seg.getDisplayY()     + dYDiff)     * m_scale );
             poly.closePath();
             if ( poly.contains( adPoint[0], adPoint[1] ) )
                 return seg.m_nTrackSector;
@@ -1326,8 +1326,8 @@ public class TrackPanel extends javax.swing.JPanel {
         double cosA = Math.cos(seg.getAngleZ() * ANGLE_SCALE_RAD);
         double sinA = Math.sin(seg.getAngleZ() * ANGLE_SCALE_RAD);
         return new double[] {
-            seg.getPosX() + dOffset  * cosA + wSegPosY * sinA,
-            seg.getPosY() + wSegPosY * cosA - dOffset  * sinA
+            seg.getDisplayX() + dOffset  * cosA + wSegPosY * sinA,
+            seg.getDisplayY() + wSegPosY * cosA - dOffset  * sinA
         };
     }
 

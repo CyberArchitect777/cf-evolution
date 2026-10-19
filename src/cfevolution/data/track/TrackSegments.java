@@ -725,6 +725,77 @@ public class TrackSegments extends Vector<TrackSegment> {
         calculateTrackLayout(nPITWIDTH, angle, nPitStartX, nPitStartY, !fHaveExit);
     }
 
+    /** World X/Y span of the 19-bit coordinate space (512 TLU). */
+    public static final int COORD_WRAP = 1 << 19;
+
+    /** A position step taken the short way round the coordinate space. */
+    public static int shortWay(int nDelta)
+    {
+        return ((nDelta + COORD_WRAP / 2) & (COORD_WRAP - 1)) - COORD_WRAP / 2;
+    }
+
+    /**
+        Sets each Seg's display position (Seg.getDisplayX/Y): the game's
+        19-bit positions with the wraparound removed, so a track that runs
+        over the edge of the coordinate space is drawn in one piece rather
+        than continuing from the far side. Consecutive Segs are at most a
+        TLU apart, so each step is taken the short way round.
+
+        For the track pass null. For the pit lane pass the track: the pit
+        lane starts on the road, so its first Seg is placed next to the
+        nearest track Seg's display position.
+    */
+    public void calculateDisplayPositions(TrackSegments track)
+    {
+        int n = getMaxTrackSegIndex() + 1;
+        if (n <= 0)
+            return;
+        Seg s = getSegAt(0);
+        double x = s.getPosX(), y = s.getPosY();
+        if (track != null)
+        {
+            // Anchor on the nearest track Seg, measured the short way round.
+            long lBest = Long.MAX_VALUE;
+            for (int i = 0; i <= track.getMaxTrackSegIndex(); i++)
+            {
+                Seg t = track.getSegAt(i);
+                long dx = shortWay(s.getPosX() - t.getPosX());
+                long dy = shortWay(s.getPosY() - t.getPosY());
+                if (dx * dx + dy * dy < lBest)
+                {
+                    lBest = dx * dx + dy * dy;
+                    x = t.m_dDisplayX + dx;
+                    y = t.m_dDisplayY + dy;
+                }
+            }
+        }
+        s.m_dDisplayX = x;
+        s.m_dDisplayY = y;
+        for (int i = 1; i < n; i++)
+        {
+            Seg prev = s;
+            s = getSegAt(i);
+            x += shortWay(s.getPosX() - prev.getPosX());
+            y += shortWay(s.getPosY() - prev.getPosY());
+            s.m_dDisplayX = x;
+            s.m_dDisplayY = y;
+        }
+    }
+
+    /** True when any Seg runs over the edge of the coordinate space, i.e.
+        its display position differs from the game's wrapped one. Needs
+        calculateDisplayPositions first. */
+    public boolean crossesCoordinateEdge()
+    {
+        for (int i = 0; i <= getMaxTrackSegIndex(); i++)
+        {
+            Seg s = getSegAt(i);
+            if (s.m_dDisplayX != s.getPosX() || s.m_dDisplayY != s.getPosY())
+                return true;
+        }
+        return false;
+    }
+
     // Returns the Seg at `segOffset` TLUs into the given sector on the given TrackSegments.
     private Seg findPitCommandSeg(TrackSegments trackSegments, int sectorIdx, int segOffset)
     {

@@ -230,9 +230,9 @@ public class RandomTrackGenerator {
         result.totalTlu = totalTlu(prims);
         result.clearanceRoadWidths = dClearance / (2.0 * dClearanceHalfRoad);
         // A donor whose start sits near the edge of the coordinate space
-        // (Germany, Belgium) puts many layouts across it. The game copes, but
-        // the editor's map and line generation assume a track that does not
-        // wrap, so such a layout is moved to the middle of the space.
+        // (Germany, Belgium) puts many layouts across it. The game's own best
+        // line arithmetic does not allow for the wrap (see TrackCoordinateEdge),
+        // so such a layout is moved to the middle of the space.
         double[][] adPos = closure.unwrappedPositions();
         boolean fCrossesEdge = false;
         for (int i = 0; i < adPos[0].length && !fCrossesEdge; i++)

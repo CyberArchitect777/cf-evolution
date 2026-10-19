@@ -429,7 +429,24 @@ public class Track {
             m_TrackSegments, m_DataHeader.getPitSide(),
             m_fLayoutMode
             );
+
+        m_TrackSegments.calculateDisplayPositions(null);
+        m_PitlaneSegments.calculateDisplayPositions(m_TrackSegments);
     };
+
+    /**
+        True when the track or its pit lane runs over the edge of the game's
+        19-bit coordinate space. The game builds its best line from the
+        wrapped positions with no allowance for the wrap (ProcessCCLineSegment
+        subtracts each Seg's position from the line's as plain 32-bit values,
+        IDA 0x90B40), so on such a track the AI line it builds is wrong. The
+        cure is to move the track: see TrackCoordinateEdge.
+    */
+    public boolean crossesCoordinateEdge()
+    {
+        return m_TrackSegments.crossesCoordinateEdge()
+            || m_PitlaneSegments.crossesCoordinateEdge();
+    }
 
     /**
         Intersect ccLine segment with end of track segment.
@@ -1068,20 +1085,20 @@ public class Track {
         Seg seg;
         // Initialize coordinates with first point
         seg = trackSegments.getSegAt( 1 );
-        dMinX = seg.getPosX();
+        dMinX = seg.getDisplayX();
         dMaxX = dMinX;
-        dMinY = seg.getPosY();
+        dMinY = seg.getDisplayY();
         dMaxY = dMinY;
         // search for min/max values
         for ( int i = 1; i <= trackSegments.getMaxTrackSegIndex(); i++ )
         {
             seg = trackSegments.getSegAt( i );
-            dX = seg.getPosX();
+            dX = seg.getDisplayX();
             if ( dX > dMaxX )
                 dMaxX = dX;
             if ( dX < dMinX )
                 dMinX = dX;
-            dY = seg.getPosY();
+            dY = seg.getDisplayY();
             if ( dY > dMaxY )
                 dMaxY = dY;
             if ( dY < dMinY )

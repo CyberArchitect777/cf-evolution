@@ -112,4 +112,17 @@ public class Seg {
         public int getAngleZChangeMulHalfPI()
         { return wAngleZChangeMulHalfPI; }
 
+        /**
+            Position for DRAWING only, with the 19-bit wraparound removed
+            (set by TrackSegments.calculateDisplayPositions). Equal to
+            getPosX/Y until a track crosses the edge of the coordinate
+            space; after that it carries on past the edge instead of
+            jumping to the far side. Game-accurate code must keep using
+            getPosX/Y, since the game itself works on the wrapped values.
+        */
+        public double getDisplayX() { return m_dDisplayX; }
+        public double getDisplayY() { return m_dDisplayY; }
+
+        double m_dDisplayX, m_dDisplayY;
+
 }

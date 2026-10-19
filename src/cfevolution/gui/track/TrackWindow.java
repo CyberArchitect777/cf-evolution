@@ -181,6 +181,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateRandomTrack = new javax.swing.JMenuItem();
         reduceMinimalTrack = new javax.swing.JMenuItem();
         matchEndHeading = new javax.swing.JMenuItem();
+        moveFromEdgeItem = new javax.swing.JMenuItem();
 
         getContentPane().setLayout(new java.awt.FlowLayout());
 
@@ -335,6 +336,14 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         });
         toolsMenu.add(matchEndHeading);
 
+        moveFromEdgeItem.setText("Move Track Away From Map Edge");
+        moveFromEdgeItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                moveTrackFromEdge();
+            }
+        });
+        toolsMenu.add(moveFromEdgeItem);
+
         trackMenuBar.add(toolsMenu);
 
         setJMenuBar(trackMenuBar);
@@ -400,11 +409,16 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         // line wraps smoothly across the start/finish seam (see BESTLINE.md).
         int ccTlu    = currentTrack.getCCLineTlu();
         int trackTlu = currentTrack.getTrackTlu();
+        String title = "Track File: " + fileName;
         if ( ccTlu > 0 && ccTlu < trackTlu )
-            setTitle("Track File: " + fileName + "  [WARNING: best line " + (trackTlu - ccTlu)
-                     + " TLU short of track end — AI line incomplete]");
-        else
-            setTitle("Track File: " + fileName);
+            title += "  [WARNING: best line " + (trackTlu - ccTlu)
+                   + " TLU short of track end — AI line incomplete]";
+        // The game builds a wrong best line on a track that runs over the
+        // edge of its coordinate space (see TrackCoordinateEdge).
+        if ( cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack) )
+            title += "  [WARNING: track runs over the map edge, so the game's AI line"
+                   + " will be wrong — use Tools > Move Track Away From Map Edge]";
+        setTitle(title);
     }
 
     public void highlightSection(int sectionType, int segmentNo)
@@ -435,6 +449,25 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             JOptionPane.showMessageDialog(this, blocked, "Cannot Generate Best Line",
                                           JOptionPane.ERROR_MESSAGE);
             return;
+        }
+        // A line generated on a track that crosses the map edge would be
+        // built wrongly by the game, so move the track clear first.
+        if (cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack))
+        {
+            cfevolution.generator.track.TrackCoordinateEdge.Result moved =
+                cfevolution.generator.track.TrackCoordinateEdge.moveToMiddle(currentTrack);
+            if (moved.failure != null)
+            {
+                JOptionPane.showMessageDialog(this, moved.failure, "Cannot Generate Best Line",
+                                              JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            updateTrackMap();
+            JOptionPane.showMessageDialog(this,
+                "This track ran over the edge of the game's map area, which makes\n"
+              + "the game build its best line wrongly. It has been moved to the\n"
+              + "middle of the map area first. Nothing else about the track has\n"
+              + "changed.", "Generate Best Line", JOptionPane.INFORMATION_MESSAGE);
         }
         GenerateCCLineDialog dialog = new GenerateCCLineDialog(this, currentTrack, generator);
         dialog.setVisible(true);
@@ -620,6 +653,36 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
                .append("Tools > Generate Best Line with \"Complete existing line\" selected.");
         JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
                                       JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** Tools > moves a track that runs over the edge of the game's
+        coordinate space into the middle of it (see TrackCoordinateEdge). */
+    private void moveTrackFromEdge()
+    {
+        if (!currentTrack.crossesCoordinateEdge())
+        {
+            JOptionPane.showMessageDialog(this,
+                "This track is already clear of the edge of the game's map area.\n"
+              + "Nothing needs to change.", "Move Track Away From Map Edge",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        cfevolution.generator.track.TrackCoordinateEdge.Result result =
+            cfevolution.generator.track.TrackCoordinateEdge.moveToMiddle(currentTrack);
+        if (result.failure != null)
+        {
+            JOptionPane.showMessageDialog(this, result.failure, "Move Track Away From Map Edge",
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        updateTrackMap();
+        JOptionPane.showMessageDialog(this,
+            "The track has been moved to the middle of the game's map area.\n"
+          + "It ran over the edge, which makes the game build a wrong best line.\n"
+          + "Its shape, pit lane and scenery are unchanged, and the game will\n"
+          + "now build the best line correctly.\n\n"
+          + "Save the track to keep the change.", "Move Track Away From Map Edge",
+            JOptionPane.INFORMATION_MESSAGE);
     }
 
     /** Adds the start-to-end gap and what it means to a report. The game
@@ -891,6 +954,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem generateRandomTrack;
     private javax.swing.JMenuItem reduceMinimalTrack;
     private javax.swing.JMenuItem matchEndHeading;
+    private javax.swing.JMenuItem moveFromEdgeItem;
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;
     private javax.swing.JMenuItem removeTrack;
