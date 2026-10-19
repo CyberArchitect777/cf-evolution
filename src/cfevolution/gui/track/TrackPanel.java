@@ -72,8 +72,13 @@ public class TrackPanel extends javax.swing.JPanel {
 		}
 
 		public void mouseWheelMoved(MouseWheelEvent e) {
-			double dFactor = e.getUnitsToScroll() > 0 ? 1.1 : 0.9;
-			zoom(dFactor, e.getX(), e.getY());
+			// Wheel up (negative rotation) zooms in, as in most map viewers.
+			// The precise rotation lets trackpads make small zooms, and
+			// 1.1 to the power of the notches makes in and out exact inverses.
+			double dNotches = e.getPreciseWheelRotation();
+			if (dNotches == 0)
+				return;
+			zoom(Math.pow(1.1, -dNotches), e.getX(), e.getY());
 		}
 	}
 
