@@ -5,6 +5,8 @@
 
 - Fixed generation failure issues, particularly with the Germany and Belgium tracks.
 - Fixed sizing issues in the Generate Random Track, Generate Best Line and Export Map Image dialogs.
+- Fixed tracks that cross the edge of the game's map area being drawn in pieces, and added Tools > Move Track Away From Map Edge, since the game gives the AI the wrong racing line on such tracks.
+- The mouse wheel now zooms the track map in when scrolled up, and trackpads zoom smoothly in the right direction.
 
 0.3.0
 
