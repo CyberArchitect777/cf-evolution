@@ -20,36 +20,30 @@ CF-Evolution supports editing two types of F1GP/WC data:
     - A limited editing capability is provided to date. There are existing game editors available that offer more features at the moment.
     - The settings that can be edited include the following
         - Driver names, qualifying grip, and race grip values
-        - Team names, BHP settings, and driver assignments
+        - Team names, engine names, and BHP settings
         - Points system configuration
         - Game settings (e.g. unlimited qualifying tyres)
 
-## Getting Started / Installation
+## Getting Started
 
 ### Requirements
 
 - Java 8 or later
 - A copy of Formula One Grand Prix or World Circuit patched to version 1.05 (unpacked executable required for executable editing)
 
-### Building from source
+### Before you start
 
-#### Windows
-
-```bat
-build.bat
-```
-
-#### Linux
-
-```bash
-./build.sh
-```
-
-Both scripts compile all sources and produce `dist/cf-evolution.jar`.
+Keep a copy of your original track files and game executable before editing them.
 
 ### Running
 
-After building, the following command will run the editor on each system.
+The editor is the file `cf-evolution.jar` in the `dist` folder. On most systems it can be started by double-clicking it, or from a command line with:
+
+```
+java -jar dist/cf-evolution.jar
+```
+
+The included scripts do the same on each system.
 
 #### Windows
 
@@ -65,9 +59,11 @@ run.bat
 
 Before opening the executable editor for the first time, go to **File > Options** and set the path to your F1GP/WC executable.
 
+To build the editor from source code, see [DEVELOPMENT.md](https://github.com/CyberArchitect777/cf-evolution/blob/main/DEVELOPMENT.md).
+
 ## Repository
 
-The CF-Evolution codebase is hosted on Github at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
+The CF-Evolution project is hosted on Github at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
 
 ## Credits
 
@@ -77,7 +73,10 @@ As noted earlier, this project is based on the research and development undertak
 * Barrie Millar
 * Rene Smit
 
-Thanks also to Fredrik Meyer for his excellent work on the ArgTools project which is aiding further development here.
+Thanks also to the following people: 
+
+* Fredrik Meyer for his excellent work on the ArgTools project which is aiding further development here.
+* Hrvoje Stimac for his testing efforts and F1GP community leadership.
 
 ## License
 
