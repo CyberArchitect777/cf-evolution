@@ -259,6 +259,10 @@ public class MainGUI extends JFrame
             link.setContentAreaFilled(false);
             link.setFocusable(false);
             link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            // Full width with the text on the left, so the list lines up
+            // under its heading instead of centring itself
+            link.setHorizontalAlignment(SwingConstants.LEFT);
+            link.setMaximumSize(new Dimension(Integer.MAX_VALUE, link.getPreferredSize().height));
             link.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) { openTrackFile(path); }
             });

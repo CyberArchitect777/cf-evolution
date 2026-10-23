@@ -339,6 +339,8 @@ public class TrackTreeSelector extends javax.swing.JPanel {
     {
         // Delete all nodes (apart from one) for the given segment type.
         
+        // Nothing stays selected: the selected node may be one of those removed
+        trackDetails.clearSelection();
         int deleteType = 0;
         
         if ((segmentType == 0) || (segmentType == 1))
@@ -463,6 +465,14 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 }
                 parentTrackWindow.updateTrackMap();
                 parentTrackWindow.highlightSection(deleteType, -1); // Passing rogue detection value as no node will now be selected
+                // The tree keeps the removed node selected otherwise, so the
+                // panel would go on editing a deleted segment
+                switch (deleteType)
+                {
+                    case 1: selectAfterDelete(mainTrackSegmentNode, segmentNo); break;
+                    case 2: selectAfterDelete(mainPitSegmentNode, segmentNo); break;
+                    case 3: selectAfterDelete(mainLineSegmentNode, segmentNo); break;
+                }
             }
             else
             {
@@ -474,6 +484,22 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             // No tree item selected, so exception thrown
         }                       
         
+    }
+
+    /** Selects the segment now at a position in a branch (1-based), or
+        the last one when the branch has become shorter. */
+    private void selectAfterDelete(DefaultMutableTreeNode branch, int segmentNo)
+    {
+        int count = branch.getChildCount();
+        if (count == 0)
+        {
+            trackDetails.clearSelection();
+            return;
+        }
+        DefaultMutableTreeNode next = (DefaultMutableTreeNode) branch.getChildAt(Math.min(segmentNo, count) - 1);
+        TreePath path = new TreePath(next.getPath());
+        trackDetails.setSelectionPath(path);
+        trackDetails.scrollPathToVisible(path);
     }
 
     private void addBelowButtonActionPerformed(java.awt.event.ActionEvent evt) {
@@ -629,9 +655,10 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 }
             }
         }
-        trackDetails.validate();
-        trackDetails.setVisible(false);
-        trackDetails.setVisible(true);        
+        // Refresh in place: hiding and re-showing the tree (the old way)
+        // took keyboard focus away, so a second Insert or Delete was lost
+        trackDetails.revalidate();
+        trackDetails.repaint();        
     }
     
     
@@ -667,9 +694,10 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             }
         }
         ((DefaultTreeModel)(trackDetails.getModel())).nodeChanged(selectedNode);
-        trackDetails.validate();
-        trackDetails.setVisible(false);
-        trackDetails.setVisible(true);
+        // Refresh in place: hiding and re-showing the tree (the old way)
+        // took keyboard focus away, so a second Insert or Delete was lost
+        trackDetails.revalidate();
+        trackDetails.repaint();
     }
     
     public void rebuildTrackNodes()

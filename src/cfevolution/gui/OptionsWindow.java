@@ -215,6 +215,7 @@ public class OptionsWindow extends javax.swing.JDialog
                 case 0: executableLocation.setText(fileName); break;
                 case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. This may be because you have \nselected the wrong file, or because this executable has not been updated to version 1.05. \nIn the latter case, upgrading your copy of F1GP/WC to 1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
                 case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this executable file. \nIt is likely that this is either not a F1GP/WC executable file, or that the executable itself is corrupt.\nPlease try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
+                case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version of F1GP/WC. \nAn unpacked version of this file is required for editing in CF Evolution. \nPlease see the documentation for more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
             }
         }        
     }

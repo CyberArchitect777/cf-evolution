@@ -65,6 +65,10 @@ public class FileDialog extends javax.swing.JDialog {
         // Displays an input dialog for opening F1GP tracks
         
         int userChoice = fileChooser.showOpenDialog(this);
+        // Callers treat an exception as Cancel. Without this check, a file
+        // clicked before pressing Cancel was opened anyway.
+        if (userChoice != javax.swing.JFileChooser.APPROVE_OPTION)
+            throw new IllegalStateException("cancelled");
         String fileName = fileChooser.getSelectedFile().getPath();
         return fileName;
     }
@@ -74,6 +78,9 @@ public class FileDialog extends javax.swing.JDialog {
         // Displays a save dialog for storing F1GP tracks
         
         int userChoice = fileChooser.showSaveDialog(this);
+        // As above: Cancel must not save to a name typed or clicked first
+        if (userChoice != javax.swing.JFileChooser.APPROVE_OPTION)
+            throw new IllegalStateException("cancelled");
         String fileName = fileChooser.getSelectedFile().getPath();
         return fileName;
     }
