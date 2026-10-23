@@ -90,9 +90,23 @@ public class MainGUI extends JFrame
         setContentPane(content);
 
         setTransferHandler(new FileDropHandler());
-        setSize(1280, 820);
-        setLocationRelativeTo(null);
+        fitToScreen(1280, 820);
         activeTabChanged();
+    }
+
+    /** Sizes the window to the preferred size, but never larger than the
+        usable screen (without the taskbar), and centres it there. A window
+        taller than the screen puts its title bar, with the minimise,
+        maximise and close buttons, off the top. On a screen too small for
+        the preferred size the window starts maximised. */
+    private void fitToScreen(int width, int height)
+    {
+        Rectangle usable = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        int w = Math.min(width, usable.width);
+        int h = Math.min(height, usable.height);
+        setBounds(usable.x + (usable.width - w) / 2, usable.y + (usable.height - h) / 2, w, h);
+        if (w < width || h < height)
+            setExtendedState(getExtendedState() | MAXIMIZED_BOTH);
     }
 
     // --- Building blocks ------------------------------------------------
