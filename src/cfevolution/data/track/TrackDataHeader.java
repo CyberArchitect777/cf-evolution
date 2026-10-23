@@ -334,7 +334,13 @@ public class TrackDataHeader extends CFDataObject {
     public void setPitSide(boolean pitSide)
     {
         // Sets the side in which the pitlane exists on the track
-        
+
+        // The byte carries other flags too (four circuits store 10, not 1),
+        // so leave it alone unless the side really changes
+        if (pitSide == getPitSide())
+        {
+            return;
+        }
         if (pitSide == false)
         {
             m_nPitSide = 0;

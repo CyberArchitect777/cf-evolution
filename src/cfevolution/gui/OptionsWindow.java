@@ -35,7 +35,7 @@ import cfevolution.data.gui.RecentFiles;
  *
  * @author  barrie
  */
-public class OptionsWindow extends javax.swing.JInternalFrame 
+public class OptionsWindow extends javax.swing.JDialog 
 {
     
     private MainGUI mainWindow;
@@ -43,9 +43,13 @@ public class OptionsWindow extends javax.swing.JInternalFrame
     /** Creates new form OptionsWindow */
     public OptionsWindow(MainGUI passedMainWindow) 
     {
+        super(passedMainWindow, "CF Evolution Options", true);
         initComponents();
         mainWindow = passedMainWindow;
-        setSize(500,200);
+        ((javax.swing.JComponent) getContentPane()).setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        setSize(560,260);
+        setLocationRelativeTo(passedMainWindow);
+        interfaceModeSelector.addItem("CF Evolution");
         interfaceModeSelector.addItem("System Default");
         interfaceModeSelector.addItem("Metal");
         if (System.getProperty("os.name").toUpperCase().indexOf("WINDOWS") != -1)
@@ -59,14 +63,14 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         interfaceModeSelector.addItem("Motif");
         Preferences userData = Preferences.userRoot();
         Preferences cheqFlagData = userData.node("cfevolution");
-        String interfaceSetting = cheqFlagData.get("CFUIMode", "");
+        String interfaceSetting = cheqFlagData.get(ThemeManager.PREF_KEY, "CF Evolution");
         if (interfaceSetting.compareTo("") != 0)
         {
             interfaceModeSelector.setSelectedItem(interfaceSetting);
         }
         executableLocation.setText(cheqFlagData.get("EXELocation", ""));
         legacyOptionsCheckBox.setSelected(cheqFlagData.getBoolean("EnableLegacyOptions", false));
-        System.out.println("Operating System Detected: " + System.getProperty("os.name"));
+
     }
     
     /** This method is called from within the constructor to
@@ -221,34 +225,20 @@ public class OptionsWindow extends javax.swing.JInternalFrame
         Preferences userData = Preferences.userRoot();
         Preferences cheqFlagData = userData.node("cfevolution");
         String selectedMode = (String)interfaceModeSelector.getSelectedItem();
-        cheqFlagData.put("CFUIMode", selectedMode);
+        cheqFlagData.put(ThemeManager.PREF_KEY, selectedMode);
         ThemeManager userInterfaceTheme = new ThemeManager();
         userInterfaceTheme.setUserInterfaceType(selectedMode, mainWindow);
         cheqFlagData.put("EXELocation", executableLocation.getText());
         cheqFlagData.putBoolean("EnableLegacyOptions", legacyOptionsCheckBox.isSelected());
         mainWindow.refreshLegacyOptions();
-        try
-        {
-            this.setClosed(true);
-        }
-        catch (Exception errorReport)
-        {
-            // This is a normal result of the closing of an internal window. Nothing should be done.
-        }
+        dispose();
            
     }
 
     private void cancelButtonActionPerformed(java.awt.event.ActionEvent evt) {
         // Cancels any changes made and closes the form
         
-        try
-        {
-            this.setClosed(true);
-        }
-        catch (Exception errorReport)
-        {
-            // This is a normal result of the closing of an internal window. Nothing should be done.
-        }
+        dispose();
     }
     
     

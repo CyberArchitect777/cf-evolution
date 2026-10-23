@@ -141,7 +141,7 @@ public class GameDrivers
         for (int x=0;x<40;x++)
         {
             int currentByteCount = 0;
-            System.out.println(x);
+            // (debug print removed)
             boolean readEnd = false;
             StringBuffer currentString = new StringBuffer();
             dataValues = BinaryManager.getDataBytes(gameVersion, binaryAccess, startingValue[0]+currentOffset, startingValue[1]+currentOffset, startingValue[2]+currentOffset, 23);

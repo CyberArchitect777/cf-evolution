@@ -26,302 +26,208 @@
 package cfevolution.gui.track;
 
 import cfevolution.data.track.*;
-import cfevolution.gui.*;
+import java.awt.*;
 import java.util.Vector;
 import javax.swing.*;
 
 /**
+ * The commands of the selected track or pit segment, inside the track
+ * tab. Adding and removing a command takes effect straight away, like
+ * adding or deleting a segment; a command's parameters are edited in the
+ * table underneath and written with Apply.
  *
  * @author  barrie
  */
-public class CommandEditGUI extends javax.swing.JInternalFrame 
+public class CommandEditGUI extends JPanel
 {
-    
-    private Vector<String> availableListData;
-    private Vector<String> currentListData;
     private CommandDataStore availableDataset;
     private TrackSegment trackSegment;
     private Vector<Command> currentSegmentCommands;
-    private JDesktopPane parentFrame;
+    private DefaultListModel<String> currentListData;
     private TrackWindow parentTrackWindow;
-    private TrackTreeSelector parentObjectWindow;
-    
-    /** Creates new form CommandEditGUI */
-    public CommandEditGUI(TrackSegment currentSegment, JDesktopPane containerFrame, TrackWindow currentTrackWindow, TrackTreeSelector currentObjectWindow) 
+    private SegmentEditGUI paramEditor;
+    private JLabel paramHeading;
+
+    public CommandEditGUI(TrackWindow currentTrackWindow, TrackTreeSelector currentObjectWindow)
     {
-        initComponents();
-        parentFrame = containerFrame;
-        availableListData = new Vector<String>();
-        currentListData = new Vector<String>();
-        currentSegmentCommands = new Vector<Command>();
-        availableDataset = new CommandDataStore();
-        trackSegment = currentSegment;
-        for (int x=0;x<trackSegment.getCommands().size();x++)
-        {
-            currentSegmentCommands.add(trackSegment.getCommands().get(x));
-        }
+        super(new BorderLayout());
         parentTrackWindow = currentTrackWindow;
-        parentObjectWindow = currentObjectWindow;
+        availableDataset = new CommandDataStore();
+        currentSegmentCommands = new Vector<Command>();
+        currentListData = new DefaultListModel<String>();
+        paramEditor = new SegmentEditGUI(currentTrackWindow, currentObjectWindow);
+        paramEditor.setAfterApply(new Runnable() {
+            public void run() { refreshList(); }
+        });
+        initComponents();
+        editSegment(null);
     }
-    
-    /** This method is called from within the constructor to
-     * initialize the form.
-     */
+
+    /** Shows the commands of a segment, or an empty list for null. */
+    public void editSegment(TrackSegment currentSegment)
+    {
+        trackSegment = currentSegment;
+        currentSegmentCommands = new Vector<Command>();
+        if (trackSegment != null)
+            currentSegmentCommands.addAll(trackSegment.getCommands());
+        refreshList();
+        boolean enabled = trackSegment != null;
+        currentList.setEnabled(enabled);
+        availableCombo.setEnabled(enabled);
+        addCommand.setEnabled(enabled);
+        removeCommand.setEnabled(enabled);
+        showParams();
+    }
+
+    public boolean hasPendingChanges()
+    {
+        return paramEditor.hasPendingChanges();
+    }
+
+    public void applyChanges()
+    {
+        paramEditor.applyChanges();
+    }
+
+    private String describe(int type)
+    {
+        CommandData data = availableDataset.getCommandByType(type);
+        if (data == null)
+            return convertIntToHex(type);
+        return data.getCommandDesc() + "  (" + convertIntToHex(type) + ")";
+    }
+
+    private void refreshList()
+    {
+        int selected = currentList == null ? -1 : currentList.getSelectedIndex();
+        currentListData.clear();
+        for (int x = 0; x < currentSegmentCommands.size(); x++)
+            currentListData.addElement(describe(currentSegmentCommands.get(x).getType()));
+        if (selected >= 0 && selected < currentListData.size())
+            currentList.setSelectedIndex(selected);
+        countLabel.setText(trackSegment == null ? "Select a track or pit segment to see its commands."
+            : currentSegmentCommands.size() == 0 ? "This segment has no commands."
+            : currentSegmentCommands.size() + (currentSegmentCommands.size() == 1 ? " command" : " commands"));
+    }
+
+    private void showParams()
+    {
+        int index = currentList.getSelectedIndex();
+        if (index < 0 || index >= currentSegmentCommands.size())
+        {
+            paramHeading.setText("Parameters");
+            paramEditor.showNothing();
+            return;
+        }
+        Command selectedCommand = currentSegmentCommands.get(index);
+        CommandData commandData = availableDataset.getCommandByType(selectedCommand.getType());
+        if (commandData == null || commandData.getNumberOfParams() == 0)
+        {
+            paramHeading.setText("Parameters: this command has none");
+            paramEditor.showNothing();
+            return;
+        }
+        paramHeading.setText("Parameters of " + commandData.getCommandDesc());
+        paramEditor.editCmdParams(selectedCommand, commandData.getParamArray());
+    }
+
+    private void commitList()
+    {
+        trackSegment.setCommands(new Vector<Command>(currentSegmentCommands));
+        parentTrackWindow.updateTrackMap();
+    }
+
     private void initComponents() {
-        currentPanel = new javax.swing.JPanel();
-        currentText = new javax.swing.JLabel();
-        currentScrollPane = new javax.swing.JScrollPane();
-        currentList = new javax.swing.JList<>();
-        availablePanel = new javax.swing.JPanel();
-        availableText = new javax.swing.JLabel();
-        availableScrollPane = new javax.swing.JScrollPane();
-        availableList = new javax.swing.JList<>();
-        buttonPanel = new javax.swing.JPanel();
-        addCommand = new javax.swing.JButton();
-        removeCommand = new javax.swing.JButton();
-        EditParams = new javax.swing.JButton();
-        exitPanel = new javax.swing.JPanel();
-        updateCommands = new javax.swing.JButton();
-        cancelChanges = new javax.swing.JButton();
+        currentList = new JList<String>(currentListData);
+        currentList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        currentList.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent e) {
+                if (!e.getValueIsAdjusting())
+                {
+                    if (paramEditor.hasPendingChanges())
+                        paramEditor.applyChanges();
+                    showParams();
+                }
+            }
+        });
+        JScrollPane listScroll = new JScrollPane(currentList);
+        listScroll.setPreferredSize(new Dimension(200, 150));
 
-        getContentPane().setLayout(new java.awt.GridLayout(3, 1));
+        countLabel = new JLabel(" ");
+        countLabel.setBorder(BorderFactory.createEmptyBorder(2, 2, 4, 2));
 
-        setResizable(true);
-        setPreferredSize(new java.awt.Dimension(447, 350));
-        currentPanel.setLayout(new java.awt.BorderLayout());
-
-        currentText.setText("Current Segment Commands (Number Of Parameters)");
-        currentPanel.add(currentText, java.awt.BorderLayout.NORTH);
-
-        currentScrollPane.setViewportView(currentList);
-
-        currentPanel.add(currentScrollPane, java.awt.BorderLayout.CENTER);
-
-        getContentPane().add(currentPanel);
-
-        availablePanel.setLayout(new java.awt.BorderLayout());
-
-        availableText.setText("Available Commands (Number Of Parameters)");
-        availableText.setPreferredSize(new java.awt.Dimension(333, 15));
-        availablePanel.add(availableText, java.awt.BorderLayout.NORTH);
-
-        availableScrollPane.setViewportView(availableList);
-
-        availablePanel.add(availableScrollPane, java.awt.BorderLayout.CENTER);
-
-        getContentPane().add(availablePanel);
-
-        buttonPanel.setLayout(new java.awt.GridLayout(4, 1, 5, 0));
-
-        addCommand.setText("Add Available Command");
+        availableCombo = new JComboBox<String>();
+        for (int x = 0; x < availableDataset.getCommandListSize(); x++)
+        {
+            CommandData data = availableDataset.getCommandByIndex(x);
+            availableCombo.addItem(data.getCommandDesc() + "  (" + convertIntToHex(data.getCommandType()) + ")");
+        }
+        addCommand = new JButton("Add");
+        addCommand.setToolTipText("Add the chosen command to this segment");
         addCommand.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                addCommandActionPerformed(evt);
+                int index = availableCombo.getSelectedIndex();
+                if (index < 0)
+                    return;
+                CommandData data = availableDataset.getCommandByIndex(index);
+                currentSegmentCommands.add(new Command(data.getCommandType(), 0, 0, 0, 0, 0, 0));
+                commitList();
+                refreshList();
+                currentList.setSelectedIndex(currentSegmentCommands.size() - 1);
             }
         });
-
-        buttonPanel.add(addCommand);
-
-        removeCommand.setText("Remove Segment Command");
+        removeCommand = new JButton("Remove");
+        removeCommand.setToolTipText("Remove the selected command from this segment");
         removeCommand.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
-                removeCommandActionPerformed(evt);
+                int index = currentList.getSelectedIndex();
+                if (index < 0)
+                    return;
+                currentSegmentCommands.remove(index);
+                commitList();
+                refreshList();
+                showParams();
             }
         });
 
-        buttonPanel.add(removeCommand);
+        JPanel addRow = new JPanel(new BorderLayout(6, 0));
+        addRow.add(availableCombo, BorderLayout.CENTER);
+        JPanel addButtons = new JPanel(new GridLayout(1, 2, 6, 0));
+        addButtons.add(addCommand);
+        addButtons.add(removeCommand);
+        addRow.add(addButtons, BorderLayout.EAST);
+        addRow.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
 
-        EditParams.setText("Edit Command Parameters");
-        EditParams.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                EditParamsActionPerformed(evt);
-            }
-        });
+        JPanel top = new JPanel(new BorderLayout());
+        top.add(countLabel, BorderLayout.NORTH);
+        top.add(listScroll, BorderLayout.CENTER);
+        top.add(addRow, BorderLayout.SOUTH);
+        top.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
-        buttonPanel.add(EditParams);
+        paramHeading = new JLabel("Parameters");
+        paramHeading.setFont(paramHeading.getFont().deriveFont(Font.BOLD));
+        paramHeading.setBorder(BorderFactory.createEmptyBorder(6, 6, 4, 6));
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.add(paramHeading, BorderLayout.NORTH);
+        bottom.add(paramEditor, BorderLayout.CENTER);
 
-        exitPanel.setLayout(new java.awt.GridLayout(1, 2));
-
-        updateCommands.setText("Update Segment");
-        updateCommands.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                updateCommandsActionPerformed(evt);
-            }
-        });
-
-        exitPanel.add(updateCommands);
-
-        cancelChanges.setText("Cancel Changes");
-        cancelChanges.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                cancelChangesActionPerformed(evt);
-            }
-        });
-
-        exitPanel.add(cancelChanges);
-
-        buttonPanel.add(exitPanel);
-
-        getContentPane().add(buttonPanel);
-
-        pack();
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
+        split.setResizeWeight(0.45);
+        split.setBorder(BorderFactory.createEmptyBorder());
+        add(split, BorderLayout.CENTER);
     }
 
-    private void EditParamsActionPerformed(java.awt.event.ActionEvent evt) {
-        // Edit the parameters of the selected current command
-        
-        if (currentList.getSelectedIndex() == -1)
-        {
-            JOptionPane.showMessageDialog(this, "No current segment has been selected", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-        else
-        {
-            String commandString = currentListData.get(currentList.getSelectedIndex());
-            CommandData commandData = availableDataset.getCommandByType(convertHexToInt(commandString.substring(0,4)));
-            if (commandData.getNumberOfParams() == 0)
-            {
-                JOptionPane.showMessageDialog(this, "There are no parameters to edit for this command", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-            else
-            {
-                Command selectedCommand = currentSegmentCommands.get(currentList.getSelectedIndex());
-                SegmentEditGUI cmdParamEditor = new SegmentEditGUI(parentTrackWindow, parentObjectWindow);
-                cmdParamEditor.editCmdParams(selectedCommand, commandData.getParamArray());
-                cmdParamEditor.setVisible(true);
-                cmdParamEditor.setTitle("Editing Parameters of Command " + convertIntToHex(selectedCommand.getType()));
-                parentFrame.add(cmdParamEditor);
-                cmdParamEditor.toFront();
-                try
-                {
-                    cmdParamEditor.setSelected(true);
-                }
-                catch (Exception exceptionError)
-                {
-                    exceptionError.printStackTrace();
-                }
-            }
-        }
-        
-    }
-
-    private void updateCommandsActionPerformed(java.awt.event.ActionEvent evt) {
-        // Updates a segment with the specified set of commands
-        
-        trackSegment.setCommands(currentSegmentCommands);
-        parentTrackWindow.updateTrackMap();
-        try
-        {
-            this.setClosed(true);
-        }
-        catch (Exception errorReport)
-        {
-            // This is a normal result of the closing of an internal window. Nothing should be done.
-        }
-        
-        
-    }
-
-    private void removeCommandActionPerformed(java.awt.event.ActionEvent evt) {
-        // Removes a command from the current segment
-        
-        if (currentList.getSelectedIndex() == -1)
-        {
-            JOptionPane.showMessageDialog(this, "No current segment has been selected", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-        else
-        {
-            currentSegmentCommands.remove(currentList.getSelectedIndex());
-            currentListData.remove(currentList.getSelectedIndex());
-            currentList.setListData(currentListData);
-        }
-                
-    }
-
-    private void addCommandActionPerformed(java.awt.event.ActionEvent evt) {
-        // Adds a new command to the current segment
-        
-        if (availableList.getSelectedIndex() == -1)
-        {
-            JOptionPane.showMessageDialog(this, "No available segment has been selected", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-        else
-        {
-            String commandString = availableListData.get(availableList.getSelectedIndex());
-            Command newCommand = new Command(convertHexToInt(commandString.substring(0,4)), 0, 0, 0, 0, 0, 0);
-            currentListData.add(commandString);
-            currentSegmentCommands.add(newCommand);
-            currentList.setListData(currentListData);
-        }
-                
-    }
-
-    private void cancelChangesActionPerformed(java.awt.event.ActionEvent evt) {
-        // Cancels all changes that have been made and closes the window
-        
-        try
-        {
-            this.setClosed(true);
-        }
-        catch (Exception errorReport)
-        {
-            // This is a normal result of the closing of an internal window. Nothing should be done.
-        }
-    }
-    
-    public void loadAllCommands()
-    {
-        // Load both all available commands and those associated with this particular track segment.
-        
-        for (int x=0;x<availableDataset.getCommandListSize();x++)
-        {
-            CommandData selectedCommand = availableDataset.getCommandByIndex(x);
-            availableListData.add(convertIntToHex(selectedCommand.getCommandType()) + " " + "(" + selectedCommand.getNumberOfParams() + ") - "+ selectedCommand.getCommandDesc());
-        }
-        
-        availableList.setListData(availableListData);
-        
-        Vector<Command> segmentCommands = trackSegment.getCommands();
-        
-        for (int x=0;x<segmentCommands.size();x++)
-        {
-            Command selectedCommand = segmentCommands.get(x);
-            CommandData detectedCommand = availableDataset.getCommandByType(selectedCommand.getType());
-            currentListData.add(convertIntToHex(detectedCommand.getCommandType()) + " " + "(" + detectedCommand.getNumberOfParams() + ") - " + detectedCommand.getCommandDesc());
-        }
-        
-        currentList.setListData(currentListData);
-        
-    }
-    
     public String convertIntToHex(int integerValue)
     {
         String hexCode = new String(Integer.toHexString(integerValue)).toUpperCase();
         return "0x" + hexCode;
     }
-    
-    public int convertHexToInt(String hexValue)
-    {
-        String bareHexValue = hexValue.substring(2);
-        return Integer.parseInt(bareHexValue, 16);
-    }
-    
-    
+
     // Variables declaration
-    private javax.swing.JButton EditParams;
-    private javax.swing.JButton addCommand;
-    private javax.swing.JList<String> availableList;
-    private javax.swing.JPanel availablePanel;
-    private javax.swing.JScrollPane availableScrollPane;
-    private javax.swing.JLabel availableText;
-    private javax.swing.JPanel buttonPanel;
-    private javax.swing.JButton cancelChanges;
-    private javax.swing.JList<String> currentList;
-    private javax.swing.JPanel currentPanel;
-    private javax.swing.JScrollPane currentScrollPane;
-    private javax.swing.JLabel currentText;
-    private javax.swing.JPanel exitPanel;
-    private javax.swing.JButton removeCommand;
-    private javax.swing.JButton updateCommands;
+    private JButton addCommand;
+    private JComboBox<String> availableCombo;
+    private JLabel countLabel;
+    private JList<String> currentList;
+    private JButton removeCommand;
     // End of variables declaration
-    
 }

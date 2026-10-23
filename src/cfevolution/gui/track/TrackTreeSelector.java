@@ -33,11 +33,10 @@ import javax.swing.*;
  *
  * @author  barrie
  */
-public class TrackTreeSelector extends javax.swing.JInternalFrame {
+public class TrackTreeSelector extends javax.swing.JPanel {
     
     private DefaultMutableTreeNode rootNode;
     private Track currentTrack;
-    private JDesktopPane parentFrame;
     private TrackWindow parentTrackWindow;
     
     private DefaultMutableTreeNode mainTrackSegmentNode;
@@ -47,12 +46,67 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
     /**
      * Creates new form TrackTreeSelector
      */
-    public TrackTreeSelector(JDesktopPane containerFrame, TrackWindow currentTrackWindow) {
+    public TrackTreeSelector(TrackWindow currentTrackWindow) {
+        super(new java.awt.BorderLayout());
         initComponents();
         setDefaultElement();    
         createTree();
-        parentFrame = containerFrame;
         parentTrackWindow = currentTrackWindow;
+    }
+
+    /** Expands the root so the four branch headings show, without opening
+        the long segment lists. */
+    public void showBranches()
+    {
+        trackDetails.expandPath(new TreePath(rootNode));
+    }
+
+    public void addAbove()
+    {
+        insertSegment(true);
+    }
+
+    public void addBelow()
+    {
+        insertSegment(false);
+    }
+
+    public void deleteSelected()
+    {
+        deleteButtonActionPerformed(null);
+    }
+
+    public void focusTree()
+    {
+        trackDetails.requestFocusInWindow();
+    }
+
+    /** Re-reads one segment node's direction label, e.g. after its
+        curvature was edited. */
+    public void updateNodeLabel(Object node)
+    {
+        if (!(node instanceof DefaultMutableTreeNode))
+            return;
+        DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) node;
+        if (selectedNode.getParent() == null)
+            return; // node no longer in the tree
+        DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode) selectedNode.getParent();
+        String text = selectedNode.toString();
+        int spaceIndex = text.indexOf(" ");
+        if (spaceIndex < 0)
+            return;
+        int segmentNo = Integer.parseInt(text.substring(0, spaceIndex));
+        String direction = null;
+        if (parentNode == mainTrackSegmentNode)
+            direction = getSegmentDirection(currentTrack.getTrackSegments().getAt(segmentNo));
+        else if (parentNode == mainPitSegmentNode)
+            direction = getSegmentDirection(currentTrack.getPitlaneSegments().getAt(segmentNo));
+        else if (parentNode == mainLineSegmentNode)
+            direction = getBestLineDirection(currentTrack.getCCLine().getAt(segmentNo));
+        if (direction == null)
+            return;
+        selectedNode.setUserObject(text.substring(0, spaceIndex) + " " + direction);
+        ((DefaultTreeModel)(trackDetails.getModel())).nodeChanged(selectedNode);
     }
     
     public void populateTree()
@@ -185,85 +239,100 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
     private void initComponents() {
         treeViewScroll = new javax.swing.JScrollPane();
         trackDetails = new javax.swing.JTree();
-        buttonPanel = new javax.swing.JPanel();
-        largeButtonPanel = new javax.swing.JPanel();
-        editSegmentButton = new javax.swing.JButton();
-        otherButtonPanel = new javax.swing.JPanel();
-        editCommandsButton = new javax.swing.JButton();
-        addAboveButton = new javax.swing.JButton();
-        addBelowButton = new javax.swing.JButton();
-        deleteButton = new javax.swing.JButton();
-
-        setTitle("Object View");
         trackDetails.setShowsRootHandles(true);
+        trackDetails.setRootVisible(false);
+        trackDetails.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
         trackDetails.addTreeSelectionListener(new javax.swing.event.TreeSelectionListener() {
             public void valueChanged(javax.swing.event.TreeSelectionEvent evt) {
                 setSelectedPaths(evt);
             }
         });
+        trackDetails.setCellRenderer(new SegmentNodeRenderer());
+
+        // Keys and a right-click menu replace the old button block
+        javax.swing.JPopupMenu popup = new javax.swing.JPopupMenu();
+        javax.swing.JMenuItem above = new javax.swing.JMenuItem("Add Segment Above");
+        above.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { addAbove(); }
+        });
+        javax.swing.JMenuItem below = new javax.swing.JMenuItem("Add Segment Below");
+        below.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { addBelow(); }
+        });
+        javax.swing.JMenuItem delete = new javax.swing.JMenuItem("Delete Segment");
+        delete.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { deleteSelected(); }
+        });
+        popup.add(above);
+        popup.add(below);
+        popup.addSeparator();
+        popup.add(delete);
+        trackDetails.setComponentPopupMenu(popup);
+        trackDetails.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger() || javax.swing.SwingUtilities.isRightMouseButton(e))
+                {
+                    TreePath path = trackDetails.getPathForLocation(e.getX(), e.getY());
+                    if (path != null)
+                        trackDetails.setSelectionPath(path);
+                }
+            }
+        });
+        bindKey(java.awt.event.KeyEvent.VK_INSERT, 0, "addBelow", new Runnable() { public void run() { addBelow(); } });
+        bindKey(java.awt.event.KeyEvent.VK_INSERT, java.awt.event.InputEvent.SHIFT_DOWN_MASK, "addAbove", new Runnable() { public void run() { addAbove(); } });
+        bindKey(java.awt.event.KeyEvent.VK_DELETE, 0, "deleteSegment", new Runnable() { public void run() { deleteSelected(); } });
 
         treeViewScroll.setViewportView(trackDetails);
+        treeViewScroll.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        add(treeViewScroll, java.awt.BorderLayout.CENTER);
+    }
 
-        getContentPane().add(treeViewScroll, java.awt.BorderLayout.CENTER);
-
-        buttonPanel.setLayout(new java.awt.GridLayout(2, 2));
-
-        largeButtonPanel.setLayout(new java.awt.GridLayout(1, 1));
-
-        editSegmentButton.setText("Edit Segment");
-        editSegmentButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                editObject(evt);
-            }
+    private void bindKey(int keyCode, int modifiers, String name, final Runnable runnable)
+    {
+        trackDetails.getInputMap(javax.swing.JComponent.WHEN_FOCUSED).put(
+            javax.swing.KeyStroke.getKeyStroke(keyCode, modifiers), name);
+        trackDetails.getActionMap().put(name, new javax.swing.AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { runnable.run(); }
         });
+    }
 
-        largeButtonPanel.add(editSegmentButton);
-
-        buttonPanel.add(largeButtonPanel);
-
-        otherButtonPanel.setLayout(new java.awt.GridLayout(2, 2));
-
-        editCommandsButton.setText("Edit Commands");
-        editCommandsButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                editCommandsButtonActionPerformed(evt);
+    /** Draws segment nodes with a small coloured mark for their direction,
+        and the four branches in bold. */
+    private static class SegmentNodeRenderer extends DefaultTreeCellRenderer
+    {
+        public java.awt.Component getTreeCellRendererComponent(javax.swing.JTree tree, Object value,
+            boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus)
+        {
+            super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+            String text = String.valueOf(node.getUserObject());
+            setFont(tree.getFont().deriveFont(node.getLevel() == 1 ? java.awt.Font.BOLD : java.awt.Font.PLAIN));
+            setIcon(null);
+            if (node.getLevel() == 2)
+            {
+                java.awt.Color mark = text.endsWith("Turn Left") ? new java.awt.Color(0x2F6FBF)
+                                    : text.endsWith("Turn Right") ? new java.awt.Color(0xC2553A)
+                                    : new java.awt.Color(0x9AA3AD);
+                setIcon(new DotIcon(mark));
             }
-        });
+            return this;
+        }
+    }
 
-        otherButtonPanel.add(editCommandsButton);
-
-        addAboveButton.setText("Add Section Above");
-        addAboveButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                addAboveButtonActionPerformed(evt);
-            }
-        });
-
-        otherButtonPanel.add(addAboveButton);
-
-        addBelowButton.setText("Add Section Below");
-        addBelowButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                addBelowButtonActionPerformed(evt);
-            }
-        });
-
-        otherButtonPanel.add(addBelowButton);
-
-        deleteButton.setText("Delete Section");
-        deleteButton.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                deleteButtonActionPerformed(evt);
-            }
-        });
-
-        otherButtonPanel.add(deleteButton);
-
-        buttonPanel.add(otherButtonPanel);
-
-        getContentPane().add(buttonPanel, java.awt.BorderLayout.SOUTH);
-
-        pack();
+    private static class DotIcon implements javax.swing.Icon
+    {
+        private final java.awt.Color colour;
+        DotIcon(java.awt.Color colour) { this.colour = colour; }
+        public int getIconWidth() { return 10; }
+        public int getIconHeight() { return 10; }
+        public void paintIcon(java.awt.Component c, java.awt.Graphics g, int x, int y)
+        {
+            java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(colour);
+            g2.fillOval(x + 1, y + 1, 8, 8);
+            g2.dispose();
+        }
     }
 
     public void deleteAllSegments(int segmentType)
@@ -566,179 +635,6 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
     }
     
     
-    private void editCommandsButtonActionPerformed(java.awt.event.ActionEvent evt) {
-        // Edit the current set of commands for the segment selected on the tree. Called by the 'Edit Commands' button
-        
-        boolean objectNotEditable = false;
-        
-        TreePath fullPath = trackDetails.getSelectionPath();
-        try
-        {
-            DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)fullPath.getLastPathComponent();
-            if (selectedNode.getLevel() > 1)
-            {
-                    TreePath parentPath = fullPath.getParentPath();
-                    DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
-                    int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                    int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
-                    if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
-                    {
-                        TrackSegments currentTrackSegments = new TrackSegments();
-                        if ((parentNode.toString()).equals("Track Segments"))
-                        {
-                            currentTrackSegments = currentTrack.getTrackSegments();
-                        }
-                        else
-                        {
-                            currentTrackSegments = currentTrack.getPitlaneSegments();   
-                        }
-                        TrackSegment selectedTrackSegment = currentTrackSegments.getAt(segmentNo);
-                        CommandEditGUI commandEditor = new CommandEditGUI(selectedTrackSegment, parentFrame, parentTrackWindow, this);
-                        commandEditor.loadAllCommands();
-                        commandEditor.setVisible(true);
-                        if ((parentNode.toString()).equals("Track Segments"))
-                        {
-                            commandEditor.setTitle("Editing Commands for Track Segment " + segmentNo);
-                        }
-                        else
-                        {
-                            commandEditor.setTitle("Editing Commands for Pit Segment " + segmentNo);
-                        }
-                        parentFrame.add(commandEditor);
-                        commandEditor.toFront();
-                        try
-                        {
-                            commandEditor.setSelected(true);
-                        }
-                        catch (Exception exceptionError)
-                        {
-                            exceptionError.printStackTrace();
-                        }
-                    }
-                    else
-                    {
-                        objectNotEditable = true;
-                    }        
-            }
-            else
-            {  
-                objectNotEditable = true;
-            }
-        
-            if (objectNotEditable == true)
-            {
-                JOptionPane.showMessageDialog(this, "Command editing is only available for individual track or pit track segments", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-        catch (Exception exceptionError)
-        {
-            // No tree item selected, so exception thrown
-        }
-        
-    }
-
-    private void editObject(java.awt.event.ActionEvent evt) {
-        // Edit the current object selected on the tree. Called natively by Edit button
-        
-        TreePath fullPath = trackDetails.getSelectionPath();
-        try
-        {
-            DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)fullPath.getLastPathComponent();
-            if (selectedNode.toString().equals("Track Headers"))
-            {
-                TrackDataHeader currentHeaders = currentTrack.getTrackDataHeader();
-                SegmentEditGUI headersEditor = new SegmentEditGUI(parentTrackWindow, this);
-                headersEditor.editDataHeaders(currentHeaders);
-                headersEditor.setVisible(true);
-                headersEditor.setTitle("Editing Track Data Headers");
-                parentFrame.add(headersEditor);
-                headersEditor.toFront();
-                try
-                {
-                    headersEditor.setSelected(true);
-                }
-                catch (Exception exceptionError)
-                {
-                    exceptionError.printStackTrace();
-                }
-            }
-            else
-            {
-                if (selectedNode.getLevel() > 1)
-                {
-                    TreePath parentPath = fullPath.getParentPath();
-                    DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
-                    int spaceIndex = ((selectedNode.toString()).indexOf(" "));
-                    int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
-                    if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
-                    {
-                        TrackSegments currentTrackSegments = new TrackSegments();
-                        if ((parentNode.toString()).equals("Track Segments"))
-                        {
-                            currentTrackSegments = currentTrack.getTrackSegments();
-                        }
-                        else
-                        {
-                            currentTrackSegments = currentTrack.getPitlaneSegments();   
-                        }
-                        TrackSegment selectedTrackSegment = currentTrackSegments.getAt(segmentNo);
-                        SegmentEditGUI segmentEditor = new SegmentEditGUI(parentTrackWindow, this);
-                        segmentEditor.editTrackSegment(selectedTrackSegment);
-                        segmentEditor.setVisible(true);
-                        if ((parentNode.toString()).equals("Track Segments"))
-                        {
-                            segmentEditor.setTitle("Editing Track Segment " + segmentNo);
-                        }
-                        else
-                        {
-                            segmentEditor.setTitle("Editing Pit Segment " + segmentNo);
-                        }
-                        parentFrame.add(segmentEditor);
-                        segmentEditor.toFront();
-                        try
-                        {
-                            segmentEditor.setSelected(true);
-                        }
-                        catch (Exception exceptionError)
-                        {
-                            exceptionError.printStackTrace();
-                        }
-                    }
-                    else
-                    {
-                        if ((parentNode.toString()).equals("Best Line Segments"))
-                        {   
-                            CCLine currentLines = currentTrack.getCCLine();
-                            CCLineSegment selectedBestLine = currentLines.getAt(segmentNo);
-                            SegmentEditGUI segmentEditor = new SegmentEditGUI(parentTrackWindow, this);
-                            segmentEditor.editBestLineSegment(selectedBestLine);
-                            segmentEditor.setVisible(true);
-                            segmentEditor.setTitle("Editing Best Line Segment " + segmentNo);
-                            parentFrame.add(segmentEditor);
-                            segmentEditor.toFront();
-                            try
-                            {
-                                segmentEditor.setSelected(true);
-                            }
-                            catch (Exception exceptionError)
-                            {
-                                exceptionError.printStackTrace();
-                            }
-                        }                         
-                    }
-                }
-                else
-                {
-                    JOptionPane.showMessageDialog(this, "Segment editing is only available for either track headers or individual track, pit or best line segments", "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            }
-        }
-        catch (Exception exceptionError)
-        {
-            // No tree item selected, so exception thrown
-        }
-    }
-
     public void updateCurrentNode()
     {
         TreePath fullPath = trackDetails.getSelectionPath();
@@ -853,9 +749,10 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
 
     private void currentTreePath()
     {
-        // Calculates the current tree node selected.
-    
+        // Calculates the current tree node selected, highlights it on the
+        // map and shows it in the property panel.
         TreePath fullPath = trackDetails.getSelectionPath();
+        notifySelection(fullPath);
         try 
         {
             DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode)fullPath.getLastPathComponent();
@@ -888,6 +785,33 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
         }
     }
     
+    /** Tells the track window what is selected: the headers, a track, pit
+        or best line segment, or nothing editable. */
+    private void notifySelection(TreePath fullPath)
+    {
+        if (fullPath == null)
+        {
+            parentTrackWindow.selectionChanged(0, -1, null);
+            return;
+        }
+        DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) fullPath.getLastPathComponent();
+        if (selectedNode.getLevel() == 1)
+        {
+            parentTrackWindow.selectionChanged(selectedNode.toString().equals("Track Headers") ? 4 : 0, -1, selectedNode);
+            return;
+        }
+        if (selectedNode.getLevel() != 2)
+        {
+            parentTrackWindow.selectionChanged(0, -1, null);
+            return;
+        }
+        DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode) selectedNode.getParent();
+        String text = selectedNode.toString();
+        int segmentNo = Integer.parseInt(text.substring(0, text.indexOf(" ")));
+        int kind = parentNode == mainTrackSegmentNode ? 1 : parentNode == mainPitSegmentNode ? 2 : 3;
+        parentTrackWindow.selectionChanged(kind, segmentNo, selectedNode);
+    }
+
     private void setSelectedPaths(javax.swing.event.TreeSelectionEvent evt) {
         
         
@@ -900,14 +824,6 @@ public class TrackTreeSelector extends javax.swing.JInternalFrame {
     
     
     // Variables declaration
-    private javax.swing.JButton addAboveButton;
-    private javax.swing.JButton addBelowButton;
-    private javax.swing.JPanel buttonPanel;
-    private javax.swing.JButton deleteButton;
-    private javax.swing.JButton editCommandsButton;
-    private javax.swing.JButton editSegmentButton;
-    private javax.swing.JPanel largeButtonPanel;
-    private javax.swing.JPanel otherButtonPanel;
     private javax.swing.JTree trackDetails;
     private javax.swing.JScrollPane treeViewScroll;
     // End of variables declaration

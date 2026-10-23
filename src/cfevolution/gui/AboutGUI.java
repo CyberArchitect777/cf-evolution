@@ -29,12 +29,14 @@ package cfevolution.gui;
  *
  * @author  barrie
  */
-public class AboutGUI extends javax.swing.JInternalFrame {
+public class AboutGUI extends javax.swing.JDialog {
     
     /** Creates new form AboutGUI */
-    public AboutGUI() 
+    public AboutGUI(java.awt.Frame owner) 
     {
+        super(owner, "About CF Evolution", true);
         initComponents();
+        setLocationRelativeTo(owner);
     }
     
     /** This method is called from within the constructor to
@@ -120,14 +122,7 @@ public class AboutGUI extends javax.swing.JInternalFrame {
     private void okButtonActionPerformed(java.awt.event.ActionEvent evt) {
         // Closes the about form
         
-        try
-        {
-            this.setClosed(true);
-        }
-        catch (Exception errorReport)
-        {
-            // This is a normal result of the closing of an internal window. Nothing should be done.
-        }
+        dispose();
         
     }
     

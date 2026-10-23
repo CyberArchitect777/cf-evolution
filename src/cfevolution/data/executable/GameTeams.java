@@ -99,7 +99,7 @@ public class GameTeams
         for (int x=0;x<40;x=x+2)
         {
             String currentHexSetting = Integer.toHexString(bhpSetting[currentCounter]);
-            System.out.println("Main - " + currentHexSetting);
+            // (debug print removed)
             if (currentHexSetting.length() < 3)
             {
                 bhpSettingData[x+1] = (byte)0x00;
@@ -180,7 +180,7 @@ public class GameTeams
         {
             if (x == 9)
             {
-                System.out.println("x" + x);
+                // (debug print removed)
             }
             int currentByteCount = 0;
             boolean readEnd = false;

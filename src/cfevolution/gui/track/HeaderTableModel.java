@@ -72,15 +72,22 @@ public class HeaderTableModel extends StandardTableModel
         currentHeader.setUnknown1(Integer.parseInt((String)getValueAt(11,1)));
         currentHeader.setUnknown2(Integer.parseInt((String)getValueAt(12,1)));
         
+        // Most circuits store three kerb colour entries, which neither choice
+        // below describes. Only change the count when the kerb type itself was
+        // changed, so applying the table leaves an untouched list as it was.
+        boolean wasDual = (currentHeader.getTotalKerbColours() == 4);
+        boolean typeChanged = (curbType.getSelectedIndex() == 1) != wasDual;
         if (curbType.getSelectedIndex() == 0)
         {
-            currentHeader.setTotalKerbColours(2);
+            if (typeChanged)
+                currentHeader.setTotalKerbColours(2);
             currentHeader.setKerbColor(true, true, Integer.parseInt((String)getValueAt(14,1)));
             currentHeader.setKerbColor(false, true, Integer.parseInt((String)getValueAt(15,1)));
         }
         else
         {
-            currentHeader.setTotalKerbColours(4);
+            if (typeChanged)
+                currentHeader.setTotalKerbColours(4);
             currentHeader.setKerbColor(true, true, Integer.parseInt((String)getValueAt(14,1)));
             currentHeader.setKerbColor(false, true, Integer.parseInt((String)getValueAt(15,1)));
             currentHeader.setKerbColor(true, false, Integer.parseInt((String)getValueAt(16,1)));

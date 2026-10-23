@@ -126,7 +126,7 @@ public class GameOptions
         //byte[] dataValue = new byte[3];
         byte[] dataValues;
         dataValues = BinaryManager.getDataBytes(gameVersion, binaryAccess, 578506, 578362, 578346, 1);
-        System.out.println(dataValues);
+        // (debug print removed)
         if (dataValues[0] == (byte)0x90)
         {
             fastFade = true;

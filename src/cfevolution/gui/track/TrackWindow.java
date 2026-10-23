@@ -29,52 +29,236 @@ import cfevolution.gui.*;
 import java.io.*;
 import cfevolution.data.track.*;
 import javax.swing.*;
-import javax.swing.event.InternalFrameListener;
-import javax.swing.event.InternalFrameEvent;
-import java.util.prefs.Preferences;
 
 /**
+ * One open track, shown as a tab of the main window: the track tree on the
+ * left, the map in the middle and the selected item's properties and
+ * commands on the right. Everything is edited in place; nothing opens a
+ * window of its own except the generation and export dialogs.
  *
  * @author  barrie
  */
-
-/* Class designed to manage both the treeview and track map windows */
-
-public class TrackWindow extends javax.swing.JInternalFrame implements InternalFrameListener
+public class TrackWindow extends JPanel implements EditorTab
 {
-    
     private Track currentTrack;
     private TrackTreeSelector treeWindow;
     private TrackGraphicalViewer mapWindow;
     private MainGUI appFrame;
     private String fileName;
-    private boolean closingWindow;
-    
-    /** Creates new form TrackWindow */
+    private boolean modified;
+
+    private SegmentEditGUI propertyEditor;
+    private CommandEditGUI commandEditor;
+    private JTabbedPane inspectorTabs;
+    private JLabel inspectorHeading;
+    private JLabel inspectorHint;
+    private JPanel warningBanner;
+    private JMenu editMenu;
+    private JMenu viewMenu;
+
     /* Receives a selected track as input */
-    public TrackWindow(Track selectedTrack, String trackFileName, MainGUI origContainer) 
+    public TrackWindow(Track selectedTrack, String trackFileName, MainGUI origContainer)
     {
-        super("Track File: " + trackFileName);
+        super(new java.awt.BorderLayout());
         fileName = trackFileName;
-        initComponents();
-        setContentPane(trackEditorWindow);
         currentTrack = selectedTrack;
         appFrame = origContainer;
-        treeWindow = new TrackTreeSelector(trackEditorWindow, this);
+        initComponents();
+
+        treeWindow = new TrackTreeSelector(this);
         mapWindow = new TrackGraphicalViewer();
         mapWindow.setParentTrackWindow(this);
         mapWindow.setTrack(currentTrack);
         treeWindow.setTrack(currentTrack);
+        propertyEditor = new SegmentEditGUI(this, treeWindow);
+        commandEditor = new CommandEditGUI(this, treeWindow);
+
+        buildLayout();
         treeWindow.populateTree();
-        trackEditorPane.setLeftComponent(treeWindow);
-        trackEditorPane.setRightComponent(mapWindow);
-        treeWindow.setVisible(true);
-        mapWindow.setVisible(true);
+        treeWindow.showBranches();
+        buildMenus();
         updateCCLineCoverageStatus();
         applyLegacyOptionsVisibility(); // Legacy best line methods hidden unless enabled in Options
-        addInternalFrameListener(this); // Listener for internal frame closing events
-        closingWindow = false; // Boolean value for detecting if closing occurs and then blocks any further events
-        this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE); // Handle close operations manually
+        selectionChanged(0, -1, null);
+        modified = false;
+    }
+
+    // --- Layout --------------------------------------------------------
+
+    private void buildLayout()
+    {
+        java.awt.Color line = new java.awt.Color(0xD5D9DF);
+
+        JPanel left = new JPanel(new java.awt.BorderLayout());
+        left.add(sectionHeading("Track"), java.awt.BorderLayout.NORTH);
+        left.add(treeWindow, java.awt.BorderLayout.CENTER);
+        left.setMinimumSize(new java.awt.Dimension(160, 100));
+
+        warningBanner = new JPanel();
+        warningBanner.setLayout(new BoxLayout(warningBanner, BoxLayout.Y_AXIS));
+        warningBanner.setBackground(new java.awt.Color(0xFFF4CC));
+        warningBanner.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new java.awt.Color(0xE8D48A)));
+        warningBanner.setVisible(false);
+        JPanel centre = new JPanel(new java.awt.BorderLayout());
+        centre.add(warningBanner, java.awt.BorderLayout.NORTH);
+        centre.add(mapWindow, java.awt.BorderLayout.CENTER);
+
+        inspectorHeading = new JLabel("Nothing selected");
+        inspectorHeading.setFont(inspectorHeading.getFont().deriveFont(java.awt.Font.BOLD, 14f));
+        inspectorHint = new JLabel(" ");
+        inspectorHint.setForeground(new java.awt.Color(0x7A828C));
+        JPanel headingBox = new JPanel(new java.awt.GridLayout(2, 1));
+        headingBox.add(inspectorHeading);
+        headingBox.add(inspectorHint);
+        headingBox.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, line),
+            BorderFactory.createEmptyBorder(8, 10, 8, 10)));
+        inspectorTabs = new JTabbedPane();
+        inspectorTabs.addTab("Properties", propertyEditor);
+        inspectorTabs.addTab("Commands", commandEditor);
+        JPanel right = new JPanel(new java.awt.BorderLayout());
+        right.add(headingBox, java.awt.BorderLayout.NORTH);
+        right.add(inspectorTabs, java.awt.BorderLayout.CENTER);
+        right.setMinimumSize(new java.awt.Dimension(260, 100));
+        right.setPreferredSize(new java.awt.Dimension(360, 100));
+
+        JSplitPane mapAndInspector = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centre, right);
+        mapAndInspector.setResizeWeight(1.0);
+        mapAndInspector.setContinuousLayout(true);
+        JSplitPane main = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, mapAndInspector);
+        main.setDividerLocation(230);
+        main.setContinuousLayout(true);
+        add(main, java.awt.BorderLayout.CENTER);
+    }
+
+    static JLabel sectionHeading(String text)
+    {
+        JLabel heading = new JLabel(text.toUpperCase());
+        heading.setFont(heading.getFont().deriveFont(java.awt.Font.BOLD, 11f));
+        heading.setForeground(new java.awt.Color(0x6A7380));
+        heading.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new java.awt.Color(0xD5D9DF)),
+            BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+        return heading;
+    }
+
+    // --- Selection and the property panel -------------------------------
+
+    /** Called by the tree whenever its selection changes. kind: 0 nothing
+        editable, 1 track segment, 2 pit segment, 3 best line segment,
+        4 track data headers. Unapplied edits to the previous item are
+        applied first, so moving on never loses typing. */
+    public void selectionChanged(int kind, int segmentNo, Object node)
+    {
+        applyPendingEdits();
+
+        boolean commands = false;
+        switch (kind)
+        {
+            case 1:
+            case 2:
+            {
+                TrackSegments segs = kind == 1 ? currentTrack.getTrackSegments() : currentTrack.getPitlaneSegments();
+                TrackSegment segment = segs.getAt(segmentNo);
+                propertyEditor.editTrackSegment(segment);
+                propertyEditor.setEditedNode(node);
+                commandEditor.editSegment(segment);
+                commands = true;
+                inspectorHeading.setText((kind == 1 ? "Track segment " : "Pit lane segment ") + segmentNo);
+                inspectorHint.setText(directionText(segment.getCurvature()) + " · " + segment.getTlu() + " TLU");
+                break;
+            }
+            case 3:
+            {
+                CCLineSegment lineSegment = currentTrack.getCCLine().getAt(segmentNo);
+                propertyEditor.editBestLineSegment(lineSegment);
+                propertyEditor.setEditedNode(node);
+                commandEditor.editSegment(null);
+                inspectorHeading.setText("Best line segment " + segmentNo);
+                inspectorHint.setText(treeWindow.getBestLineDirection(lineSegment) + " · " + lineSegment.getTlu() + " TLU");
+                break;
+            }
+            case 4:
+                propertyEditor.editDataHeaders(currentTrack.getTrackDataHeader());
+                propertyEditor.setEditedNode(null);
+                commandEditor.editSegment(null);
+                inspectorHeading.setText("Track data headers");
+                inspectorHint.setText("Settings that apply to the whole track");
+                break;
+            default:
+                propertyEditor.showNothing();
+                commandEditor.editSegment(null);
+                inspectorHeading.setText("Nothing selected");
+                inspectorHint.setText("Pick a segment in the list or click the map");
+                break;
+        }
+        inspectorTabs.setEnabledAt(1, commands);
+        if (!commands)
+            inspectorTabs.setSelectedIndex(0);
+    }
+
+    private static String directionText(int curvature)
+    {
+        return curvature < 0 ? "Turns left" : curvature > 0 ? "Turns right" : "Straight";
+    }
+
+    // --- EditorTab ------------------------------------------------------
+
+    public JComponent getComponent() { return this; }
+
+    public String getTabTitle() { return new File(fileName).getName(); }
+
+    public String getFilePath() { return fileName; }
+
+    public boolean isModified() { return modified; }
+
+    private void setModified(boolean value)
+    {
+        modified = value;
+        if (appFrame != null)
+            appFrame.tabStateChanged(this); // also refreshes the status bar figures
+    }
+
+    public String getStatusText()
+    {
+        double km = currentTrack.getTrackTlu() * 16 * 0.3048 / 1000.0;
+        return String.format("Lap %.2f km  ·  %d track segments  ·  %d pit lane segments  ·  %d best line segments",
+            km, currentTrack.getTrackSegments().size(), currentTrack.getPitlaneSegments().size(),
+            currentTrack.getCCLine().size());
+    }
+
+    public JMenu[] getMenus()
+    {
+        return new JMenu[] { editMenu, viewMenu, toolsMenu };
+    }
+
+    public JComponent[] getToolbarItems()
+    {
+        return new JComponent[] {
+            MainGUI.toolbarButton("Add Above", "Add a segment above the selected one (Shift+Insert in the list)",
+                new Runnable() { public void run() { treeWindow.addAbove(); } }),
+            MainGUI.toolbarButton("Add Below", "Add a segment below the selected one (Insert in the list)",
+                new Runnable() { public void run() { treeWindow.addBelow(); } }),
+            MainGUI.toolbarButton("Delete", "Delete the selected segment (Delete in the list)",
+                new Runnable() { public void run() { treeWindow.deleteSelected(); } }),
+            null,
+            MainGUI.toolbarButton("Generate Best Line", "Generate the AI's best line by simulating laps (Ctrl+Shift+B)",
+                new Runnable() { public void run() {
+                    openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator()); } }),
+            MainGUI.toolbarButton("Random Track", "Generate a new random circuit from this one",
+                new Runnable() { public void run() { openGenerateTrackDialog(); } }),
+        };
+    }
+
+    public JMenuItem[] getFileMenuItems()
+    {
+        JMenuItem export = new JMenuItem("Export Track Map as Image...");
+        export.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                new ExportMapImageDialog(TrackWindow.this, mapWindow).setVisible(true);
+            }
+        });
+        return new JMenuItem[] { export };
     }
 
     /** Shows or hides the legacy best line generation methods (options
@@ -90,83 +274,57 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         generateLineDataFit.setVisible(legacy);
         generateLineRefine.setVisible(legacy);
     }
-    
-    public void internalFrameClosing(InternalFrameEvent e) 
+
+    // --- Menus ----------------------------------------------------------
+
+    private JMenuItem item(String text, final Runnable action)
     {
-        // Handle window closing event
-        
-        closeTrack();
-    }
-    
-    public void closeTrack()
-    {
-        // Close the open track window after user confirmation
-        
-        if (closingWindow == false)
-        {
-            int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to close this track?", "Close Track", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (selectionOption == JOptionPane.YES_OPTION)
-            {
-                try
-                {
-                    closingWindow = true;
-                    this.setClosed(true);
-                }
-                catch (Exception errorReport)
-                {
-                    // This is a normal result of the closing of an internal window. Nothing should be done.
-                }
-            }       
-        }
+        JMenuItem menuItem = new JMenuItem(text);
+        menuItem.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { action.run(); }
+        });
+        return menuItem;
     }
 
-    public void internalFrameClosed(InternalFrameEvent e) 
+    private void buildMenus()
     {
+        editMenu = new JMenu("Edit");
+        editMenu.setMnemonic('E');
+        editMenu.add(item("Add Segment Above", new Runnable() { public void run() { treeWindow.addAbove(); } }));
+        editMenu.add(item("Add Segment Below", new Runnable() { public void run() { treeWindow.addBelow(); } }));
+        editMenu.add(item("Delete Segment", new Runnable() { public void run() { treeWindow.deleteSelected(); } }));
+        editMenu.addSeparator();
+        JMenuItem apply = item("Apply Property Changes", new Runnable() { public void run() {
+            applyPendingEdits(); } });
+        apply.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        editMenu.add(apply);
+        editMenu.addSeparator();
+        editMenu.add(removeTrack);
+        editMenu.add(removePit);
+        editMenu.add(removeLine);
+
+        viewMenu = new JMenu("View");
+        viewMenu.setMnemonic('V');
+        JMenuItem zoomIn = new JMenuItem(mapWindow.getZoomInAction());
+        zoomIn.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_EQUALS, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        JMenuItem zoomOut = new JMenuItem(mapWindow.getZoomOutAction());
+        zoomOut.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_MINUS, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        JMenuItem centre = new JMenuItem(mapWindow.getCentreAction());
+        centre.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_0, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        viewMenu.add(zoomIn);
+        viewMenu.add(zoomOut);
+        viewMenu.add(centre);
+        viewMenu.addSeparator();
+        viewMenu.add(new JMenuItem(mapWindow.getLayoutAction()));
+        viewMenu.addSeparator();
+        JMenuItem findList = item("Go to Segment List", new Runnable() { public void run() { treeWindow.focusTree(); } });
+        findList.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_L, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        viewMenu.add(findList);
     }
 
-    public void internalFrameOpened(InternalFrameEvent e) 
-    {
-    }
-
-    public void internalFrameIconified(InternalFrameEvent e) 
-    {
-    }
-
-    public void internalFrameDeiconified(InternalFrameEvent e) 
-    {
-    }
-
-    public void internalFrameActivated(InternalFrameEvent e) 
-    {
-    }
-
-    public void internalFrameDeactivated(InternalFrameEvent e) 
-    {
-    }
-    
-    public void positionWindows()
-    {
-        // Re-position and resize internal windows based on size of main track window
-        
-        int windowX = trackEditorWindow.getWidth();
-        int windowY = trackEditorWindow.getHeight();
-        trackEditorPane.setBounds(0,0,windowX,windowY);
-        trackEditorPane.setDividerLocation(0.42);
-        trackEditorPane.updateUI();
-    }
-    
-    /** This method is called from within the constructor to
-     * initialize the form.
-     */
+    /** Builds the Tools menu items. The Remove All items are shown in the
+        Edit menu instead. */
     private void initComponents() {
-        trackEditorWindow = new javax.swing.JDesktopPane();
-        trackEditorPane = new javax.swing.JSplitPane();
-        trackMenuBar = new javax.swing.JMenuBar();
-        fileMenu = new javax.swing.JMenu();
-        saveTrackItem = new javax.swing.JMenuItem();
-        saveTrackAsItem = new javax.swing.JMenuItem();
-        exportMapItem = new javax.swing.JMenuItem();
-        closeTrackItem = new javax.swing.JMenuItem();
         toolsMenu = new javax.swing.JMenu();
         removeTrack = new javax.swing.JMenuItem();
         removePit = new javax.swing.JMenuItem();
@@ -181,92 +339,27 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         matchEndHeading = new javax.swing.JMenuItem();
         moveFromEdgeItem = new javax.swing.JMenuItem();
 
-        getContentPane().setLayout(new java.awt.FlowLayout());
-
-        setClosable(true);
-        setIconifiable(true);
-        setMaximizable(true);
-        setResizable(true);
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            public void componentResized(java.awt.event.ComponentEvent evt) {
-                windowResize(evt);
-            }
-        });
-
-        trackEditorPane.setBounds(0, 0, -1, -1);
-        trackEditorWindow.add(trackEditorPane, javax.swing.JLayeredPane.DEFAULT_LAYER);
-
-        getContentPane().add(trackEditorWindow);
-
-        fileMenu.setText("File");
-        saveTrackItem.setText("Save Track...");
-        saveTrackItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                saveTrackItem(evt);
-            }
-        });
-
-        fileMenu.add(saveTrackItem);
-
-        saveTrackAsItem.setText("Save Track As...");
-        saveTrackAsItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                saveTrackAs(evt);
-            }
-        });
-
-        fileMenu.add(saveTrackAsItem);
-
-        exportMapItem.setText("Export Track Map as Image...");
-        exportMapItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                new ExportMapImageDialog(TrackWindow.this, mapWindow).setVisible(true);
-            }
-        });
-
-        fileMenu.add(exportMapItem);
-
-        closeTrackItem.setText("Close Track");
-        closeTrackItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                closeTrackItemActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(closeTrackItem);
-
-        trackMenuBar.add(fileMenu);
-
-        toolsMenu.setText("Tools");
-        removeTrack.setText("Remove All Track Segments");
+        removeTrack.setText("Remove All Track Segments...");
         removeTrack.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 removeAllTrack(evt);
             }
         });
-
-        toolsMenu.add(removeTrack);
-
-        removePit.setText("Remove All Pit Segments");
+        removePit.setText("Remove All Pit Segments...");
         removePit.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 removeAllPit(evt);
             }
         });
-
-        toolsMenu.add(removePit);
-
-        removeLine.setText("Remove All Best Line Segments");
+        removeLine.setText("Remove All Best Line Segments...");
         removeLine.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 removeAllLine(evt);
             }
         });
 
-        toolsMenu.add(removeLine);
-
-        toolsMenu.addSeparator();
-
+        toolsMenu.setText("Tools");
+        toolsMenu.setMnemonic('T');
         generateLineGeometric.setText("Generate Best Line (Constructed Racing Line)...");
         generateLineGeometric.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -274,7 +367,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateLineGeometric);
-
         generateLineDataFit.setText("Generate Best Line (Learned from Original Tracks)...");
         generateLineDataFit.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -282,7 +374,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateLineDataFit);
-
         generateLineRefine.setText("Generate Best Line (Iterative Refinement)...");
         generateLineRefine.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -290,15 +381,15 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateLineRefine);
-
         generateLineFastest.setText("Generate Best Line (Fastest Lap Simulation)...");
+        generateLineFastest.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_B,
+            java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.SHIFT_DOWN_MASK));
         generateLineFastest.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
             }
         });
         toolsMenu.add(generateLineFastest);
-
         repairLineItem.setText("Repair Best Line After Edit");
         repairLineItem.setEnabled(false);
         repairLineItem.addActionListener(new java.awt.event.ActionListener() {
@@ -307,9 +398,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(repairLineItem);
-
         toolsMenu.addSeparator();
-
         generateRandomTrack.setText("Generate Random Track...");
         generateRandomTrack.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -317,7 +406,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(generateRandomTrack);
-
         reduceMinimalTrack.setText("Reduce to Minimal Track...");
         reduceMinimalTrack.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -325,7 +413,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(reduceMinimalTrack);
-
         matchEndHeading.setText("Add Segment to Match Start/End Heading...");
         matchEndHeading.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -333,7 +420,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(matchEndHeading);
-
         moveFromEdgeItem.setText("Move Track Away From Map Edge");
         moveFromEdgeItem.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -341,12 +427,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             }
         });
         toolsMenu.add(moveFromEdgeItem);
-
-        trackMenuBar.add(toolsMenu);
-
-        setJMenuBar(trackMenuBar);
-
-        pack();
     }
 
     private void removeAllLine(java.awt.event.ActionEvent evt) {
@@ -384,8 +464,7 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
 
     private void closeTrackItemActionPerformed(java.awt.event.ActionEvent evt) {
         // Handle close track menu event
-        
-        closeTrack();      
+        appFrame.closeTab(this);      
         
     }
 
@@ -396,7 +475,8 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
 
         mapWindow.redrawTrackMap();
         updateCCLineCoverageStatus();
-
+        // Every edit path ends here, so this is where a change is noticed
+        setModified(true);
     }
 
     public void updateCCLineCoverageStatus()
@@ -405,18 +485,46 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         // uncovered Segs keep stale AI line values in the game. Overshoot is
         // normal — 14 of the 16 original tracks deliberately overrun so the
         // line wraps smoothly across the start/finish seam (see BESTLINE.md).
+        // Shown in a banner above the map rather than in the title.
         int ccTlu    = currentTrack.getCCLineTlu();
         int trackTlu = currentTrack.getTrackTlu();
-        String title = "Track File: " + fileName;
-        if ( ccTlu > 0 && ccTlu < trackTlu )
-            title += "  [WARNING: best line " + (trackTlu - ccTlu)
-                   + " TLU short of track end — AI line incomplete]";
+        warningBanner.removeAll();
+        boolean any = false;
         // The game builds a wrong best line on a track that runs over the
         // edge of its coordinate space (see TrackCoordinateEdge).
         if ( cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack) )
-            title += "  [WARNING: track runs over the map edge, so the game's AI line"
-                   + " will be wrong — use Tools > Move Track Away From Map Edge]";
-        setTitle(title);
+        {
+            addWarning("This track runs over the edge of the game's map area, so the game's AI line will be wrong.",
+                       "Move Track", new Runnable() { public void run() { moveTrackFromEdge(); } });
+            any = true;
+        }
+        if ( ccTlu > 0 && ccTlu < trackTlu )
+        {
+            addWarning("The best line stops " + (trackTlu - ccTlu) + " TLU short of the end of the track, so the AI has no line there.",
+                       "Generate Best Line", new Runnable() { public void run() {
+                           openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator()); } });
+            any = true;
+        }
+        warningBanner.setVisible(any);
+        warningBanner.revalidate();
+        warningBanner.repaint();
+    }
+
+    private void addWarning(String text, String fixLabel, final Runnable fix)
+    {
+        JPanel row = new JPanel(new java.awt.BorderLayout(8, 0));
+        row.setOpaque(false);
+        JLabel label = new JLabel("\u26a0  " + text);
+        label.setForeground(new java.awt.Color(0x6B4E00));
+        row.add(label, java.awt.BorderLayout.CENTER);
+        JButton button = new JButton(fixLabel);
+        button.setFocusable(false);
+        button.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { fix.run(); }
+        });
+        row.add(button, java.awt.BorderLayout.EAST);
+        row.setBorder(BorderFactory.createEmptyBorder(3, 8, 3, 6));
+        warningBanner.add(row);
     }
 
     public void highlightSection(int sectionType, int segmentNo)
@@ -887,21 +995,33 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
             "This Track Will Not Load in the Game", JOptionPane.WARNING_MESSAGE);
     }
 
-    private void saveTrackItem(java.awt.event.ActionEvent evt) {
+    /** Applies typing in the property or command panel that has not been
+        applied yet. Only real edits are applied: re-applying an untouched
+        table can rewrite values it does not model exactly. */
+    private void applyPendingEdits()
+    {
+        if (propertyEditor.hasPendingChanges())
+            propertyEditor.applyChanges();
+        if (commandEditor.hasPendingChanges())
+            commandEditor.applyChanges();
+    }
+
+    public boolean save()
+    {
         // Saves the current track file to the same file it was loaded from
-        // FUTURE: New track files will have no existing filename and therefore will need to be routed to saveTrackAs
-        
+        applyPendingEdits();
         File trackFile = new File(fileName);
         currentTrack.save(trackFile);
+        setModified(false);
         warnIfGameWillHang(trackFile);
-           
+        return true;
     }
-    
-    private void saveTrackAs(java.awt.event.ActionEvent evt) {
+
+    public boolean saveAs()
+    {
         // Prompts for a filename and then saves the current track file in memory to the specified filename
-        
-        boolean cancelCalled = false;
-        String selectedFileName = new String();
+        applyPendingEdits();
+        String selectedFileName;
         FileDialog fileDialog = new FileDialog(appFrame,true);
         try
         {
@@ -909,41 +1029,28 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
         }
         catch (Exception exceptionError)
         {
-            cancelCalled = true;
+            return false; // cancelled
         }
-        if (cancelCalled == false)
+        if (selectedFileName.toLowerCase().endsWith(".dat") == false)
         {
-            if (selectedFileName.toLowerCase().endsWith(".dat") == false)
-            {
-                    selectedFileName = selectedFileName + ".DAT";
-            }
-            File fileTest = new File(selectedFileName);
-            if (fileTest.exists() == true)
-            {
-                JOptionPane.showMessageDialog(this, "The filename you have provided already exists. Please try again.", "Filename already exists", JOptionPane.ERROR_MESSAGE);
-            }
-            else
-            {
-                File trackFile = new File(selectedFileName);
-                currentTrack.save(trackFile);
-                warnIfGameWillHang(trackFile);
-            }
+            selectedFileName = selectedFileName + ".DAT";
         }
+        File trackFile = new File(selectedFileName);
+        if (trackFile.exists() == true)
+        {
+            JOptionPane.showMessageDialog(this, "The filename you have provided already exists. Please try again.", "Filename already exists", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        currentTrack.save(trackFile);
+        // The tab now stands for the new file, so a later Save writes there
+        fileName = selectedFileName;
+        setModified(false);
+        appFrame.updateRecentFileList(selectedFileName);
+        warnIfGameWillHang(trackFile);
+        return true;
     }
 
-    private void windowResize(java.awt.event.ComponentEvent evt) {
-        // Calls window location and size re-calculation code when internal frame is resized.
-        
-        positionWindows();
-        
-        
-    }
-    
-    
     // Variables declaration
-    private javax.swing.JMenuItem closeTrackItem;
-    private javax.swing.JMenuItem exportMapItem;
-    private javax.swing.JMenu fileMenu;
     private javax.swing.JMenuItem generateLineGeometric;
     private javax.swing.JMenuItem generateLineDataFit;
     private javax.swing.JMenuItem generateLineRefine;
@@ -956,12 +1063,6 @@ public class TrackWindow extends javax.swing.JInternalFrame implements InternalF
     private javax.swing.JMenuItem removeLine;
     private javax.swing.JMenuItem removePit;
     private javax.swing.JMenuItem removeTrack;
-    private javax.swing.JMenuItem saveTrackAsItem;
-    private javax.swing.JMenuItem saveTrackItem;
     private javax.swing.JMenu toolsMenu;
-    private javax.swing.JSplitPane trackEditorPane;
-    private javax.swing.JDesktopPane trackEditorWindow;
-    private javax.swing.JMenuBar trackMenuBar;
     // End of variables declaration
-    
 }

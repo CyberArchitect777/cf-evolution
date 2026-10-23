@@ -22,565 +22,636 @@
  *
  * Created on 22 February 2005, 22:28
  */
-
 package cfevolution.gui;
 
 import cfevolution.gui.executable.ExecutableWindow;
 import cfevolution.gui.track.TrackWindow;
-import javax.swing.*;
-import java.io.*;
 import cfevolution.data.track.*;
 import cfevolution.data.gui.*;
 import cfevolution.data.executable.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.prefs.Preferences;
-import java.awt.event.ActionListener;
-import java.awt.event.WindowListener;
-import java.awt.event.WindowEvent;
+import javax.swing.*;
 
 /**
+ * The editor's single window. Each open track or executable is a tab;
+ * the menus, toolbar and status bar follow whichever tab is in front.
+ * With nothing open, a start page offers the common first steps.
  *
  * @author  barrie
  */
-public class MainGUI extends javax.swing.JFrame implements WindowListener
+public class MainGUI extends JFrame
 {
-    
-    private Track currentTrack;
-    private Executable currentExecutable;
-    private boolean closingProgram;
-            
-    /** Creates new form MainGUI */
-    public MainGUI() 
+    private static final String WELCOME = "welcome";
+    private static final String EDITORS = "editors";
+
+    private final List<EditorTab> tabs = new ArrayList<EditorTab>();
+    private JTabbedPane tabPane;
+    private JPanel centre;
+    private CardLayout centreCards;
+    private JToolBar toolbar;
+    private JLabel statusText;
+    private JLabel statusSaved;
+    private JPanel recentPanel;
+    private JButton saveButton;
+
+    public MainGUI()
     {
-        // Setting main frame information
-        // The first three commands should appear in this order before any other.
-        super("CF Evolution - An open-source F1GP/WC editor");
-        initComponents();
-        
-        // Setting global variables
-        
-        closingProgram = false;
-        
-        // Perform window management
-        
-        setContentPane(mainEditorWindow);
-        addWindowListener(this);
-        this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
-        
-        // Start of normal commands
-        
-        setSize(800,572);
-        setVisible(true);
-        
-        // Setting menu item visibility based on recent file availability
-        
-        updateRecentFileList(new String());
-                      
-    }
-    
-    /** This method is called from within the constructor to
-     * initialize the form.
-     */
-    private void initComponents() {
-        mainEditorWindow = new javax.swing.JDesktopPane();
-        mainMenuBar = new javax.swing.JMenuBar();
-        fileMenu = new javax.swing.JMenu();
-        openMenu = new javax.swing.JMenu();
-        openTrack = new javax.swing.JMenuItem();
-        openExecutable = new javax.swing.JMenuItem();
-        menuSeparator3 = new javax.swing.JSeparator();
-        optionsMenu = new javax.swing.JMenuItem();
-        menuSeparator1 = new javax.swing.JSeparator();
-        lastFileMenuOne = new javax.swing.JMenuItem();
-        lastFileMenuTwo = new javax.swing.JMenuItem();
-        lastFileMenuThree = new javax.swing.JMenuItem();
-        lastFileMenuFour = new javax.swing.JMenuItem();
-        menuSeparator2 = new javax.swing.JSeparator();
-        exitItem = new javax.swing.JMenuItem();
-        helpMenu = new javax.swing.JMenu();
-        aboutItem = new javax.swing.JMenuItem();
-
-        getContentPane().setLayout(new java.awt.FlowLayout());
-
-        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            public void componentResized(java.awt.event.ComponentEvent evt) {
-                windowResizeEvent(evt);
-            }
+        super("CF Evolution");
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent e) { quitCFEvolution(); }
         });
 
-        getContentPane().add(mainEditorWindow);
-
-        fileMenu.setText("File");
-        fileMenu.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                fileMenuActionPerformed(evt);
-            }
+        tabPane = new JTabbedPane();
+        tabPane.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) { activeTabChanged(); }
         });
 
-        openMenu.setText("Open...");
-        openTrack.setText("Track File");
-        openTrack.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                loadTrack(evt);
-            }
-        });
+        centreCards = new CardLayout();
+        centre = new JPanel(centreCards);
+        centre.add(createWelcomePage(), WELCOME);
+        centre.add(tabPane, EDITORS);
 
-        openMenu.add(openTrack);
+        toolbar = new JToolBar();
+        toolbar.setFloatable(false);
+        toolbar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(0xD5D9DF)),
+            BorderFactory.createEmptyBorder(3, 6, 3, 6)));
 
-        openExecutable.setText("Executable");
-        openExecutable.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                openExecutableActionPerformed(evt);
-            }
-        });
+        JPanel content = new JPanel(new BorderLayout());
+        content.add(toolbar, BorderLayout.NORTH);
+        content.add(centre, BorderLayout.CENTER);
+        content.add(createStatusBar(), BorderLayout.SOUTH);
+        setContentPane(content);
 
-        openMenu.add(openExecutable);
-
-        fileMenu.add(openMenu);
-
-        fileMenu.add(menuSeparator3);
-
-        optionsMenu.setText("Options");
-        optionsMenu.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                optionsMenuActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(optionsMenu);
-
-        fileMenu.add(menuSeparator1);
-
-        lastFileMenuOne.setText("Item");
-        lastFileMenuOne.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                lastFileMenuOneActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(lastFileMenuOne);
-
-        lastFileMenuTwo.setText("Item");
-        lastFileMenuTwo.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                lastFileMenuTwoActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(lastFileMenuTwo);
-
-        lastFileMenuThree.setText("Item");
-        lastFileMenuThree.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                lastFileMenuThreeActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(lastFileMenuThree);
-
-        lastFileMenuFour.setText("Item");
-        lastFileMenuFour.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                lastFileMenuFourActionPerformed(evt);
-            }
-        });
-
-        fileMenu.add(lastFileMenuFour);
-
-        fileMenu.add(menuSeparator2);
-
-        exitItem.setText("Exit");
-        exitItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                exitProgram(evt);
-            }
-        });
-
-        fileMenu.add(exitItem);
-
-        mainMenuBar.add(fileMenu);
-
-        helpMenu.setText("Help");
-        aboutItem.setText("About");
-        aboutItem.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                aboutItemActionPerformed(evt);
-            }
-        });
-
-        helpMenu.add(aboutItem);
-
-        mainMenuBar.add(helpMenu);
-
-        setJMenuBar(mainMenuBar);
-
-        pack();
+        setTransferHandler(new FileDropHandler());
+        setSize(1280, 820);
+        setLocationRelativeTo(null);
+        activeTabChanged();
     }
 
-    private void openExecutableActionPerformed(java.awt.event.ActionEvent evt) {
-    
-        // Handles the load executable menu item and passes processing onto another method after prompting for a filename
-        
-        Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("cfevolution");
-        String fileName = cheqFlagData.get("EXELocation", "-1");
-        if (fileName.compareTo("-1") == 0)
+    // --- Building blocks ------------------------------------------------
+
+    /** A flat toolbar button running the given action. */
+    public static JButton toolbarButton(String text, String tooltip, final Runnable action)
+    {
+        JButton button = new JButton(text);
+        button.setToolTipText(tooltip);
+        button.setFocusable(false);
+        button.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { action.run(); }
+        });
+        return button;
+    }
+
+    private JMenuItem menuItem(String text, KeyStroke key, final Runnable action)
+    {
+        JMenuItem item = new JMenuItem(text);
+        if (key != null)
+            item.setAccelerator(key);
+        item.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { action.run(); }
+        });
+        return item;
+    }
+
+    private static KeyStroke ctrl(int key)
+    {
+        return KeyStroke.getKeyStroke(key, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask());
+    }
+
+    private static KeyStroke ctrlShift(int key)
+    {
+        return KeyStroke.getKeyStroke(key, Toolkit.getDefaultToolkit().getMenuShortcutKeyMask() | InputEvent.SHIFT_DOWN_MASK);
+    }
+
+    private JComponent createStatusBar()
+    {
+        statusText = new JLabel(" ");
+        statusSaved = new JLabel(" ");
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.add(statusText, BorderLayout.CENTER);
+        bar.add(statusSaved, BorderLayout.EAST);
+        bar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(0xD5D9DF)),
+            BorderFactory.createEmptyBorder(4, 10, 4, 10)));
+        statusText.setForeground(new Color(0x4A525C));
+        return bar;
+    }
+
+    private JComponent createWelcomePage()
+    {
+        JPanel card = new JPanel();
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(0xD5D9DF)),
+            BorderFactory.createEmptyBorder(28, 36, 28, 36)));
+
+        JLabel title = new JLabel("CF Evolution");
+        title.setFont(title.getFont().deriveFont(Font.BOLD, 30f));
+        title.setForeground(new Color(0xC23B22));
+        JLabel subtitle = new JLabel("Track and game editor for Formula One Grand Prix / World Circuit");
+        subtitle.setForeground(new Color(0x5A626C));
+        card.add(left(title));
+        card.add(Box.createVerticalStrut(4));
+        card.add(left(subtitle));
+        card.add(Box.createVerticalStrut(24));
+
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 12, 0));
+        buttons.setOpaque(false);
+        buttons.add(bigButton("Open Track", "An F1CTnn.DAT circuit file", new Runnable() {
+            public void run() { loadTrack(); } }));
+        buttons.add(bigButton("Open Game Executable", "Drivers, teams, points and settings", new Runnable() {
+            public void run() { openExecutable(); } }));
+        buttons.setMaximumSize(new Dimension(560, 74));
+        card.add(left(buttons));
+        card.add(Box.createVerticalStrut(24));
+
+        JLabel recentTitle = new JLabel("Recent tracks");
+        recentTitle.setFont(recentTitle.getFont().deriveFont(Font.BOLD));
+        card.add(left(recentTitle));
+        card.add(Box.createVerticalStrut(6));
+        recentPanel = new JPanel();
+        recentPanel.setOpaque(false);
+        recentPanel.setLayout(new BoxLayout(recentPanel, BoxLayout.Y_AXIS));
+        card.add(left(recentPanel));
+        card.add(Box.createVerticalStrut(20));
+
+        JLabel tip = new JLabel("<html>You can also drop track or executable files onto this window.<br>"
+            + "Ctrl+O opens a track, Ctrl+E an executable, Ctrl+S saves, Ctrl+W closes a tab.</html>");
+        tip.setForeground(new Color(0x7A828C));
+        card.add(left(tip));
+
+        JPanel page = new JPanel(new GridBagLayout());
+        page.setBackground(new Color(0xF2F3F5));
+        page.add(card);
+        return page;
+    }
+
+    private static JComponent left(JComponent c)
+    {
+        c.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return c;
+    }
+
+    private JButton bigButton(String title, String detail, final Runnable action)
+    {
+        JButton button = new JButton("<html><b style='font-size:12px'>" + title + "</b><br><span style='color:#5A626C'>"
+                                     + detail + "</span></html>");
+        button.setHorizontalAlignment(SwingConstants.LEFT);
+        button.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(0xB8C6D8)),
+            BorderFactory.createEmptyBorder(10, 14, 10, 14)));
+        button.setBackground(new Color(0xF3F7FC));
+        button.setFocusable(false);
+        button.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { action.run(); }
+        });
+        return button;
+    }
+
+    /** The last two folders of a path, so long paths stay readable. */
+    private static String shortFolder(String path)
+    {
+        File parent = new File(path).getParentFile();
+        if (parent == null)
+            return "";
+        File grand = parent.getParentFile();
+        return (grand != null && grand.getParentFile() != null ? "\u2026" + File.separator + grand.getName() + File.separator : "")
+             + parent.getName();
+    }
+
+    private void refreshWelcomeRecent()
+    {
+        recentPanel.removeAll();
+        RecentFiles usedFiles = new RecentFiles();
+        int shown = 0;
+        for (int i = 0; i < 4; i++)
         {
-            int optionSelected = JOptionPane.showConfirmDialog(this, "No F1GP/WC executable file has yet been identified for use with CF Evolution. \nDo you want to open the configuration dialog?", "No F1GP/WC Executable Selected", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (optionSelected == JOptionPane.YES_OPTION)
-            {
-                openOptionsWindow();
-            }            
+            final String path = usedFiles.getRecentFilePath(i);
+            if (path == null || path.length() == 0)
+                continue;
+            JButton link = new JButton("<html><span style='color:#2F6FBF'>" + usedFiles.getRecentFileName(i)
+                                       + "</span>&nbsp;&nbsp;<span style='color:#8A929C'>" + shortFolder(path)
+                                       + "</span></html>");
+            link.setToolTipText(path);
+            link.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
+            link.setContentAreaFilled(false);
+            link.setFocusable(false);
+            link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            link.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) { openTrackFile(path); }
+            });
+            recentPanel.add(left(link));
+            shown++;
         }
-        else
+        if (shown == 0)
         {
-            openExecutableFile(fileName);
-        }                      
+            JLabel none = new JLabel("None yet");
+            none.setForeground(new Color(0x8A929C));
+            recentPanel.add(left(none));
+        }
+        recentPanel.revalidate();
     }
 
-    public void openExecutableFile(String fileName)
+    // --- Tabs -----------------------------------------------------------
+
+    private EditorTab activeTab()
     {
-        // Open a executable file from a parameter passed filename by using executable handling procedures
-        
-        File executableFile = new File(fileName);
-        currentExecutable = new Executable(executableFile);
-        int loadSuccess = currentExecutable.loadData();
-           
-        if (loadSuccess == 0)
+        int index = tabPane.getSelectedIndex();
+        return index < 0 ? null : tabs.get(index);
+    }
+
+    private void addTab(EditorTab tab)
+    {
+        tabs.add(tab);
+        tabPane.addTab(tab.getTabTitle(), tab.getComponent());
+        int index = tabPane.getTabCount() - 1;
+        tabPane.setTabComponentAt(index, new TabHeader(tab));
+        tabPane.setToolTipTextAt(index, tab.getFilePath());
+        tabPane.setSelectedIndex(index);
+        activeTabChanged();
+    }
+
+    /** Selects an already open file's tab; true if there was one. */
+    private boolean selectIfOpen(String fileName)
+    {
+        String wanted = new File(fileName).getAbsolutePath();
+        for (int i = 0; i < tabs.size(); i++)
         {
-              
-            // Calculate size of track editing window
-                
-            int windowX = mainEditorWindow.getWidth();
-            int windowY = mainEditorWindow.getHeight();
-            ExecutableWindow newExecutableWindow = new ExecutableWindow(currentExecutable, fileName, this);
-            if (windowX > 700)
+            if (new File(tabs.get(i).getFilePath()).getAbsolutePath().equals(wanted))
             {
-                windowX = 700;
+                tabPane.setSelectedIndex(i);
+                return true;
             }
-            if (windowY > 500)
-            {
-                windowY = 500;
-            }
-            newExecutableWindow.reshape(0,0,windowX,windowY);
-            newExecutableWindow.setVisible(true);
-                
-            // Add track editor window
-        
-            mainEditorWindow.add(newExecutableWindow);
-            newExecutableWindow.positionWindows();
-            newExecutableWindow.toFront();
         }
-        else
+        return false;
+    }
+
+    /** Called by a tab when it is changed or saved. */
+    public void tabStateChanged(EditorTab tab)
+    {
+        int index = tabs.indexOf(tab);
+        if (index >= 0)
         {
-            switch(loadSuccess)
+            Component header = tabPane.getTabComponentAt(index);
+            if (header instanceof TabHeader)
+                ((TabHeader) header).refresh();
+            tabPane.setToolTipTextAt(index, tab.getFilePath());
+        }
+        if (tab == activeTab())
+            refreshStatus();
+        refreshTitle();
+    }
+
+    /** Closes a tab, asking first if it has unsaved changes. Returns false
+        when the user cancels. */
+    public boolean closeTab(EditorTab tab)
+    {
+        int index = tabs.indexOf(tab);
+        if (index < 0)
+            return true;
+        tabPane.setSelectedIndex(index);
+        if (tab.isModified())
+        {
+            int choice = JOptionPane.showOptionDialog(this,
+                "Save the changes to " + tab.getTabTitle() + " before closing it?",
+                "Unsaved Changes", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                new String[] { "Save", "Don't Save", "Cancel" }, "Save");
+            if (choice == 0)
             {
-                case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. \nThis may be because you have selected the wrong file, or \nbecause this executable has not been updated to version \n1.05. In the latter case, upgrading your copy of F1GP/WC to \n1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
-                case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this \nexecutable file. It is likely that this is either not a \nF1GP/WC executable file, or that the executable itself is \ncorrupt.Please try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
-                case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version \nof F1GP/WC. An unpacked version of this file is required for \nediting in CF Evolution. Please see the documentation \nfor more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
-            }                
+                if (!tab.save())
+                    return false;
+            }
+            else if (choice != 1)
+                return false;
+        }
+        tabs.remove(index);
+        tabPane.removeTabAt(index);
+        activeTabChanged();
+        return true;
+    }
+
+    private void activeTabChanged()
+    {
+        boolean any = !tabs.isEmpty();
+        centreCards.show(centre, any ? EDITORS : WELCOME);
+        if (!any)
+            refreshWelcomeRecent();
+        rebuildMenus();
+        rebuildToolbar();
+        refreshStatus();
+        refreshTitle();
+    }
+
+    private void refreshStatus()
+    {
+        EditorTab tab = activeTab();
+        if (tab == null)
+        {
+            statusText.setText("Open a track or the game executable to start.");
+            statusSaved.setText(" ");
+            return;
+        }
+        statusText.setText(tab.getStatusText());
+        statusSaved.setText(tab.isModified() ? "● Unsaved changes" : "All changes saved");
+        statusSaved.setForeground(tab.isModified() ? new Color(0xB5651D) : new Color(0x5A8F4E));
+        if (saveButton != null)
+            saveButton.setEnabled(true);
+    }
+
+    private void refreshTitle()
+    {
+        EditorTab tab = activeTab();
+        setTitle(tab == null ? "CF Evolution"
+                 : (tab.isModified() ? "● " : "") + tab.getTabTitle() + " — CF Evolution");
+    }
+
+    private void rebuildToolbar()
+    {
+        toolbar.removeAll();
+        toolbar.add(toolbarButton("Open Track", "Open a track file (Ctrl+O)", new Runnable() {
+            public void run() { loadTrack(); } }));
+        toolbar.add(toolbarButton("Open Executable", "Open the game executable (Ctrl+E)", new Runnable() {
+            public void run() { openExecutable(); } }));
+        saveButton = toolbarButton("Save", "Save the file in front (Ctrl+S)", new Runnable() {
+            public void run() { saveActive(); } });
+        saveButton.setEnabled(activeTab() != null);
+        toolbar.add(saveButton);
+        EditorTab tab = activeTab();
+        if (tab != null)
+        {
+            JComponent[] items = tab.getToolbarItems();
+            if (items.length > 0)
+                toolbar.addSeparator();
+            for (int i = 0; i < items.length; i++)
+            {
+                if (items[i] == null)
+                    toolbar.addSeparator();
+                else
+                    toolbar.add(items[i]);
+            }
+        }
+        toolbar.revalidate();
+        toolbar.repaint();
+    }
+
+    private void rebuildMenus()
+    {
+        JMenuBar bar = new JMenuBar();
+        EditorTab tab = activeTab();
+
+        JMenu file = new JMenu("File");
+        file.setMnemonic('F');
+        file.add(menuItem("Open Track...", ctrl(KeyEvent.VK_O), new Runnable() { public void run() { loadTrack(); } }));
+        file.add(menuItem("Open Executable...", ctrl(KeyEvent.VK_E), new Runnable() { public void run() { openExecutable(); } }));
+        JMenu recent = new JMenu("Open Recent");
+        RecentFiles usedFiles = new RecentFiles();
+        for (int i = 0; i < 4; i++)
+        {
+            final String path = usedFiles.getRecentFilePath(i);
+            if (path == null || path.length() == 0)
+                continue;
+            recent.add(menuItem(usedFiles.getRecentFileName(i), null, new Runnable() {
+                public void run() { openTrackFile(path); } }));
+        }
+        recent.setEnabled(recent.getItemCount() > 0);
+        file.add(recent);
+        file.addSeparator();
+        JMenuItem save = menuItem("Save", ctrl(KeyEvent.VK_S), new Runnable() { public void run() { saveActive(); } });
+        JMenuItem saveAs = menuItem("Save As...", ctrlShift(KeyEvent.VK_S), new Runnable() {
+            public void run() { EditorTab t = activeTab(); if (t != null) t.saveAs(); } });
+        JMenuItem close = menuItem("Close", ctrl(KeyEvent.VK_W), new Runnable() {
+            public void run() { EditorTab t = activeTab(); if (t != null) closeTab(t); } });
+        save.setEnabled(tab != null);
+        saveAs.setEnabled(tab != null);
+        close.setEnabled(tab != null);
+        file.add(save);
+        file.add(saveAs);
+        if (tab != null)
+        {
+            JMenuItem[] extra = tab.getFileMenuItems();
+            if (extra.length > 0)
+                file.addSeparator();
+            for (int i = 0; i < extra.length; i++)
+                file.add(extra[i]);
+        }
+        file.addSeparator();
+        file.add(close);
+        file.addSeparator();
+        file.add(menuItem("Options...", null, new Runnable() { public void run() { openOptionsWindow(); } }));
+        file.addSeparator();
+        file.add(menuItem("Exit", ctrl(KeyEvent.VK_Q), new Runnable() { public void run() { quitCFEvolution(); } }));
+        bar.add(file);
+
+        if (tab != null)
+        {
+            JMenu[] menus = tab.getMenus();
+            for (int i = 0; i < menus.length; i++)
+                bar.add(menus[i]);
+        }
+
+        JMenu help = new JMenu("Help");
+        help.setMnemonic('H');
+        help.add(menuItem("About CF Evolution", null, new Runnable() {
+            public void run() { new AboutGUI(MainGUI.this).setVisible(true); } }));
+        bar.add(help);
+
+        setJMenuBar(bar);
+        bar.revalidate();
+    }
+
+    private void saveActive()
+    {
+        EditorTab tab = activeTab();
+        if (tab != null)
+            tab.save();
+    }
+
+    /** The header of one tab: its name, a dot while unsaved, and a close button. */
+    private class TabHeader extends JPanel
+    {
+        private final EditorTab tab;
+        private final JLabel label = new JLabel();
+
+        TabHeader(final EditorTab tab)
+        {
+            super(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            this.tab = tab;
+            setOpaque(false);
+            label.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 8));
+            add(label);
+            JButton close = new JButton("×");
+            close.setToolTipText("Close (Ctrl+W)");
+            close.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+            close.setContentAreaFilled(false);
+            close.setFocusable(false);
+            close.setFont(close.getFont().deriveFont(15f));
+            close.setForeground(new Color(0x7A828C));
+            close.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) { closeTab(tab); }
+            });
+            add(close);
+            refresh();
+        }
+
+        void refresh()
+        {
+            label.setText((tab.isModified() ? "● " : "") + tab.getTabTitle());
+            label.setFont(label.getFont().deriveFont(tab.isModified() ? Font.BOLD : Font.PLAIN));
         }
     }
-    
-    public void windowClosing(WindowEvent wetEvent)
+
+    // --- Opening files --------------------------------------------------
+
+    private void loadTrack()
     {
-        // Handles window closing event
-                
-        quitCFEvolution();
-    }
-	
-    public void windowOpened(WindowEvent wetEvent) 
-    {
-    }
-	
-    public void windowClosed(WindowEvent wetEvent)
-    {
-    }
-	
-    public void windowIconified(WindowEvent wetEvent)
-    {
-    }
-	
-    public void windowDeiconified(WindowEvent wetEvent)
-    {
-    }
-	
-    public void windowActivated(WindowEvent wetEvent)
-    {
-    }
-	
-    public void windowDeactivated(WindowEvent wetEvent)
-    {
-    }
-    
-    public void openOptionsWindow()
-    {
-        OptionsWindow programOptions = new OptionsWindow(this);
-        programOptions.setVisible(true);
-        programOptions.setTitle("CF Evolution Options");
-        mainEditorWindow.add(programOptions);
-        programOptions.toFront();
+        // Prompts for a track file and opens it in a new tab
+        FileDialog fileDialog = new FileDialog(this, true);
+        fileDialog.setFilterType(1);
+        String fileName;
         try
         {
-            programOptions.setSelected(true);
+            Preferences cheqFlagData = Preferences.userRoot().node("cfevolution");
+            fileDialog.setInitialDirectory(cheqFlagData.get("LastLoadedTrackDir", ""));
+            fileName = fileDialog.showOpenDialog();
         }
         catch (Exception exceptionError)
         {
-            exceptionError.printStackTrace();
+            return; // cancelled
         }
+        openTrackFile(fileName);
     }
 
-    /** Re-applies the "Enable legacy options" preference to every open
-        track window's Tools menu (called when the option is changed). */
-    public void refreshLegacyOptions()
-    {
-        javax.swing.JInternalFrame[] frames = mainEditorWindow.getAllFrames();
-        for (int i = 0; i < frames.length; i++)
-        {
-            if (frames[i] instanceof TrackWindow)
-                ((TrackWindow) frames[i]).applyLegacyOptionsVisibility();
-        }
-    }
-
-
-    private void optionsMenuActionPerformed(java.awt.event.ActionEvent evt) {
-        // Handles the event after the option menu item is activated by the user.
-        
-        openOptionsWindow();
-                
-    }
-
-    private void lastFileMenuFourActionPerformed(java.awt.event.ActionEvent evt) {
-        // Handler method for recent file selection four
-        
-        recentFileMenuHandler(3);
-        
-    }
-
-    private void lastFileMenuThreeActionPerformed(java.awt.event.ActionEvent evt) {
-        // Handler method for recent file selection three
-        
-        recentFileMenuHandler(2);
-        
-    }
-
-    private void lastFileMenuTwoActionPerformed(java.awt.event.ActionEvent evt) {
-        // Handler method for recent file selection two
-        
-        recentFileMenuHandler(1);
-        
-    }
-
-    private void lastFileMenuOneActionPerformed(java.awt.event.ActionEvent evt) {
-        // Handler method for recent file selection one        
-        
-        recentFileMenuHandler(0);
-        
-    }
-
-    public void recentFileMenuHandler(int buttonIndex)
-    {
-        RecentFiles usedFiles = new RecentFiles();
-        String recentFilePath = usedFiles.getRecentFilePath(buttonIndex);
-        openTrackFile(recentFilePath);
-    }
-    
-    private void aboutItemActionPerformed(java.awt.event.ActionEvent evt) {
-        // Displays the About dialog
-        
-        AboutGUI aboutWindow = new AboutGUI();
-        aboutWindow.setVisible(true);
-        aboutWindow.setTitle("About CF Evolution");
-        mainEditorWindow.add(aboutWindow);
-        aboutWindow.toFront();
-        try
-        {
-            aboutWindow.setSelected(true);
-        }
-        catch (Exception exceptionError)
-        {
-            exceptionError.printStackTrace();
-        }
-    }
-
-    private void windowResizeEvent(java.awt.event.ComponentEvent evt) {
-        // Detects any change in the size of the main editor window and adjusts internal frames accordingly
-        
-        // WARNING: Will need to be implemented
-        
-    }
-    
-    public void updateIndividualMenu(JMenuItem selectedMenuItem, int recentElement)
-    {
-        // Updates a specific menu item
-        
-        RecentFiles usedFiles = new RecentFiles();
-        if ((usedFiles.getRecentFilePath(recentElement)).compareTo("") == 0)
-        {
-            selectedMenuItem.setVisible(false);
-        }
-        else
-        {
-            selectedMenuItem.setVisible(true);
-            final String recentFileName = usedFiles.getRecentFileName(recentElement);
-            selectedMenuItem.setText(recentFileName);
-        }        
-    }
-    
-    public void updateRecentFileList(String newFileName)
-    {
-    
-        // Updates the list of recently used files. If a filename is provided by parameter,
-        // the list will include this new file. If not, the list will merely be refreshed
-        
-        RecentFiles usedFiles = new RecentFiles();
-        if (usedFiles.addNewFile(newFileName) == true)
-        {
-            menuSeparator2.setVisible(true);            
-            updateIndividualMenu(lastFileMenuOne,0);
-            updateIndividualMenu(lastFileMenuTwo,1);
-            updateIndividualMenu(lastFileMenuThree,2);
-            updateIndividualMenu(lastFileMenuFour,3);
-        }
-        else
-        {
-            if (usedFiles.getNumberFiles() == 0)
-            {
-                menuSeparator2.setVisible(false);
-            }
-            else
-            {
-                menuSeparator2.setVisible(true);
-            }
-            updateIndividualMenu(lastFileMenuOne,0);
-            updateIndividualMenu(lastFileMenuTwo,1);
-            updateIndividualMenu(lastFileMenuThree,2);
-            updateIndividualMenu(lastFileMenuFour,3);
-        }                           
-    }       
-    
     public void openTrackFile(String fileName)
     {
-        
-        // Open a track file from a parameter passed filename by using Klaus's track input processing
-        
+        if (selectIfOpen(fileName))
+            return;
         File trackFile = new File(fileName);
-        Preferences userData = Preferences.userRoot();
-        Preferences cheqFlagData = userData.node("cfevolution");
-        cheqFlagData.put("LastLoadedTrackDir", trackFile.getParent());
-        currentTrack = new Track();
-        boolean loadSuccess = currentTrack.load(trackFile);
-           
-        if (loadSuccess == true)
+        Preferences cheqFlagData = Preferences.userRoot().node("cfevolution");
+        cheqFlagData.put("LastLoadedTrackDir", String.valueOf(trackFile.getParent()));
+        Track currentTrack = new Track();
+        if (currentTrack.load(trackFile))
         {
-              
-            // Updates the list of recently updated files
-                
-            updateRecentFileList(fileName);           
-                
-            // Calculate size of track editing window
-                
-            int windowX = mainEditorWindow.getWidth();
-            int windowY = mainEditorWindow.getHeight();
-            TrackWindow newTrackWindow = new TrackWindow(currentTrack, fileName, this);
-            newTrackWindow.reshape(0,0,windowX,windowY);
-            newTrackWindow.setVisible(true);
-                
-            // Add track editor window
-        
-            mainEditorWindow.add(newTrackWindow);
-            newTrackWindow.positionWindows();
-            newTrackWindow.toFront();
+            updateRecentFileList(fileName);
+            addTab(new TrackWindow(currentTrack, fileName, this));
         }
         else
         {
             JOptionPane.showMessageDialog(this, "There was a problem loading the track file specified. \nIt is likely that this is either not a track file, or that the track itself is corrupt.\nPlease try another valid track file", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-    
-    private void loadTrack(java.awt.event.ActionEvent evt) {
-        // Handles the load track menu item and passes processing onto another method after prompting for a filename
-        
-        FileDialog fileDialog = new FileDialog(this,true);  
-        fileDialog.setFilterType(1);
-        String fileName = new String();
-        boolean cancelCalled = false;
+
+    /** Opens the executable named in Options, or asks for one (and
+        remembers it) when none has been chosen yet. */
+    private void openExecutable()
+    {
+        Preferences cheqFlagData = Preferences.userRoot().node("cfevolution");
+        String fileName = cheqFlagData.get("EXELocation", "");
+        FileDialog fileDialog = new FileDialog(this, true);
+        fileDialog.setFilterType(2);
+        fileDialog.setInitialDirectory(fileName);
         try
         {
-            Preferences userData = Preferences.userRoot();
-            Preferences cheqFlagData = userData.node("cfevolution");
-            fileDialog.setInitialDirectory(cheqFlagData.get("LastLoadedTrackDir", ""));
             fileName = fileDialog.showOpenDialog();
         }
         catch (Exception exceptionError)
         {
-            cancelCalled = true;
+            return; // cancelled
         }
-        if (cancelCalled == false)
-        {
-            openTrackFile(fileName);
-        }                
-                           
+        if (openExecutableFile(fileName))
+            cheqFlagData.put("EXELocation", fileName);
     }
-   
-    private void exitProgram(java.awt.event.ActionEvent evt) {
-        // Handles the file menu's exit program function. 
-        
-        quitCFEvolution();
-        
+
+    public boolean openExecutableFile(String fileName)
+    {
+        if (selectIfOpen(fileName))
+            return true;
+        Executable currentExecutable = new Executable(new File(fileName));
+        int loadSuccess = currentExecutable.loadData();
+        switch (loadSuccess)
+        {
+            case 0:
+                addTab(new ExecutableWindow(currentExecutable, fileName, this));
+                return true;
+            case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. \nThis may be because you have selected the wrong file, or \nbecause this executable has not been updated to version \n1.05. In the latter case, upgrading your copy of F1GP/WC to \n1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
+            case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this \nexecutable file. It is likely that this is either not a \nF1GP/WC executable file, or that the executable itself is \ncorrupt.Please try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
+            case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version \nof F1GP/WC. An unpacked version of this file is required for \nediting in CF Evolution. Please see the documentation \nfor more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
+        }
+        return false;
+    }
+
+    /** Opens files dropped on the window: .EXE as an executable, anything
+        else as a track. */
+    private class FileDropHandler extends TransferHandler
+    {
+        public boolean canImport(TransferSupport support)
+        {
+            return support.isDataFlavorSupported(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+        }
+
+        public boolean importData(TransferSupport support)
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                List<File> files = (List<File>) support.getTransferable()
+                    .getTransferData(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
+                for (File f : files)
+                {
+                    if (f.getName().toLowerCase().endsWith(".exe"))
+                        openExecutableFile(f.getPath());
+                    else
+                        openTrackFile(f.getPath());
+                }
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
+    }
+
+    // --- Options, recent files, quitting ----------------------------------
+
+    public void openOptionsWindow()
+    {
+        new OptionsWindow(this).setVisible(true);
+    }
+
+    /** Re-applies the "Enable legacy options" preference to every open
+        track's Tools menu (called when the option is changed). */
+    public void refreshLegacyOptions()
+    {
+        for (EditorTab tab : tabs)
+            if (tab instanceof TrackWindow)
+                ((TrackWindow) tab).applyLegacyOptionsVisibility();
+    }
+
+    /** Adds a file to the recent list (an empty name only refreshes it). */
+    public void updateRecentFileList(String newFileName)
+    {
+        new RecentFiles().addNewFile(newFileName);
+        rebuildMenus();
+        if (tabs.isEmpty())
+            refreshWelcomeRecent();
     }
 
     public void quitCFEvolution()
     {
-        // Immediately exits the program after user confirmation
-        
-        if (closingProgram == false)
+        // Closes every tab (each asks about unsaved changes), then exits
+        while (!tabs.isEmpty())
         {
-            int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to quit?", "Quit CF Evolution", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (selectionOption == JOptionPane.YES_OPTION)
-            {
-                closingProgram = true;
-                System.exit(0);
-            }       
-        }        
+            if (!closeTab(tabs.get(tabs.size() - 1)))
+                return;
+        }
+        System.exit(0);
     }
-    
-    private void fileMenuActionPerformed(java.awt.event.ActionEvent evt) {
-        // TODO add your handling code here:
-    }
-    
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String args[]) 
-    {
-        java.awt.EventQueue.invokeLater(new Runnable() 
-        {
-            public void run() 
-            {
-                new MainGUI().setVisible(true);
-            }
-        });
-    }
-    
-    // Variables declaration
-    private javax.swing.JMenuItem aboutItem;
-    private javax.swing.JMenuItem exitItem;
-    private javax.swing.JMenu fileMenu;
-    private javax.swing.JMenu helpMenu;
-    private javax.swing.JMenuItem lastFileMenuFour;
-    private javax.swing.JMenuItem lastFileMenuOne;
-    private javax.swing.JMenuItem lastFileMenuThree;
-    private javax.swing.JMenuItem lastFileMenuTwo;
-    private javax.swing.JDesktopPane mainEditorWindow;
-    private javax.swing.JMenuBar mainMenuBar;
-    private javax.swing.JSeparator menuSeparator1;
-    private javax.swing.JSeparator menuSeparator2;
-    private javax.swing.JSeparator menuSeparator3;
-    private javax.swing.JMenuItem openExecutable;
-    private javax.swing.JMenu openMenu;
-    private javax.swing.JMenuItem openTrack;
-    private javax.swing.JMenuItem optionsMenu;
-    // End of variables declaration
-    
 }

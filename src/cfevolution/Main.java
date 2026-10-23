@@ -44,10 +44,12 @@ public class Main
     {
         Preferences userData = Preferences.userRoot();
         Preferences cheqFlagData = userData.node("cfevolution");
-        String interfaceType = cheqFlagData.get("CFUIMode", "System Default");
+        // The look is applied before the window is built, so nothing has
+        // to be redrawn in a second look straight after start-up.
+        String interfaceType = cheqFlagData.get(ThemeManager.PREF_KEY, "CF Evolution");
+        new ThemeManager().setUserInterfaceType(interfaceType, null);
         mainScreen = new MainGUI();
-        ThemeManager userInterfaceTheme = new ThemeManager();
-        userInterfaceTheme.setUserInterfaceType(interfaceType, mainScreen);        
+        mainScreen.setVisible(true);
     }
        
     /**
@@ -55,7 +57,9 @@ public class Main
      */
     public static void main(String[] args) 
     {
-        Main CheqFlag = new Main();
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() { new Main(); }
+        });
     }
     
 }
