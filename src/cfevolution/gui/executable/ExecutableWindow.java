@@ -867,8 +867,24 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get() { return settings.getPitStopRaceDistance(); }
             public void set(int v) { settings.setPitStopRaceDistance(v); } },
             "The original game has 75. Shorter races have no pit stops.");
+        row(racing, "Shortest race (laps)", 1, 50, new Setting() {
+            public int get() { return settings.getMinimumRaceLaps(); }
+            public void set(int v) { settings.setMinimumRaceLaps(v); } },
+            "The original game has 3.");
+        row(racing, "Computer cars out at once in practice and qualifying", 1, 26, new Setting() {
+            public int get() { return settings.getMaxPracticeRunners(); }
+            public void set(int v) { settings.setMaxPracticeRunners(v); } },
+            "The original game has 16. The whole field is 26.");
         racing.add(tyres, wide());
         box.add(racing);
+        box.add(Box.createVerticalStrut(12));
+
+        JPanel championship = group("Championship");
+        row(championship, "Best results that count", 0, 16, new Setting() {
+            public int get() { return settings.getBestResultsCounted(); }
+            public void set(int v) { settings.setBestResultsCounted(v); } },
+            "The original game has 16, every race. 0 also counts every race.");
+        box.add(championship);
         box.add(Box.createVerticalStrut(12));
 
         JPanel weather = group("Weather");

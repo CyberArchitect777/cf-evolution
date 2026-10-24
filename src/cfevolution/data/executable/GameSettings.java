@@ -60,6 +60,17 @@ public class GameSettings
     // word immediate of `cmp word [bp+1226h],4Bh` in InitCarPitStopStrategy:
     // computer cars only plan a pit stop in a race of at least this % distance
     private static final int PIT_STOP_DISTANCE = 24867;
+    // InitNumRaceLaps: `mov ax,3` for the 5% distance, then `cmp ax,3 / jge /
+    // mov ax,3`, the shortest race. Code in seg001, which moves between builds
+    // (IT -44, US -36); found by its bytes in all three
+    private static final int[] MIN_LAPS_EU = { 112179, 112182, 112187 };
+    private static final int MIN_LAPS_IT = -44, MIN_LAPS_US = -36;
+    // InitCarsForNonRace: `cmp ax,10h / jle / mov ax,10h`, the most cars out on
+    // track at once in practice and qualifying (same place in all builds)
+    private static final int[] RUNNERS = { 66025, 66030 };
+    // wMaxRacePoints, the word just before the points table: only a driver's
+    // best N finishes count for the championship, 0 = all (data, shifted)
+    private static final int BEST_RESULTS = 183938;
     // millisecond immediates in the race control code
     private static final int YELLOW_FLAG_MS = 28269;
     private static final int RETIRED_REMOVED_MS = 28383;
@@ -76,6 +87,9 @@ public class GameSettings
     private int rainChanceRaw;
     private int rainEverywhereByte;
     private int pitStopDistance;
+    private int minRaceLaps, minRaceLapsLoaded;
+    private int maxRunners, maxRunnersLoaded;
+    private int bestResults;
     private int yellowFlagMs;
     private int retiredRemovedMs;
     private int retireAfterWall;
@@ -162,6 +176,39 @@ public class GameSettings
         pitStopDistance = percent;
     }
 
+    /** The fewest laps any race can have (the original game has 3). */
+    public int getMinimumRaceLaps()
+    {
+        return minRaceLaps;
+    }
+
+    public void setMinimumRaceLaps(int laps)
+    {
+        minRaceLaps = laps;
+    }
+
+    /** The most computer cars out on track at once in practice and qualifying (16). */
+    public int getMaxPracticeRunners()
+    {
+        return maxRunners;
+    }
+
+    public void setMaxPracticeRunners(int cars)
+    {
+        maxRunners = cars;
+    }
+
+    /** How many of a driver's best finishes count for the championship; 0 = all. */
+    public int getBestResultsCounted()
+    {
+        return bestResults;
+    }
+
+    public void setBestResultsCounted(int results)
+    {
+        bestResults = results;
+    }
+
     public int getYellowFlagSeconds()
     {
         return yellowFlagMs / 1000;
@@ -196,6 +243,12 @@ public class GameSettings
     private static byte[] word(int value)
     {
         return new byte[] { (byte) value, (byte) (value >> 8) };
+    }
+
+    private static int readWordAt(RandomAccessFile binaryAccess, int gameVersion, int european, int italian, int us)
+    {
+        byte[] data = BinaryManager.getDataBytes(gameVersion, binaryAccess, european, italian, us, 2);
+        return (data[0] & 0xFF) | ((data[1] & 0xFF) << 8);
     }
 
     private static int readWord(RandomAccessFile binaryAccess, int gameVersion, int europeanOffset, int shift)
@@ -252,6 +305,17 @@ public class GameSettings
         BinaryManager.setDataBytes(gameVersion, binaryAccess, RAIN_EVERYWHERE, RAIN_EVERYWHERE, RAIN_EVERYWHERE,
                                    new byte[] { (byte) rainEverywhereByte });
         writeWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0, pitStopDistance);
+        writeWord(binaryAccess, gameVersion, BEST_RESULTS, 1, bestResults);
+        // The patched immediates are only rewritten when changed, so a file
+        // another tool edited at one of them keeps its other bytes
+        if (minRaceLaps != minRaceLapsLoaded)
+            for (int eu : MIN_LAPS_EU)
+                BinaryManager.setDataBytes(gameVersion, binaryAccess, eu, eu + MIN_LAPS_IT, eu + MIN_LAPS_US, word(minRaceLaps));
+        if (maxRunners != maxRunnersLoaded)
+            for (int at : RUNNERS)
+                writeWord(binaryAccess, gameVersion, at, 0, maxRunners);
+        minRaceLapsLoaded = minRaceLaps;
+        maxRunnersLoaded = maxRunners;
         writeWord(binaryAccess, gameVersion, YELLOW_FLAG_MS, 0, yellowFlagMs);
         writeWord(binaryAccess, gameVersion, RETIRED_REMOVED_MS, 0, retiredRemovedMs);
         writeWord(binaryAccess, gameVersion, RETIRE_WALL, 1, retireAfterWall);
@@ -289,6 +353,10 @@ public class GameSettings
         rainEverywhereByte = BinaryManager.getDataBytes(gameVersion, binaryAccess,
             RAIN_EVERYWHERE, RAIN_EVERYWHERE, RAIN_EVERYWHERE, 1)[0] & 0xFF;
         pitStopDistance = readWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0);
+        bestResults = readWord(binaryAccess, gameVersion, BEST_RESULTS, 1);
+        minRaceLaps = minRaceLapsLoaded = readWordAt(binaryAccess, gameVersion, MIN_LAPS_EU[1],
+                                                     MIN_LAPS_EU[1] + MIN_LAPS_IT, MIN_LAPS_EU[1] + MIN_LAPS_US);
+        maxRunners = maxRunnersLoaded = readWord(binaryAccess, gameVersion, RUNNERS[0], 0);
         yellowFlagMs = readWord(binaryAccess, gameVersion, YELLOW_FLAG_MS, 0);
         retiredRemovedMs = readWord(binaryAccess, gameVersion, RETIRED_REMOVED_MS, 0);
         retireAfterWall = readWord(binaryAccess, gameVersion, RETIRE_WALL, 1);
