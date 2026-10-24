@@ -57,6 +57,9 @@ public class GameSettings
     // high byte of `test word [0174h],4000h`: 40h keeps dry the circuits
     // whose track file asks for it (Phoenix); 0 ignores that request
     private static final int RAIN_EVERYWHERE = 111746;
+    // word immediate of `cmp word [bp+1226h],4Bh` in InitCarPitStopStrategy:
+    // computer cars only plan a pit stop in a race of at least this % distance
+    private static final int PIT_STOP_DISTANCE = 24867;
     // millisecond immediates in the race control code
     private static final int YELLOW_FLAG_MS = 28269;
     private static final int RETIRED_REMOVED_MS = 28383;
@@ -72,6 +75,7 @@ public class GameSettings
     private int aiGripLevelLoaded;
     private int rainChanceRaw;
     private int rainEverywhereByte;
+    private int pitStopDistance;
     private int yellowFlagMs;
     private int retiredRemovedMs;
     private int retireAfterWall;
@@ -145,6 +149,17 @@ public class GameSettings
     {
         if (newValue != getRainEverywhere())
             rainEverywhereByte = newValue ? 0x00 : 0x40;
+    }
+
+    /** Shortest race, as % of full distance, in which computer cars plan a pit stop. */
+    public int getPitStopRaceDistance()
+    {
+        return pitStopDistance;
+    }
+
+    public void setPitStopRaceDistance(int percent)
+    {
+        pitStopDistance = percent;
     }
 
     public int getYellowFlagSeconds()
@@ -236,6 +251,7 @@ public class GameSettings
         writeWord(binaryAccess, gameVersion, RAIN_CHANCE, 0, rainChanceRaw);
         BinaryManager.setDataBytes(gameVersion, binaryAccess, RAIN_EVERYWHERE, RAIN_EVERYWHERE, RAIN_EVERYWHERE,
                                    new byte[] { (byte) rainEverywhereByte });
+        writeWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0, pitStopDistance);
         writeWord(binaryAccess, gameVersion, YELLOW_FLAG_MS, 0, yellowFlagMs);
         writeWord(binaryAccess, gameVersion, RETIRED_REMOVED_MS, 0, retiredRemovedMs);
         writeWord(binaryAccess, gameVersion, RETIRE_WALL, 1, retireAfterWall);
@@ -272,6 +288,7 @@ public class GameSettings
         rainChanceRaw = readWord(binaryAccess, gameVersion, RAIN_CHANCE, 0);
         rainEverywhereByte = BinaryManager.getDataBytes(gameVersion, binaryAccess,
             RAIN_EVERYWHERE, RAIN_EVERYWHERE, RAIN_EVERYWHERE, 1)[0] & 0xFF;
+        pitStopDistance = readWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0);
         yellowFlagMs = readWord(binaryAccess, gameVersion, YELLOW_FLAG_MS, 0);
         retiredRemovedMs = readWord(binaryAccess, gameVersion, RETIRED_REMOVED_MS, 0);
         retireAfterWall = readWord(binaryAccess, gameVersion, RETIRE_WALL, 1);

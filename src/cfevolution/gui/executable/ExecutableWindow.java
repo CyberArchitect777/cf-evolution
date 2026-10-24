@@ -863,6 +863,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
         box.add(Box.createVerticalStrut(12));
 
         JPanel racing = group("Racing");
+        row(racing, "Computer cars make pit stops in races of at least (%)", 1, 100, new Setting() {
+            public int get() { return settings.getPitStopRaceDistance(); }
+            public void set(int v) { settings.setPitStopRaceDistance(v); } },
+            "The original game has 75. Shorter races have no pit stops.");
         racing.add(tyres, wide());
         box.add(racing);
         box.add(Box.createVerticalStrut(12));

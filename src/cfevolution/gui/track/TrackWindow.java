@@ -275,6 +275,22 @@ public class TrackWindow extends JPanel implements EditorTab
         generateLineRefine.setVisible(legacy);
     }
 
+    /** Race length and the computer cars' pit stop plan, kept in the track file's footer. */
+    private void editRaceStrategy()
+    {
+        applyPendingEdits();
+        if (!cfevolution.data.track.RaceStrategy.isAvailable(currentTrack.getFooter()))
+        {
+            JOptionPane.showMessageDialog(this, "This track file does not have race settings to change.",
+                "Race Strategy", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        RaceStrategyDialog dialog = new RaceStrategyDialog(this, currentTrack.getFooter());
+        dialog.setVisible(true);
+        if (dialog.wasChanged())
+            setModified(true);
+    }
+
     // --- Menus ----------------------------------------------------------
 
     private JMenuItem item(String text, final Runnable action)
@@ -298,6 +314,8 @@ public class TrackWindow extends JPanel implements EditorTab
             applyPendingEdits(); } });
         apply.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ENTER, java.awt.event.InputEvent.CTRL_DOWN_MASK));
         editMenu.add(apply);
+        editMenu.addSeparator();
+        editMenu.add(item("Race Strategy...", new Runnable() { public void run() { editRaceStrategy(); } }));
         editMenu.addSeparator();
         editMenu.add(removeTrack);
         editMenu.add(removePit);
