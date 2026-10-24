@@ -147,7 +147,7 @@ public class GameDrivers
             dataValues = BinaryManager.getDataBytes(gameVersion, binaryAccess, startingValue[0]+currentOffset, startingValue[1]+currentOffset, startingValue[2]+currentOffset, 23);
             while (readEnd == false)
             {
-                if ((dataValues[currentByteCount] != 0x00) && (currentByteCount < 23))
+                if ((currentByteCount < 23) && (dataValues[currentByteCount] != 0x00))
                 {
                     char currentCharacter = (char)dataValues[currentByteCount];
                     currentString.append(currentCharacter);

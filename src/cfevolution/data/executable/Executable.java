@@ -41,6 +41,7 @@ public class Executable
     private GamePoints gamePoints;
     private GameDrivers gameDrivers;
     private GameTeams gameTeams;
+    private GameLiveries gameLiveries;
     
     /** Creates a new instance of Executable */
     public Executable(File loadedFile)
@@ -64,6 +65,7 @@ public class Executable
         gamePoints = new GamePoints();
         gameDrivers = new GameDrivers();
         gameTeams = new GameTeams();
+        gameLiveries = new GameLiveries();
     }
     
     public int returnGameVersionID()
@@ -106,6 +108,11 @@ public class Executable
     {
         return gameTeams;
     }
+
+    public GameLiveries getGameLiveries()
+    {
+        return gameLiveries;
+    }
     
     public boolean saveData()
     {
@@ -122,6 +129,7 @@ public class Executable
             operationSuccess = operationSuccess + gamePoints.saveData(binaryAccess, gameVersion);
             operationSuccess = operationSuccess + gameDrivers.saveData(binaryAccess, gameVersion);
             operationSuccess = operationSuccess + gameTeams.saveData(binaryAccess, gameVersion);
+            operationSuccess = operationSuccess + gameLiveries.saveData(binaryAccess, gameVersion);
             binaryAccess.close();
             if (operationSuccess == 0)
             {
@@ -167,6 +175,8 @@ public class Executable
                     operationSuccess = operationSuccess + gamePoints.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameDrivers.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameTeams.loadData(binaryAccess, gameVersion);
+                    operationSuccess = operationSuccess + gameLiveries.loadData(binaryAccess, gameVersion);
+                    binaryAccess.close();
                     if (operationSuccess == 0)
                     {
                         return 0;

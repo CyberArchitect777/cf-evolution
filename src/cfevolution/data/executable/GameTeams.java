@@ -43,6 +43,9 @@ public class GameTeams
     private Vector<String> teamNames;
     private Vector<String> engineNames;
     private int[] bhpSetting;
+    // Two bytes per team: the car numbers that drive for it (0 = none).
+    // The low six bits are the number; the top two are flags kept as read.
+    private int[] lineUp;
         
     /** Creates a new instance of GameTeams */
     public GameTeams() 
@@ -54,7 +57,20 @@ public class GameTeams
         {
             bhpSetting[x] = 0;
         }
-        
+        lineUp = new int[40];
+    }
+
+    /** The car number in a team's first (slot 0) or second (slot 1) seat,
+        or 0 when the seat is empty. */
+    public int getTeamCar(int teamIndex, int slot)
+    {
+        return lineUp[teamIndex * 2 + slot] & 0x3F;
+    }
+
+    public void setTeamCar(int teamIndex, int slot, int carNumber)
+    {
+        int index = teamIndex * 2 + slot;
+        lineUp[index] = (lineUp[index] & 0xC0) | (carNumber & 0x3F);
     }
     
     public String getTeamName(int nameIndex)
@@ -129,6 +145,12 @@ public class GameTeams
             currentCounter++;
         }
         BinaryManager.setDataBytes(gameVersion, binaryAccess, 183996, 183932, 183948, bhpSettingData);
+        byte[] lineUpData = new byte[40];
+        for (int x=0;x<40;x++)
+        {
+            lineUpData[x] = (byte)lineUp[x];
+        }
+        BinaryManager.setDataBytes(gameVersion, binaryAccess, 180210, 180146, 180162, lineUpData);
         byte[] teamEngineByteName = new byte[12];
         int currentOffset = 0;
         for (int x=0;x<40;x++)
@@ -208,6 +230,12 @@ public class GameTeams
                 currentByteCount++;
             }
             currentOffset = currentOffset + 13;
+        }
+        // Team line-ups, just before the driver names
+        dataValues = BinaryManager.getDataBytes(gameVersion, binaryAccess, 180210, 180146, 180162, 40);
+        for (int x=0;x<40;x++)
+        {
+            lineUp[x] = dataValues[x] & 0xFF;
         }
         dataValues = BinaryManager.getDataBytes(gameVersion, binaryAccess, 183996, 183932, 183948, 40);
         int currentCounter = 0;
