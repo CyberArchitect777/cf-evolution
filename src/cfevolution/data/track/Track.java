@@ -327,6 +327,18 @@ public class Track {
         original, has 205. */
     public static final int MAX_PIT_SEGS = 220;
 
+    /** The most track Segs the game compiles. TCCompileTrack hangs (jmp $)
+        past 1,419 real Segs (F1GP-SDL, measured on Belgium 2026-10-11: 1,419
+        compiles, 1,420 hangs). Spa, the longest original, has 1,417. */
+    public static final int MAX_TRACK_SEGS = 1419;
+
+    /** Track Segs as the game compiles them, one per TLU. Needs the layout
+        calculated. */
+    public int getTrackSegCount()
+    {
+        return m_TrackSegments.getMaxTrackSegIndex() + 1;
+    }
+
     /** Pit lane Segs as the game compiles them, one per TLU. Needs the
         layout calculated. */
     public int getPitSegCount()

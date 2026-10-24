@@ -29,40 +29,58 @@ import java.io.*;
 import cfevolution.data.*;
 
 /**
+ * The 38-byte computer car set-up and behaviour block of a track file
+ * ("CC setup", the game's strTrkCCSetup and wTrk* values at seg003:0204h).
+ *
+ * Kept as the raw bytes read, so it always saves back exactly as loaded;
+ * the accessors below read and write single fields. Layout (F1GP-SDL's
+ * reading of TCLoadCCSetup, IDA 0x8FCCC; the field names are the game's):
+ *   bytes 0-7  front wing, rear wing, gears 1-6, each stored + 151
+ *   byte 8     tyre compound, stored + 52 (0 = A .. 3 = D; C on every original)
+ *   byte 9     brake balance
+ *   then 14 words, most a factor where 16384 (4000h) = 100%:
+ *   grip, CC aggression non-race, CC aggression race, time factor non-race
+ *   (the race clock's scale, which sets how long lap times look), power,
+ *   air resistance, tyre wear qualifying, tyre wear other sessions (an
+ *   UNSIGNED factor: Germany's 33896 is 207%), fuel load, time factor race,
+ *   CC power (only below Ace: (value - 4000h) x (4 - opposition level) is
+ *   added to the computer cars' power), CC wet race aggression, formation
+ *   gap, and a heading-step threshold the computer cars brake by.
+ *
+ * Originally Klaus's field-by-field class; rewritten 2026-10-24.
  *
  * @author Klaus
  */
 public class CCSetup extends CFDataObject {
 
-    /** Creates a new instance of CCSetup */
+    public static final int SIZE = 38;
+
+    /** Bytes 0-9. */
+    public static final int FRONT_WING = 0, REAR_WING = 1, GEAR_1 = 2, TYRE = 8, BRAKE_BALANCE = 9;
+    /** Stored offsets of the set-up bytes. */
+    public static final int SETUP_OFFSET = 151, TYRE_OFFSET = 52;
+
+    /** Words 0-13, after the ten set-up bytes. */
+    public static final int GRIP = 0, AGGRESSION_PRACTICE = 1, AGGRESSION_RACE = 2, CLOCK_PRACTICE = 3,
+        POWER = 4, AIR_RESISTANCE = 5, WEAR_QUALIFYING = 6, WEAR_OTHER = 7, FUEL = 8, CLOCK_RACE = 9,
+        CC_POWER = 10, AGGRESSION_WET = 11, FORMATION_GAP = 12, BRAKE_THRESHOLD = 13;
+
+    /** The factor value meaning 100%. */
+    public static final int FULL = 0x4000;
+
+    private final byte[] m_baData = new byte[SIZE];
+
     public CCSetup() {
-        m_nGearRatio = new int[ 7 ]; // Gear ratios 1..6
     }
 
     public void load( FileInputStream fis)
     {
         try {
-            m_nFrontWing = fis.read();
-            m_nRearWing = fis.read();
-            for ( int i = 1; i <= 6; i++ )
-                m_nGearRatio[ i ] = fis.read();
-            m_nTyreType = fis.read();
-            m_nBrakeBalance = fis.read();
-            // From here values are 2 bytes!
-            m_nGrip = fis.read() + fis.read() * 256;
-            m_nQA = fis.read() + fis.read() * 256;
-            m_nRA = fis.read() + fis.read() * 256;
-            m_nQT = fis.read() + fis.read() * 256;
-            m_nAccel = fis.read() + fis.read() * 256;
-            m_nAirRes = fis.read() + fis.read() * 256;
-            m_nUnk1 = fis.read() + fis.read() * 256;
-            m_nTW1 = fis.read() + fis.read() * 256;
-            m_nTW2 = fis.read() + fis.read() * 256;
-            m_nRT = fis.read() + fis.read() * 256;
-            m_nUnk2 = fis.read() + fis.read() * 256;;
-            m_nWetRA = fis.read() + fis.read() * 256;
-            m_nUnk3 = fis.read() + fis.read() * 256;
-            m_nUnk4 = fis.read() + fis.read() * 256;
+            for (int i = 0; i < SIZE; i++)
+            {
+                int b = fis.read();
+                m_baData[i] = (byte) (b < 0 ? 0 : b);
+            }
         }
         catch( IOException ioe )
         {
@@ -71,40 +89,46 @@ public class CCSetup extends CFDataObject {
 
     public int save(FileOutputStream fos) throws IOException
     {
-        // writing single bytes
-        fos.write( m_nFrontWing );
-        fos.write( m_nRearWing );
-        for ( int i = 1; i <= 6; i++ )
-            fos.write( m_nGearRatio[ i ] );
-        fos.write( m_nTyreType );
-        fos.write( m_nBrakeBalance );
-        // From here values are 2 bytes!
-        write( fos, m_nGrip );
-        write( fos, m_nQA );
-        write( fos, m_nRA );
-        write( fos, m_nQT );
-        write( fos, m_nAccel );
-        write( fos, m_nAirRes );
-        write( fos, m_nUnk1 );
-        write( fos, m_nTW1 );
-        write( fos, m_nTW2 );
-        write( fos, m_nRT );
-        write( fos, m_nUnk2 );
-        write( fos, m_nWetRA );
-        write( fos, m_nUnk3 );
-        write( fos, m_nUnk4 );
-        return 38; // number of bytes written
+        fos.write(m_baData);
+        return SIZE;
     }
 
-    // instance data members
-    protected int m_nFrontWing, m_nRearWing;
-    protected int m_nGearRatio[];
-    protected int m_nTyreType;
-    protected int m_nBrakeBalance;
-    protected int m_nGrip;
-    protected int m_nQA, m_nRA, m_nQT;
-    protected int m_nAccel, m_nAirRes;
-    protected int m_nUnk1, m_nUnk2, m_nUnk3, m_nUnk4;
-    protected int m_nTW1, m_nTW2, m_nRT;
-    protected int m_nWetRA;
+    /** A raw set-up byte, 0-9. */
+    public int getByte(int index)
+    {
+        return m_baData[index] & 0xFF;
+    }
+
+    public void setByte(int index, int value)
+    {
+        m_baData[index] = (byte) value;
+    }
+
+    /** A raw word, 0-13 (unsigned). */
+    public int getWord(int index)
+    {
+        int o = 10 + index * 2;
+        return (m_baData[o] & 0xFF) | ((m_baData[o + 1] & 0xFF) << 8);
+    }
+
+    public void setWord(int index, int value)
+    {
+        int o = 10 + index * 2;
+        m_baData[o] = (byte) value;
+        m_baData[o + 1] = (byte) (value >> 8);
+    }
+
+    /** A factor word as a whole percentage of 100% (16384). */
+    public int getPercent(int index)
+    {
+        return Math.round(getWord(index) * 100f / FULL);
+    }
+
+    /** Sets a factor word from a percentage, only if the percentage shown
+        changes, so values that are not whole percentages survive. */
+    public void setPercent(int index, int percent)
+    {
+        if (percent != getPercent(index))
+            setWord(index, Math.min(0xFFFF, percent * FULL / 100));
+    }
 }

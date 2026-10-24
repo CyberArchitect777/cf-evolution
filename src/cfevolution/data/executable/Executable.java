@@ -42,23 +42,13 @@ public class Executable
     private GameDrivers gameDrivers;
     private GameTeams gameTeams;
     private GameLiveries gameLiveries;
+    private GameTables gameTables;
     
     /** Creates a new instance of Executable */
     public Executable(File loadedFile)
     {
         gameFile = loadedFile;
-        int executableSize = (int)gameFile.length();     
-                
-        switch(executableSize)
-        {
-            case 600480: gameVersion = 1; System.out.println("1.05 European unpacked version detected"); break;
-            case 600336: gameVersion = 2; System.out.println("1.05 Italian unpacked version detected"); break;
-            case 600320: gameVersion = 3; System.out.println("1.05 US unpacked version detected"); break;
-            case 321878: gameVersion = 4; System.out.println("1.05 European packed version detected"); break;
-            case 321748: gameVersion = 5; System.out.println("1.05 Italian packed version detected"); break;
-            case 321716: gameVersion = 6; System.out.println("1.05 US packed version detected"); break;
-            default: gameVersion = 7; break;
-        }    
+        gameVersion = identify(gameFile);
         
         gameOptions = new GameOptions();
         gameSettings = new GameSettings();
@@ -66,8 +56,70 @@ public class Executable
         gameDrivers = new GameDrivers();
         gameTeams = new GameTeams();
         gameLiveries = new GameLiveries();
+        gameTables = new GameTables();
     }
     
+    /*
+     * Builds are recognised by their CONTENT (2026-10-24), not the file size,
+     * so a file another tool has extended still opens and a different file
+     * that happens to have the right size does not. Two fingerprints no tool
+     * edits must both be where the build puts them:
+     *  - the start of InitNumRaceLaps in seg001, which sits at a different
+     *    place in each build (`shr ax,1 / cmp word [bp+1226h],5 / jnz / mov`);
+     *  - wNumTeams, the unnamed word and wHighestCarId (18, 17, 35) in seg004,
+     *    at the data offsets every table here uses (IT -64, US -48).
+     * The packed builds compress those tables, so they are still told apart by
+     * size, only to explain that they cannot be edited.
+     */
+    private static final byte[] CODE_PRINT = { (byte)0xD1, (byte)0xE8, (byte)0x81, (byte)0xBE, 0x26, 0x12, 0x05, 0x00, 0x75, 0x03, (byte)0xB8 };
+    private static final int[] CODE_AT = { 112168, 112124, 112132 };
+    private static final byte[] DATA_PRINT = { 0x12, 0x00, 0x11, 0x00, 0x23, 0x00 };
+    private static final int[] DATA_AT = { 183970, 183906, 183922 };
+    private static final String[] BUILD_NAMES = { "European", "Italian", "US" };
+
+    /** 1-3 unpacked EU/IT/US, 4-6 packed EU/IT/US, 7 not recognised. */
+    public static int identify(File file)
+    {
+        try
+        {
+            RandomAccessFile raf = new RandomAccessFile(file, "r");
+            try
+            {
+                for (int build = 0; build < 3; build++)
+                    if (matches(raf, CODE_AT[build], CODE_PRINT) && matches(raf, DATA_AT[build], DATA_PRINT))
+                    {
+                        System.out.println("1.05 " + BUILD_NAMES[build] + " unpacked version detected");
+                        return build + 1;
+                    }
+            }
+            finally
+            {
+                raf.close();
+            }
+        }
+        catch (IOException e)
+        {
+            return 7;
+        }
+        switch ((int) file.length())
+        {
+            case 321878: return 4;
+            case 321748: return 5;
+            case 321716: return 6;
+            default: return 7;
+        }
+    }
+
+    private static boolean matches(RandomAccessFile raf, int offset, byte[] print) throws IOException
+    {
+        if (raf.length() < offset + print.length)
+            return false;
+        byte[] read = new byte[print.length];
+        raf.seek(offset);
+        raf.readFully(read);
+        return java.util.Arrays.equals(read, print);
+    }
+
     public int returnGameVersionID()
     {
         return gameVersion;
@@ -113,6 +165,11 @@ public class Executable
     {
         return gameLiveries;
     }
+
+    public GameTables getGameTables()
+    {
+        return gameTables;
+    }
     
     public boolean saveData()
     {
@@ -130,6 +187,7 @@ public class Executable
             operationSuccess = operationSuccess + gameDrivers.saveData(binaryAccess, gameVersion);
             operationSuccess = operationSuccess + gameTeams.saveData(binaryAccess, gameVersion);
             operationSuccess = operationSuccess + gameLiveries.saveData(binaryAccess, gameVersion);
+            operationSuccess = operationSuccess + gameTables.saveData(binaryAccess, gameVersion);
             binaryAccess.close();
             if (operationSuccess == 0)
             {
@@ -176,6 +234,7 @@ public class Executable
                     operationSuccess = operationSuccess + gameDrivers.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameTeams.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameLiveries.loadData(binaryAccess, gameVersion);
+                    operationSuccess = operationSuccess + gameTables.loadData(binaryAccess, gameVersion);
                     binaryAccess.close();
                     if (operationSuccess == 0)
                     {

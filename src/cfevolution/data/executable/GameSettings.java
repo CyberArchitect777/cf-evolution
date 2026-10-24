@@ -71,6 +71,12 @@ public class GameSettings
     // wMaxRacePoints, the word just before the points table: only a driver's
     // best N finishes count for the championship, 0 = all (data, shifted)
     private static final int BEST_RESULTS = 183938;
+    // `mov bx,2CCh` in InitTeamPower: a team's power is trackPower x its base
+    // BHP / this, so it is what every team's BHP is measured against (716)
+    private static final int TEAM_POWER_REFERENCE = 24523;
+    // `cmp cx,7` in CheckCarPitstopAtEndOfLap: no more cars start a pit stop
+    // while this many are already pitting (7)
+    private static final int MAX_PITTING = 12522;
     // millisecond immediates in the race control code
     private static final int YELLOW_FLAG_MS = 28269;
     private static final int RETIRED_REMOVED_MS = 28383;
@@ -87,6 +93,8 @@ public class GameSettings
     private int rainChanceRaw;
     private int rainEverywhereByte;
     private int pitStopDistance;
+    private int teamPowerReference;
+    private int maxPitting;
     private int minRaceLaps, minRaceLapsLoaded;
     private int maxRunners, maxRunnersLoaded;
     private int bestResults;
@@ -175,6 +183,14 @@ public class GameSettings
     {
         pitStopDistance = percent;
     }
+
+    /** The BHP every team's engine power is measured against (716). */
+    public int getTeamPowerReference() { return teamPowerReference; }
+    public void setTeamPowerReference(int bhp) { teamPowerReference = bhp; }
+
+    /** The most cars that can be in the pits for a stop at once (7). */
+    public int getMaxCarsPitting() { return maxPitting; }
+    public void setMaxCarsPitting(int cars) { maxPitting = cars; }
 
     /** The fewest laps any race can have (the original game has 3). */
     public int getMinimumRaceLaps()
@@ -306,6 +322,8 @@ public class GameSettings
                                    new byte[] { (byte) rainEverywhereByte });
         writeWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0, pitStopDistance);
         writeWord(binaryAccess, gameVersion, BEST_RESULTS, 1, bestResults);
+        writeWord(binaryAccess, gameVersion, TEAM_POWER_REFERENCE, 0, teamPowerReference);
+        writeWord(binaryAccess, gameVersion, MAX_PITTING, 0, maxPitting);
         // The patched immediates are only rewritten when changed, so a file
         // another tool edited at one of them keeps its other bytes
         if (minRaceLaps != minRaceLapsLoaded)
@@ -354,6 +372,8 @@ public class GameSettings
             RAIN_EVERYWHERE, RAIN_EVERYWHERE, RAIN_EVERYWHERE, 1)[0] & 0xFF;
         pitStopDistance = readWord(binaryAccess, gameVersion, PIT_STOP_DISTANCE, 0);
         bestResults = readWord(binaryAccess, gameVersion, BEST_RESULTS, 1);
+        teamPowerReference = readWord(binaryAccess, gameVersion, TEAM_POWER_REFERENCE, 0);
+        maxPitting = readWord(binaryAccess, gameVersion, MAX_PITTING, 0);
         minRaceLaps = minRaceLapsLoaded = readWordAt(binaryAccess, gameVersion, MIN_LAPS_EU[1],
                                                      MIN_LAPS_EU[1] + MIN_LAPS_IT, MIN_LAPS_EU[1] + MIN_LAPS_US);
         maxRunners = maxRunnersLoaded = readWord(binaryAccess, gameVersion, RUNNERS[0], 0);

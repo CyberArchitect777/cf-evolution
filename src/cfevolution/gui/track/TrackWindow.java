@@ -291,6 +291,37 @@ public class TrackWindow extends JPanel implements EditorTab
             setModified(true);
     }
 
+    /** Tools > Check Track: every check the editor has, with fixes. */
+    private void checkTrack()
+    {
+        applyPendingEdits();
+        new TrackCheckDialog(this, currentTrack, new TrackCheckDialog.Fixer() {
+            public void fix(int action) {
+                switch (action)
+                {
+                    case TrackCheck.ACTION_MOVE_TRACK: moveTrackFromEdge(); break;
+                    case TrackCheck.ACTION_MATCH_HEADING: addEndHeadingSegment(); break;
+                    case TrackCheck.ACTION_GENERATE_LINE:
+                        openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
+                        break;
+                }
+            }
+        }).setVisible(true);
+        // The checks recompile the layout (which changes nothing in the file);
+        // redraw without marking the track unsaved. Fixes mark it themselves.
+        mapWindow.redrawTrackMap();
+    }
+
+    /** The circuit's car and computer car settings (the CC setup block). */
+    private void editCarSettings()
+    {
+        applyPendingEdits();
+        CarSettingsDialog dialog = new CarSettingsDialog(this, currentTrack.getCCSetup());
+        dialog.setVisible(true);
+        if (dialog.wasChanged())
+            setModified(true);
+    }
+
     // --- Menus ----------------------------------------------------------
 
     private JMenuItem item(String text, final Runnable action)
@@ -316,6 +347,7 @@ public class TrackWindow extends JPanel implements EditorTab
         editMenu.add(apply);
         editMenu.addSeparator();
         editMenu.add(item("Race Strategy...", new Runnable() { public void run() { editRaceStrategy(); } }));
+        editMenu.add(item("Car and AI Settings...", new Runnable() { public void run() { editCarSettings(); } }));
         editMenu.addSeparator();
         editMenu.add(removeTrack);
         editMenu.add(removePit);
@@ -445,6 +477,14 @@ public class TrackWindow extends JPanel implements EditorTab
             }
         });
         toolsMenu.add(moveFromEdgeItem);
+        toolsMenu.addSeparator();
+        JMenuItem checkTrack = new JMenuItem("Check Track...");
+        checkTrack.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                checkTrack();
+            }
+        });
+        toolsMenu.add(checkTrack);
     }
 
     private void removeAllLine(java.awt.event.ActionEvent evt) {
@@ -986,6 +1026,14 @@ public class TrackWindow extends JPanel implements EditorTab
                    .append(nEntries - nBudget).append(" curve(s)\n")
                    .append("in the best line, or regenerate it.\n\n");
             }
+        }
+
+        int nTrackSegs = currentTrack.getTrackSegCount();
+        if (nTrackSegs > Track.MAX_TRACK_SEGS) {
+            msg.append("The track is ").append(nTrackSegs).append(" TLU long. The game allows at most ")
+               .append(Track.MAX_TRACK_SEGS).append(",\n")
+               .append("so it needs to lose ").append(nTrackSegs - Track.MAX_TRACK_SEGS)
+               .append(" TLU. Shorten some straights or remove a corner.\n\n");
         }
 
         int nPitSegs = currentTrack.getPitSegCount();

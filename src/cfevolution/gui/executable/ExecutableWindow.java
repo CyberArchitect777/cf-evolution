@@ -42,7 +42,8 @@ import javax.swing.table.DefaultTableCellRenderer;
  */
 public class ExecutableWindow extends JPanel implements EditorTab
 {
-    private static final String[] PAGES = { "Drivers", "Teams", "Points", "Liveries", "Game Settings" };
+    private static final String[] PAGES = { "Drivers", "Teams", "Points", "Liveries", "Game Settings",
+                                            "Pit Lane", "Set-ups", "Lap Records", "Car Physics", "Opposition Levels" };
 
     private MainGUI appFrame;
     private String fileName;
@@ -66,6 +67,11 @@ public class ExecutableWindow extends JPanel implements EditorTab
         pageContainer.add(pointsPage(), PAGES[2]);
         pageContainer.add(liveriesPage(), PAGES[3]);
         pageContainer.add(settingsPage(), PAGES[4]);
+        pageContainer.add(pitLanePage(), PAGES[5]);
+        pageContainer.add(setupsPage(), PAGES[6]);
+        pageContainer.add(lapRecordsPage(), PAGES[7]);
+        pageContainer.add(physicsPage(), PAGES[8]);
+        pageContainer.add(oppositionPage(), PAGES[9]);
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebar(), pageContainer);
         split.setDividerLocation(220);
@@ -859,6 +865,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 "1 is the original game. Higher gives every car more grip in corners, yours too.");
         else
             note(computerCars, "The grip setting in this file was changed by another tool, so it is left as it is.");
+        row(computerCars, "Team engine power measured against (BHP)", 100, 2000, new Setting() {
+            public int get() { return settings.getTeamPowerReference(); }
+            public void set(int v) { settings.setTeamPowerReference(v); } },
+            "The original game has 716. Raising it slows every team.");
         box.add(computerCars);
         box.add(Box.createVerticalStrut(12));
 
@@ -867,6 +877,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get() { return settings.getPitStopRaceDistance(); }
             public void set(int v) { settings.setPitStopRaceDistance(v); } },
             "The original game has 75. Shorter races have no pit stops.");
+        row(racing, "Most cars in the pits at once", 1, 26, new Setting() {
+            public int get() { return settings.getMaxCarsPitting(); }
+            public void set(int v) { settings.setMaxCarsPitting(v); } },
+            "The original game has 7. Team-mates never stop together.");
         row(racing, "Shortest race (laps)", 1, 50, new Setting() {
             public int get() { return settings.getMinimumRaceLaps(); }
             public void set(int v) { settings.setMinimumRaceLaps(v); } },
@@ -994,6 +1008,398 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JLabel hintLabel = new JLabel(hint);
         hintLabel.setForeground(new Color(0x6A7380));
         group.add(hintLabel, c);
+    }
+
+    // --- Number tables (set-ups, physics, opposition) ------------------------
+
+    /** One grid of stored numbers: a row label, then a column per value. */
+    private interface Cells
+    {
+        int get(int row, int col);
+        int original(int row, int col);
+        void set(int row, int col, int value);
+    }
+
+    /** Cells straight from a table, row-major, as unsigned or signed words. */
+    private static Cells words(final GameTables.Table t, final int cols, final boolean signed)
+    {
+        return new Cells() {
+            int fix(int v) { return signed ? (short) v : v; }
+            public int get(int r, int c) { return fix(t.word(r * cols + c)); }
+            public int original(int r, int c) { return fix(t.originalWord(r * cols + c)); }
+            public void set(int r, int c, int v) { t.setWord(r * cols + c, v); }
+        };
+    }
+
+    private JComponent grid(final String[] rows, final String[] cols, final int min, final int max, final Cells cells,
+                            int labelWidth, int cellWidth)
+    {
+        final AbstractTableModel model = new AbstractTableModel() {
+            public int getRowCount() { return rows.length; }
+            public int getColumnCount() { return cols.length + 1; }
+            public String getColumnName(int c) { return c == 0 ? "" : cols[c - 1]; }
+            public Class<?> getColumnClass(int c) { return c == 0 ? String.class : Integer.class; }
+            public boolean isCellEditable(int r, int c) { return c > 0; }
+            public Object getValueAt(int r, int c) { return c == 0 ? rows[r] : (Object) cells.get(r, c - 1); }
+            public void setValueAt(Object v, int r, int c) {
+                Integer n = number(v, min, max, "This value");
+                if (n == null || n.intValue() == cells.get(r, c - 1)) return;
+                cells.set(r, c - 1, n);
+                fireTableCellUpdated(r, c);
+            }
+        };
+        int[] widths = new int[cols.length + 1];
+        widths[0] = labelWidth;
+        for (int i = 1; i < widths.length; i++) widths[i] = cellWidth;
+        final JTable table = table(model, widths) ;
+        table.setDefaultRenderer(Integer.class, new StripedRenderer() {
+            public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int r, int c) {
+                Component comp = super.getTableCellRendererComponent(t, value, sel, focus, r, c);
+                int orig = cells.original(r, c - 1);
+                ((JComponent) comp).setToolTipText("Original: " + orig);
+                if (!sel) comp.setFont(comp.getFont().deriveFont(cells.get(r, c - 1) != orig ? Font.BOLD : Font.PLAIN));
+                return comp;
+            }
+        });
+        boolean wide = labelWidth + cols.length * cellWidth > 900;
+        if (wide) table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(Math.min(900, labelWidth + cols.length * cellWidth + 4),
+                                              24 * rows.length + table.getTableHeader().getPreferredSize().height + 4 + (wide ? 18 : 0)));
+        scroll.setAlignmentX(LEFT_ALIGNMENT);
+        scroll.setMaximumSize(new Dimension(Math.min(900, labelWidth + cols.length * cellWidth + 4), scroll.getPreferredSize().height));
+        return scroll;
+    }
+
+    /** A titled section of a scrolling page of grids. */
+    private static void section(JPanel box, String title, String note, JComponent content)
+    {
+        JLabel t = new JLabel(title);
+        t.setFont(t.getFont().deriveFont(Font.BOLD));
+        t.setBorder(BorderFactory.createEmptyBorder(12, 0, 2, 0));
+        t.setAlignmentX(LEFT_ALIGNMENT);
+        box.add(t);
+        if (note != null)
+        {
+            JLabel n = new JLabel(note);
+            n.setForeground(new Color(0x6A7380));
+            n.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+            n.setAlignmentX(LEFT_ALIGNMENT);
+            box.add(n);
+        }
+        box.add(content);
+    }
+
+    private static JComponent scrollingBox(JPanel box)
+    {
+        JPanel holder = new JPanel(new BorderLayout());
+        holder.add(box, BorderLayout.NORTH);
+        JScrollPane scroll = new JScrollPane(holder);
+        scroll.setBorder(null);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        return scroll;
+    }
+
+    private static JPanel verticalBox()
+    {
+        JPanel box = new JPanel();
+        box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
+        return box;
+    }
+
+    private static final String[] CIRCUITS = { "United States", "Brazil", "San Marino", "Monaco", "Canada", "Mexico",
+        "France", "Great Britain", "Germany", "Hungary", "Belgium", "Italy", "Portugal", "Spain", "Japan", "Australia" };
+    private static final String[] LEVELS = { "Rookie", "Amateur", "Semi-Pro", "Pro", "Ace" };
+    private static final String[] COMPOUNDS = { "A", "B", "C", "D", "Q", "W" };
+
+    // --- Pit lane -----------------------------------------------------------
+
+    private JComponent pitLanePage()
+    {
+        final GameTables.Table order = currentExecutable.getGameTables().pitOrder;
+        final GameTeams teams = currentExecutable.getGameTeams();
+        final AbstractTableModel model = new AbstractTableModel() {
+            public int getRowCount() { return 20; }
+            public int getColumnCount() { return 2; }
+            public String getColumnName(int c) { return c == 0 ? "Position along the pit lane" : "Team"; }
+            public boolean isCellEditable(int r, int c) { return c == 1; }
+            public Object getValueAt(int r, int c) {
+                if (c == 0) return (r + 1) + (r >= 18 ? "  (not used: 18 pit boxes)" : "");
+                return teamLabel(teams, order.getByte(r));
+            }
+            public void setValueAt(Object v, int r, int c) {
+                int team = Integer.parseInt(String.valueOf(v).trim().split(" ")[0]);
+                int was = order.getByte(r);
+                if (team == was) return;
+                // Keep every team exactly once: the team chosen swaps places with this one
+                for (int i = 0; i < 20; i++)
+                    if (order.getByte(i) == team) order.setByte(i, was);
+                order.setByte(r, team);
+                fireTableDataChanged();
+            }
+        };
+        JTable table = table(model, new int[] { 260, 260 });
+        String[] choices = new String[20];
+        for (int i = 0; i < 20; i++) choices[i] = teamLabel(teams, i + 1);
+        table.getColumnModel().getColumn(1).setCellEditor(new DefaultCellEditor(new JComboBox<String>(choices)));
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setPreferredSize(new Dimension(540, 520));
+        JPanel narrow = new JPanel(new BorderLayout());
+        narrow.add(scroll, BorderLayout.WEST);
+        return page("Pit Lane", "The order of the teams' pit boxes, from the start of the pit lane. Choosing a team swaps it with the one it replaces.", narrow);
+    }
+
+    private static String teamLabel(GameTeams teams, int team)
+    {
+        return team + "  " + (team >= 1 && team <= 20 ? teams.getTeamName(team - 1) : "?");
+    }
+
+    // --- Set-ups ------------------------------------------------------------
+
+    private JComponent setupsPage()
+    {
+        final GameTables tables = currentExecutable.getGameTables();
+        final GameDrivers drivers = currentExecutable.getGameDrivers();
+        String[] carRows = new String[40];
+        for (int i = 0; i < 40; i++) carRows[i] = (i + 1) + "  " + drivers.getDriverName(i);
+        String[] circuitRows = CIRCUITS;
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Each car", setupGrid(carRows, tables.carSetups, 0));
+        tabs.addTab("Each circuit", setupGrid(circuitRows, tables.circuitSetups, 0));
+        tabs.addTab("Each circuit, other session", setupGrid(circuitRows, tables.circuitSetups, 16));
+        return page("Set-ups",
+            "Starting car set-ups: each car's default, and each circuit's. The second circuit set is used when race and qualifying set-ups are kept separate.",
+            tabs);
+    }
+
+    private JComponent setupGrid(final String[] rows, final GameTables.Table t, final int firstRow)
+    {
+        final String[] cols = { "Front wing", "Rear wing", "Gear 1", "Gear 2", "Gear 3", "Gear 4", "Gear 5", "Gear 6", "Tyres", "Brake balance" };
+        final AbstractTableModel model = new AbstractTableModel() {
+            int at(int r, int c) { return (firstRow + r) * GameTables.SETUP_SIZE + c - 1; }
+            public int getRowCount() { return rows.length; }
+            public int getColumnCount() { return cols.length + 1; }
+            public String getColumnName(int c) { return c == 0 ? "" : cols[c - 1]; }
+            public boolean isCellEditable(int r, int c) { return c > 0; }
+            public Object getValueAt(int r, int c) {
+                if (c == 0) return rows[r];
+                int v = t.getByte(at(r, c));
+                if (c == 9) return v < COMPOUNDS.length ? COMPOUNDS[v] : String.valueOf(v);
+                if (c == 10) return (int) (byte) v;
+                return v;
+            }
+            public void setValueAt(Object v, int r, int c) {
+                int n;
+                if (c == 9)
+                {
+                    n = java.util.Arrays.asList(COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
+                    if (n < 0)
+                    {
+                        JOptionPane.showMessageDialog(ExecutableWindow.this, "Tyres must be one of A, B, C, D, Q or W.",
+                            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                }
+                else
+                {
+                    Integer i = c == 10 ? number(v, -127, 127, "Brake balance") : number(v, 0, 255, cols[c - 1]);
+                    if (i == null) return;
+                    n = i & 0xFF;
+                }
+                if (n == t.getByte(at(r, c))) return;
+                t.setByte(at(r, c), n);
+                fireTableCellUpdated(r, c);
+            }
+        };
+        int[] widths = new int[cols.length + 1];
+        widths[0] = 170;
+        for (int i = 1; i < widths.length; i++) widths[i] = 76;
+        return new JScrollPane(table(model, widths));
+    }
+
+    // --- Lap records --------------------------------------------------------
+
+    private static String lapTime(int ms)
+    {
+        return String.format("%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
+    }
+
+    private JComponent lapRecordsPage()
+    {
+        final GameTables tables = currentExecutable.getGameTables();
+        final String[] cols = { "Circuit", "Qualifying: driver", "Team", "Time", "Date", "Race: driver", "Team", "Time", "Date" };
+        final java.time.format.DateTimeFormatter dates = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK);
+        final AbstractTableModel model = new AbstractTableModel() {
+            public int getRowCount() { return 16; }
+            public int getColumnCount() { return cols.length; }
+            public String getColumnName(int c) { return cols[c]; }
+            public boolean isCellEditable(int r, int c) { return c > 0; }
+            public Object getValueAt(int r, int c) {
+                if (c == 0) return CIRCUITS[r];
+                boolean race = c >= 5;
+                switch ((c - 1) % 4)
+                {
+                    case 0: return tables.getRecordDriver(r, race);
+                    case 1: return tables.getRecordTeam(r, race);
+                    case 2: return lapTime(tables.getRecordTime(r, race));
+                    default: return GameTables.dateOfDay(tables.getRecordDay(r, race)).format(dates);
+                }
+            }
+            public void setValueAt(Object v, int r, int c) {
+                boolean race = c >= 5;
+                String text = String.valueOf(v).trim();
+                switch ((c - 1) % 4)
+                {
+                    case 0: {
+                        String n = name(text, GameTables.NAME_LENGTH - 1, "A driver's name");
+                        if (n == null || n.equals(tables.getRecordDriver(r, race))) return;
+                        tables.setRecordDriver(r, race, n);
+                        break;
+                    }
+                    case 1: {
+                        String n = name(text, GameTables.TEAM_LENGTH - 1, "A team name");
+                        if (n == null || n.equals(tables.getRecordTeam(r, race))) return;
+                        tables.setRecordTeam(r, race, n);
+                        break;
+                    }
+                    case 2: {
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+):(\\d{1,2})\\.(\\d{1,3})").matcher(text);
+                        int ms = -1;
+                        if (m.matches() && Integer.parseInt(m.group(2)) < 60)
+                        {
+                            String frac = (m.group(3) + "00").substring(0, 3);
+                            ms = Integer.parseInt(m.group(1)) * 60000 + Integer.parseInt(m.group(2)) * 1000 + Integer.parseInt(frac);
+                        }
+                        if (ms <= 0 || ms >= 60 * 60000)
+                        {
+                            JOptionPane.showMessageDialog(ExecutableWindow.this,
+                                "A lap time must look like 1:21.434 (minutes, seconds, thousandths).",
+                                "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                            return;
+                        }
+                        if (ms == tables.getRecordTime(r, race)) return;
+                        tables.setRecordTime(r, race, ms);
+                        break;
+                    }
+                    default: {
+                        java.time.LocalDate d = null;
+                        for (String pattern : new String[] { "d MMM yyyy", "d/M/yyyy", "d-M-yyyy", "yyyy-M-d" })
+                            try { d = java.time.LocalDate.parse(text, java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.UK)); break; }
+                            catch (java.time.format.DateTimeParseException e) { /* next pattern */ }
+                        int day = d == null ? -1 : GameTables.dayOfDate(d);
+                        if (day < 0)
+                        {
+                            JOptionPane.showMessageDialog(ExecutableWindow.this,
+                                "A date must look like 10 Mar 1991 or 10/3/1991, from 1978 onwards. The game has no 29 February 2000.",
+                                "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                            return;
+                        }
+                        if (day == tables.getRecordDay(r, race)) return;
+                        tables.setRecordDay(r, race, day);
+                    }
+                }
+                fireTableCellUpdated(r, c);
+            }
+        };
+        JTable table = table(model, new int[] { 110, 150, 100, 80, 100, 150, 100, 80, 100 });
+        return page("Lap Records", "The lap records the game starts with, for qualifying and the race at each circuit.",
+                    new JScrollPane(table));
+    }
+
+    // --- Car physics --------------------------------------------------------
+
+    private JComponent physicsPage()
+    {
+        final GameTables t = currentExecutable.getGameTables();
+        JPanel box = verticalBox();
+        JLabel intro = new JLabel("<html>These change how every car in the game behaves, yours included. Hover over a value to see "
+            + "the original; changed values are shown in bold.</html>");
+        intro.setAlignmentX(LEFT_ALIGNMENT);
+        box.add(intro);
+
+        String[] rpm = new String[33];
+        for (int i = 0; i < 33; i++) rpm[i] = String.valueOf(i * 512);
+        section(box, "Engine torque at each engine speed (rpm)", "The qualifying engine revs higher. Torque falls to 0 at the rev limit.",
+            grid(new String[] { "Race engine", "Qualifying engine" }, rpm, 0, 65535, new Cells() {
+                GameTables.Table of(int r) { return r == 0 ? t.torqueRace : t.torqueQualifying; }
+                public int get(int r, int c) { return of(r).word(c); }
+                public int original(int r, int c) { return of(r).originalWord(c); }
+                public void set(int r, int c, int v) { of(r).setWord(c, v); }
+            }, 150, 56));
+        String[] grip = { "1", "2", "3", "4", "5", "6", "7", "8" };
+        section(box, "Tyre grip, dry weather", "Eight values for each compound: base grip, then how it warms up, peaks and wears.",
+            grid(COMPOUNDS, grip, -32768, 32767, words(t.tyreGripDry, 8, true), 150, 70));
+        section(box, "Tyre grip, wet weather", null, grid(COMPOUNDS, grip, -32768, 32767, words(t.tyreGripWet, 8, true), 150, 70));
+        section(box, "Lowest grip a worn tyre can fall to", null,
+            grid(new String[] { "Grip floor" }, new String[] { "Dry", "Wet" }, 0, 65535, words(t.minimumGrip, 2, false), 150, 70));
+        section(box, "Car weight and fuel (lb)", "The weight is stored twice and both copies change together. It cannot be 0, which crashes the game.",
+            grid(new String[] { "Car weight", "Fuel" }, new String[] { "Value", "Second value" }, 0, 65535, new Cells() {
+                public int get(int r, int c) { return r == 0 ? t.carWeight.word(c) : t.fuel.word(c); }
+                public int original(int r, int c) { return r == 0 ? t.carWeight.originalWord(c) : t.fuel.originalWord(c); }
+                public void set(int r, int c, int v) {
+                    if (r == 1) { t.fuel.setWord(c, v); return; }
+                    if (v == 0)
+                    {
+                        JOptionPane.showMessageDialog(ExecutableWindow.this, "The car weight cannot be 0: the game would crash.",
+                            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    t.carWeight.setWord(0, v);
+                    t.carWeight.setWord(1, v);
+                }
+            }, 150, 100));
+        String[] wing = new String[9];
+        for (int i = 0; i < 9; i++) wing[i] = String.valueOf(i * 8);
+        section(box, "Wings: drag and downforce at each wing setting", null,
+            grid(new String[] { "Drag", "Downforce" }, wing, 0, 65535, new Cells() {
+                GameTables.Table of(int r) { return r == 0 ? t.wingDrag : t.wingDownforce; }
+                public int get(int r, int c) { return of(r).word(c); }
+                public int original(int r, int c) { return of(r).originalWord(c); }
+                public void set(int r, int c, int v) { of(r).setWord(c, v); }
+            }, 150, 64));
+        section(box, "Other car values", null,
+            grid(new String[] { "Downforce factor", "Engine braking" }, new String[] { "Value" }, 0, 65535, new Cells() {
+                GameTables.Table of(int r) { return r == 0 ? t.downforceFactor : t.engineBraking; }
+                public int get(int r, int c) { return of(r).word(0); }
+                public int original(int r, int c) { return of(r).originalWord(0); }
+                public void set(int r, int c, int v) { of(r).setWord(0, v); }
+            }, 150, 80));
+        String[] revCols = { "Change up", "Change down", "3", "4", "5", "6", "7", "8", "9", "10" };
+        section(box, "Gear changes (rpm)", "Automatic gear change points: up, down, then the automatic down-shift values.",
+            grid(new String[] { "Engine speed" }, revCols, 0, 65535, words(t.revLimits, 10, false), 150, 70));
+        return page("Car Physics", "The car's engine, tyres, weight and wings.", scrollingBox(box));
+    }
+
+    // --- Opposition levels --------------------------------------------------
+
+    private JComponent oppositionPage()
+    {
+        final GameTables t = currentExecutable.getGameTables();
+        JPanel box = verticalBox();
+        JLabel intro = new JLabel("<html>How the computer cars differ between the opposition levels chosen in the game's options. "
+            + "Hover over a value to see the original; changed values are shown in bold.</html>");
+        intro.setAlignmentX(LEFT_ALIGNMENT);
+        box.add(intro);
+        final GameTables.Table[] rowsTables = { t.oppPowerDeduction, t.oppRankPower, t.oppOversteerLow, t.oppCornerBurst,
+                                                t.oppVariationLow, t.oppVariationHigh, t.oppWingVariation };
+        String[] rows = { "Random power loss", "Power lost per skill step", "Handling variation, lowest",
+                          "Corner speed burst threshold", "Driver variation, lowest", "Driver variation, highest",
+                          "Wing setting spread" };
+        section(box, "At each level", "At Ace a driver's skill costs no power at all.",
+            grid(rows, LEVELS, 0, 65535, new Cells() {
+                public int get(int r, int c) { return rowsTables[r].word(c); }
+                public int original(int r, int c) { return rowsTables[r].originalWord(c); }
+                public void set(int r, int c, int v) { rowsTables[r].setWord(c, v); }
+            }, 220, 90));
+        final GameTables.Table[] singles = { t.oppOversteerHigh, t.globalCornerSpeed, t.wetRacePower };
+        section(box, "At every level", null,
+            grid(new String[] { "Handling variation, highest", "Corner speed from skill", "Computer car power in the wet" },
+                 new String[] { "Value" }, 0, 65535, new Cells() {
+                public int get(int r, int c) { return singles[r].word(0); }
+                public int original(int r, int c) { return singles[r].originalWord(0); }
+                public void set(int r, int c, int v) { singles[r].setWord(0, v); }
+            }, 220, 90));
+        return page("Opposition Levels", "The computer cars at Rookie, Amateur, Semi-Pro, Pro and Ace.", scrollingBox(box));
     }
 
     // --- EditorTab ----------------------------------------------------------
