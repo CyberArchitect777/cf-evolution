@@ -59,7 +59,7 @@ public class TrackGraphicalViewer extends JPanel {
     private final Action fitAction = new AbstractAction("Fit to Window") {
         public void actionPerformed(ActionEvent e) { m_trackPanel.fitToWindow(); }
     };
-    private final Action layoutAction = new AbstractAction("Layout Only") {
+    private final Action layoutAction = new AbstractAction("Show Unclosed") {
         public void actionPerformed(ActionEvent e) { toggleLayoutMode(); }
     };
 
@@ -91,10 +91,13 @@ public class TrackGraphicalViewer extends JPanel {
         bar.add(toolButton(centreAction, "Centre", "Centre the map (Ctrl+0)"));
         bar.add(toolButton(fitAction, "Fit", "Zoom and move the map so the whole track fits the window (Ctrl+F)"));
         bar.addSeparator();
-        layoutModeButton = new JToggleButton("Layout Only");
+        // Was "Layout Mode", then "Layout Only"; a tester found both unclear (2026-10-24).
+        layoutModeButton = new JToggleButton("Show Unclosed");
         layoutModeButton.setName("layoutOnly");
-        layoutModeButton.setToolTipText("<html>Shows the track as its segments build it: the best line is hidden, and the lap<br>"
-            + "is not closed up at the start line the way the game does it. Useful while building a track.</html>");
+        layoutModeButton.setToolTipText("<html>Shows the track exactly as its segments build it, without the step where the game<br>"
+            + "joins the end of the lap to the start. A gap at the start line shows how far the game<br>"
+            + "will stretch the track to close it: none on the original circuits, so a big gap means<br>"
+            + "visible distortion. The best line is hidden, because the game builds it on the closed track.</html>");
         layoutModeButton.setFocusable(false);
         layoutModeButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(ActionEvent e) { toggleLayoutMode(); }

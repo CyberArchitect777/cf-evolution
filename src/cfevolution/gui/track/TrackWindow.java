@@ -313,6 +313,14 @@ public class TrackWindow extends JPanel implements EditorTab
         mapWindow.redrawTrackMap();
     }
 
+    /** The picture of distant scenery along the horizon (the file's first 4096 bytes). */
+    private void editHorizon()
+    {
+        applyPendingEdits();
+        if (HorizonDialog.edit(this, currentTrack))
+            setModified(true);
+    }
+
     /** The circuit's car and computer car settings (the CC setup block). */
     private void editCarSettings()
     {
@@ -349,6 +357,7 @@ public class TrackWindow extends JPanel implements EditorTab
         editMenu.addSeparator();
         editMenu.add(item("Race Strategy...", new Runnable() { public void run() { editRaceStrategy(); } }));
         editMenu.add(item("Car and AI Settings...", new Runnable() { public void run() { editCarSettings(); } }));
+        editMenu.add(item("Horizon...", new Runnable() { public void run() { editHorizon(); } }));
         editMenu.addSeparator();
         editMenu.add(removeTrack);
         editMenu.add(removePit);

@@ -396,6 +396,18 @@ public class Track {
         return fLayoutMode;
     }
 
+    /** The horizon picture: the file's first 4096 bytes, 512 x 8 palette
+        indices, row by row (see TrackHorizon). The array itself, not a copy. */
+    public byte[] getHorizon()
+    {
+        return m_baBackground;
+    }
+
+    public File getFile()
+    {
+        return m_File;
+    }
+
     /** Data members */
     protected File m_File;    // File where track was loaded from
 

@@ -66,6 +66,15 @@ public class GameLiveries
     {
     }
 
+    /** Just a palette (768 bytes, 6-bit), for drawing and choosing colours
+        outside the executable tab, e.g. a track's horizon. */
+    public static GameLiveries ofPalette(byte[] palette)
+    {
+        GameLiveries l = new GameLiveries();
+        System.arraycopy(palette, 0, l.palette, 0, 768);
+        return l;
+    }
+
     /** The game's colour for a palette index (stored as 6-bit values). */
     public Color getPaletteColour(int index)
     {

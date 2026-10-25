@@ -585,6 +585,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
         table.getTableHeader().setReorderingAllowed(false);
         fitColumnOnDoubleClick(table);
         table.setCellSelectionEnabled(true);
+        // several rows at once, so one Paste covers them (Shift/Ctrl+click)
+        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        table.getColumnModel().getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         table.getColumnModel().getColumn(0).setPreferredWidth(170);
         table.getColumnModel().getColumn(0).setMinWidth(120);
         DefaultTableCellRenderer swatch = new DefaultTableCellRenderer() {
@@ -636,9 +639,91 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel tab = new JPanel(new BorderLayout());
         tab.add(new JScrollPane(table), BorderLayout.CENTER);
         tab.add(picturePanel(liveries, source, pictures, table, model, choose), BorderLayout.EAST);
+        JPanel south = new JPanel();
+        south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
+        south.add(copyPasteButtons(source, table, model, fileKind == null ? "crew" : fileKind));
         if (fileKind != null)
-            tab.add(colourFileButtons(source, table, model, fileKind), BorderLayout.SOUTH);
+            south.add(colourFileButtons(source, table, model, fileKind));
+        tab.add(south, BorderLayout.SOUTH);
         return tab;
+    }
+
+    /** The design last copied on each tab (car, hel, crew), as the offered parts' colours.
+        Shared by every executable tab, so a design can go from one game to another. */
+    private static final java.util.Map<String, int[]> copiedDesigns = new java.util.HashMap<String, int[]>();
+
+    /**
+     * Copy the selected row's design and paste it onto every selected row
+     * (Hrvoje, 2026-10-24: "the copy-paste features for the designs are also
+     * extremely useful"). Only the parts the page offers are copied; the bytes it
+     * keeps as the game has them stay with each row. Ctrl+C / Ctrl+V do the same.
+     */
+    private JComponent copyPasteButtons(final ColourTable source, final JTable table, final AbstractTableModel model,
+                                        final String kind)
+    {
+        final String what = kind.equals(CAR_FILE) ? "car colours" : kind.equals(HELMET_FILE) ? "helmet" : "pit crew colours";
+        final String rowWord = kind.equals(HELMET_FILE) ? "driver" : "team";
+        final JButton paste = new JButton("Paste");
+        paste.setName("paste " + kind);
+        paste.setToolTipText("Give every selected " + rowWord + " the copied " + what);
+        paste.setEnabled(copiedDesigns.containsKey(kind));
+        final JLabel copied = new JLabel(" ");
+        copied.setForeground(new Color(0x6A7380));
+
+        final Runnable copy = new Runnable() {
+            public void run() {
+                int r = table.getSelectedRow();
+                if (r < 0)
+                    return;
+                int[] design = new int[source.parts().length];
+                for (int p = 0; p < design.length; p++)
+                    design[p] = source.get(r, p);
+                copiedDesigns.put(kind, design);
+                paste.setEnabled(true);
+                copied.setText("Copied: " + source.rowName(r).replaceAll("^[0-9]+ +", ""));
+            }
+        };
+        final Runnable pasteRun = new Runnable() {
+            public void run() {
+                int[] design = copiedDesigns.get(kind);
+                int[] rows = table.getSelectedRows();
+                if (design == null || rows.length == 0)
+                    return;
+                for (int r : rows)
+                {
+                    for (int p = 0; p < design.length; p++)
+                        if (source.get(r, p) != design[p])
+                            source.set(r, p, design[p]);
+                    model.fireTableRowsUpdated(r, r);
+                }
+            }
+        };
+        JButton copyButton = new JButton("Copy");
+        copyButton.setName("copy " + kind);
+        copyButton.setToolTipText("Copy the selected " + rowWord + "'s " + what);
+        copyButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { copy.run(); }
+        });
+        paste.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { pasteRun.run(); }
+        });
+        int menuKey = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, menuKey), "copyDesign");
+        table.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_V, menuKey), "pasteDesign");
+        table.getActionMap().put("copyDesign", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { copy.run(); }
+        });
+        table.getActionMap().put("pasteDesign", new AbstractAction() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { pasteRun.run(); }
+        });
+
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        p.add(copyButton);
+        p.add(paste);
+        p.add(new JLabel("<html><font color='#6A7380'>the selected " + rowWord + "'s " + what
+            + " onto other " + rowWord + "s (select several to paste onto them all)</font></html>"));
+        p.add(copied);
+        return p;
     }
 
     /** Import and export of the selected row's colours as ArgEditor's .car or .hel file. */
