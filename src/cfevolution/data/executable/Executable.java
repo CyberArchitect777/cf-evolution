@@ -110,6 +110,25 @@ public class Executable
         }
     }
 
+    /** 1-3 for an unpacked EU/IT/US build held in memory, else 7. */
+    public static int identify(byte[] data)
+    {
+        for (int build = 0; build < 3; build++)
+            if (matches(data, CODE_AT[build], CODE_PRINT) && matches(data, DATA_AT[build], DATA_PRINT))
+                return build + 1;
+        return 7;
+    }
+
+    private static boolean matches(byte[] data, int offset, byte[] print)
+    {
+        if (data.length < offset + print.length)
+            return false;
+        for (int i = 0; i < print.length; i++)
+            if (data[offset + i] != print[i])
+                return false;
+        return true;
+    }
+
     private static boolean matches(RandomAccessFile raf, int offset, byte[] print) throws IOException
     {
         if (raf.length() < offset + print.length)

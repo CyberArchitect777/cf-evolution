@@ -26,7 +26,7 @@
 package cfevolution.gui;
 
 import java.util.prefs.Preferences;
-import cfevolution.data.executable.Executable;
+import cfevolution.data.GameFolder;
 import java.io.*;
 import javax.swing.*;
 import cfevolution.data.gui.RecentFiles;
@@ -68,7 +68,7 @@ public class OptionsWindow extends javax.swing.JDialog
         {
             interfaceModeSelector.setSelectedItem(interfaceSetting);
         }
-        executableLocation.setText(cheqFlagData.get("EXELocation", ""));
+        executableLocation.setText(cheqFlagData.get(MainGUI.PREF_GAME_FOLDER, ""));
         legacyOptionsCheckBox.setSelected(cheqFlagData.getBoolean("EnableLegacyOptions", false));
 
     }
@@ -109,7 +109,7 @@ public class OptionsWindow extends javax.swing.JDialog
 
         executableLabelPanel.setLayout(new java.awt.GridLayout(1, 1));
 
-        executableLabel.setText("Location of F1GP/WC Executable");
+        executableLabel.setText("Game folder");
         executableLabelPanel.add(executableLabel);
 
         executablePanel.add(executableLabelPanel);
@@ -191,35 +191,26 @@ public class OptionsWindow extends javax.swing.JDialog
     }
 
     private void executableSelectorActionPerformed(java.awt.event.ActionEvent evt) {
-        // Selects a executable filename
-        
-        FileDialog fileDialog = new FileDialog(mainWindow,true);  
-        fileDialog.setFilterType(2);
-        fileDialog.setInitialDirectory(executableLocation.getText());
-        String fileName = new String();
-        boolean cancelCalled = false;
+        // Chooses the game folder, which Open Game Folder then starts in
+
+        FileDialog fileDialog = new FileDialog(mainWindow,true);
+        fileDialog.setFolderMode(executableLocation.getText());
+        String folder;
         try
         {
-            fileName = fileDialog.showOpenDialog();
+            folder = fileDialog.showOpenDialog();
         }
         catch (Exception exceptionError)
         {
-            cancelCalled = true;
+            return; // cancelled
         }
-        if (cancelCalled == false)
-        {
-            Executable gameExecutable = new Executable(new File(fileName));
-            int exitCode = gameExecutable.loadData();
-            switch(exitCode)
-            {
-                case 0: executableLocation.setText(fileName); break;
-                case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. This may be because you have \nselected the wrong file, or because this executable has not been updated to version 1.05. \nIn the latter case, upgrading your copy of F1GP/WC to 1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
-                case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this executable file. \nIt is likely that this is either not a F1GP/WC executable file, or that the executable itself is corrupt.\nPlease try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
-                case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version of F1GP/WC. \nAn unpacked version of this file is required for editing in CF Evolution. \nPlease see the documentation for more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
-            }
-        }        
+        GameFolder game = GameFolder.open(new File(folder));
+        if (game.getProblem() != null)
+            JOptionPane.showMessageDialog(this, game.getProblem(), "Game Folder Not Usable", JOptionPane.ERROR_MESSAGE);
+        else
+            executableLocation.setText(game.getFolder().getPath());
     }
-       
+
     private void okButtonActionPerformed(java.awt.event.ActionEvent evt) {
         // Saves all changes and applies chosen settings to the editor
         
@@ -229,7 +220,7 @@ public class OptionsWindow extends javax.swing.JDialog
         cheqFlagData.put(ThemeManager.PREF_KEY, selectedMode);
         ThemeManager userInterfaceTheme = new ThemeManager();
         userInterfaceTheme.setUserInterfaceType(selectedMode, mainWindow);
-        cheqFlagData.put("EXELocation", executableLocation.getText());
+        cheqFlagData.put(MainGUI.PREF_GAME_FOLDER, executableLocation.getText());
         cheqFlagData.putBoolean("EnableLegacyOptions", legacyOptionsCheckBox.isSelected());
         mainWindow.refreshLegacyOptions();
         dispose();

@@ -26,6 +26,7 @@ package cfevolution.gui;
 
 import cfevolution.gui.executable.ExecutableWindow;
 import cfevolution.gui.track.TrackWindow;
+import cfevolution.data.GameFolder;
 import cfevolution.data.track.*;
 import cfevolution.data.gui.*;
 import cfevolution.data.executable.*;
@@ -38,7 +39,8 @@ import java.util.prefs.Preferences;
 import javax.swing.*;
 
 /**
- * The editor's single window. Each open track or executable is a tab;
+ * The editor's single window. Each open game folder, track or executable
+ * is a tab;
  * the menus, toolbar and status bar follow whichever tab is in front.
  * With nothing open, a start page offers the common first steps.
  *
@@ -57,6 +59,10 @@ public class MainGUI extends JFrame
     private JLabel statusText;
     private JLabel statusSaved;
     private JPanel recentPanel;
+    private JPanel gameFolderPanel;
+
+    /** The game folder opened last, offered again on the start page. */
+    public static final String PREF_GAME_FOLDER = "GameFolder";
     private JButton saveButton;
 
     public MainGUI()
@@ -179,13 +185,23 @@ public class MainGUI extends JFrame
 
         JPanel buttons = new JPanel(new GridLayout(1, 2, 12, 0));
         buttons.setOpaque(false);
+        buttons.add(bigButton("Open Game Folder", "Circuits, drivers, teams and settings", new Runnable() {
+            public void run() { openGameFolder(); } }));
         buttons.add(bigButton("Open Track", "An F1CTnn.DAT circuit file", new Runnable() {
             public void run() { loadTrack(); } }));
-        buttons.add(bigButton("Open Game Executable", "Drivers, teams, points and settings", new Runnable() {
-            public void run() { openExecutable(); } }));
         buttons.setMaximumSize(new Dimension(560, 74));
         card.add(left(buttons));
         card.add(Box.createVerticalStrut(24));
+
+        JLabel gameTitle = new JLabel("Game folder");
+        gameTitle.setFont(gameTitle.getFont().deriveFont(Font.BOLD));
+        card.add(left(gameTitle));
+        card.add(Box.createVerticalStrut(6));
+        gameFolderPanel = new JPanel();
+        gameFolderPanel.setOpaque(false);
+        gameFolderPanel.setLayout(new BoxLayout(gameFolderPanel, BoxLayout.Y_AXIS));
+        card.add(left(gameFolderPanel));
+        card.add(Box.createVerticalStrut(16));
 
         JLabel recentTitle = new JLabel("Recent tracks");
         recentTitle.setFont(recentTitle.getFont().deriveFont(Font.BOLD));
@@ -197,8 +213,8 @@ public class MainGUI extends JFrame
         card.add(left(recentPanel));
         card.add(Box.createVerticalStrut(20));
 
-        JLabel tip = new JLabel("<html>You can also drop track or executable files onto this window.<br>"
-            + "Ctrl+O opens a track, Ctrl+E an executable, Ctrl+S saves, Ctrl+W closes a tab.</html>");
+        JLabel tip = new JLabel("<html>You can also drop the game folder or track files onto this window.<br>"
+            + "Ctrl+G opens the game folder, Ctrl+O a track, Ctrl+S saves, Ctrl+W closes a tab.</html>");
         tip.setForeground(new Color(0x7A828C));
         card.add(left(tip));
 
@@ -241,8 +257,48 @@ public class MainGUI extends JFrame
              + parent.getName();
     }
 
+    /** A link in the start page's lists. */
+    private static JButton link(String name, String where, String tooltip, final Runnable action)
+    {
+        JButton link = new JButton("<html><span style='color:#2F6FBF'>" + name
+                                   + "</span>&nbsp;&nbsp;<span style='color:#8A929C'>" + where + "</span></html>");
+        link.setToolTipText(tooltip);
+        link.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
+        link.setContentAreaFilled(false);
+        link.setFocusable(false);
+        link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        // Full width with the text on the left, so the list lines up
+        // under its heading instead of centring itself
+        link.setHorizontalAlignment(SwingConstants.LEFT);
+        link.setMaximumSize(new Dimension(Integer.MAX_VALUE, link.getPreferredSize().height));
+        link.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { action.run(); }
+        });
+        return link;
+    }
+
+    /** The last game folder, if it is still there. */
+    private static String lastGameFolder()
+    {
+        String folder = Preferences.userRoot().node("cfevolution").get(PREF_GAME_FOLDER, "");
+        return folder.length() > 0 && new File(folder).isDirectory() ? folder : null;
+    }
+
     private void refreshWelcomeRecent()
     {
+        gameFolderPanel.removeAll();
+        final String folder = lastGameFolder();
+        if (folder != null)
+            gameFolderPanel.add(left(link(new File(folder).getName(), shortFolder(folder), folder, new Runnable() {
+                public void run() { openGameFolder(folder); } })));
+        else
+        {
+            JLabel none = new JLabel("None yet");
+            none.setForeground(new Color(0x8A929C));
+            gameFolderPanel.add(left(none));
+        }
+        gameFolderPanel.revalidate();
+
         recentPanel.removeAll();
         RecentFiles usedFiles = new RecentFiles();
         int shown = 0;
@@ -251,22 +307,8 @@ public class MainGUI extends JFrame
             final String path = usedFiles.getRecentFilePath(i);
             if (path == null || path.length() == 0)
                 continue;
-            JButton link = new JButton("<html><span style='color:#2F6FBF'>" + usedFiles.getRecentFileName(i)
-                                       + "</span>&nbsp;&nbsp;<span style='color:#8A929C'>" + shortFolder(path)
-                                       + "</span></html>");
-            link.setToolTipText(path);
-            link.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
-            link.setContentAreaFilled(false);
-            link.setFocusable(false);
-            link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            // Full width with the text on the left, so the list lines up
-            // under its heading instead of centring itself
-            link.setHorizontalAlignment(SwingConstants.LEFT);
-            link.setMaximumSize(new Dimension(Integer.MAX_VALUE, link.getPreferredSize().height));
-            link.addActionListener(new ActionListener() {
-                public void actionPerformed(ActionEvent e) { openTrackFile(path); }
-            });
-            recentPanel.add(left(link));
+            recentPanel.add(left(link(usedFiles.getRecentFileName(i), shortFolder(path), path, new Runnable() {
+                public void run() { openTrackFile(path); } })));
             shown++;
         }
         if (shown == 0)
@@ -373,15 +415,21 @@ public class MainGUI extends JFrame
         EditorTab tab = activeTab();
         if (tab == null)
         {
-            statusText.setText("Open a track or the game executable to start.");
+            statusText.setText("Open the game folder or a track to start.");
             statusSaved.setText(" ");
             return;
         }
         statusText.setText(tab.getStatusText());
-        statusSaved.setText(tab.isModified() ? "● Unsaved changes" : "All changes saved");
+        statusSaved.setText(tab instanceof GameWindow ? " " : tab.isModified() ? "● Unsaved changes" : "All changes saved");
         statusSaved.setForeground(tab.isModified() ? new Color(0xB5651D) : new Color(0x5A8F4E));
         if (saveButton != null)
-            saveButton.setEnabled(true);
+            saveButton.setEnabled(canSave(tab));
+    }
+
+    /** A game folder tab has nothing of its own to save. */
+    private static boolean canSave(EditorTab tab)
+    {
+        return tab != null && !(tab instanceof GameWindow);
     }
 
     private void refreshTitle()
@@ -394,13 +442,13 @@ public class MainGUI extends JFrame
     private void rebuildToolbar()
     {
         toolbar.removeAll();
+        toolbar.add(toolbarButton("Open Game Folder", "Open the game's folder: its circuits and GP.EXE (Ctrl+G)", new Runnable() {
+            public void run() { openGameFolder(); } }));
         toolbar.add(toolbarButton("Open Track", "Open a track file (Ctrl+O)", new Runnable() {
             public void run() { loadTrack(); } }));
-        toolbar.add(toolbarButton("Open Executable", "Open the game executable (Ctrl+E)", new Runnable() {
-            public void run() { openExecutable(); } }));
         saveButton = toolbarButton("Save", "Save the file in front (Ctrl+S)", new Runnable() {
             public void run() { saveActive(); } });
-        saveButton.setEnabled(activeTab() != null);
+        saveButton.setEnabled(canSave(activeTab()));
         toolbar.add(saveButton);
         EditorTab tab = activeTab();
         if (tab != null)
@@ -427,9 +475,16 @@ public class MainGUI extends JFrame
 
         JMenu file = new JMenu("File");
         file.setMnemonic('F');
+        file.add(menuItem("Open Game Folder...", ctrl(KeyEvent.VK_G), new Runnable() { public void run() { openGameFolder(); } }));
         file.add(menuItem("Open Track...", ctrl(KeyEvent.VK_O), new Runnable() { public void run() { loadTrack(); } }));
-        file.add(menuItem("Open Executable...", ctrl(KeyEvent.VK_E), new Runnable() { public void run() { openExecutable(); } }));
         JMenu recent = new JMenu("Open Recent");
+        final String folder = lastGameFolder();
+        if (folder != null)
+        {
+            recent.add(menuItem("Game folder: " + new File(folder).getName(), null, new Runnable() {
+                public void run() { openGameFolder(folder); } }));
+            recent.addSeparator();
+        }
         RecentFiles usedFiles = new RecentFiles();
         for (int i = 0; i < 4; i++)
         {
@@ -439,6 +494,8 @@ public class MainGUI extends JFrame
             recent.add(menuItem(usedFiles.getRecentFileName(i), null, new Runnable() {
                 public void run() { openTrackFile(path); } }));
         }
+        if (recent.getMenuComponentCount() > 0 && recent.getMenuComponent(recent.getMenuComponentCount() - 1) instanceof JSeparator)
+            recent.remove(recent.getMenuComponentCount() - 1);
         recent.setEnabled(recent.getItemCount() > 0);
         file.add(recent);
         file.addSeparator();
@@ -447,8 +504,8 @@ public class MainGUI extends JFrame
             public void run() { EditorTab t = activeTab(); if (t != null) t.saveAs(); } });
         JMenuItem close = menuItem("Close", ctrl(KeyEvent.VK_W), new Runnable() {
             public void run() { EditorTab t = activeTab(); if (t != null) closeTab(t); } });
-        save.setEnabled(tab != null);
-        saveAs.setEnabled(tab != null);
+        save.setEnabled(canSave(tab));
+        saveAs.setEnabled(canSave(tab));
         close.setEnabled(tab != null);
         file.add(save);
         file.add(saveAs);
@@ -566,25 +623,119 @@ public class MainGUI extends JFrame
         }
     }
 
-    /** Opens the executable named in Options, or asks for one (and
-        remembers it) when none has been chosen yet. */
-    private void openExecutable()
+    /** Asks for the game folder, starting at the one opened last. */
+    private void openGameFolder()
     {
-        Preferences cheqFlagData = Preferences.userRoot().node("cfevolution");
-        String fileName = cheqFlagData.get("EXELocation", "");
         FileDialog fileDialog = new FileDialog(this, true);
-        fileDialog.setFilterType(2);
-        fileDialog.setInitialDirectory(fileName);
+        fileDialog.setFolderMode(Preferences.userRoot().node("cfevolution").get(PREF_GAME_FOLDER, ""));
+        String folder;
         try
         {
-            fileName = fileDialog.showOpenDialog();
+            folder = fileDialog.showOpenDialog();
         }
         catch (Exception exceptionError)
         {
             return; // cancelled
         }
-        if (openExecutableFile(fileName))
-            cheqFlagData.put("EXELocation", fileName);
+        openGameFolder(folder);
+    }
+
+    /** Opens a game folder in a tab: its GP.EXE, which must be unpacked (a
+        packed one is offered for unpacking), and its 16 circuits. Returns
+        false, after saying why, if it cannot. */
+    public boolean openGameFolder(String folder)
+    {
+        GameFolder game = GameFolder.open(new File(folder));
+        for (int i = 0; i < tabs.size(); i++)
+        {
+            if (tabs.get(i) instanceof GameWindow
+                && ((GameWindow) tabs.get(i)).getGameFolder().getFolder().equals(game.getFolder()))
+            {
+                tabPane.setSelectedIndex(i);
+                return true;
+            }
+        }
+        if (game.isPacked())
+        {
+            game = offerToUnpack(game);
+            if (game == null)
+                return false;
+        }
+        if (game.getProblem() != null)
+        {
+            JOptionPane.showMessageDialog(this, wrap(game.getProblem(), 70), "Game Folder Not Opened", JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        Preferences.userRoot().node("cfevolution").put(PREF_GAME_FOLDER, game.getFolder().getPath());
+        addTab(new GameWindow(game, this));
+        return true;
+    }
+
+    /** Asks to unpack a packed GP.EXE, keeping the original as GPPACKED.EXE,
+        and does it. Returns the folder looked at again, or null if the user
+        cancelled or it failed (after saying so). */
+    private GameFolder offerToUnpack(GameFolder game)
+    {
+        String backupName = GameFolder.BACKUP_NAME;
+        int choice = JOptionPane.showOptionDialog(this, wrap(
+            "GP.EXE in this folder is the packed version, which the editor cannot change.\n\n"
+            + "Unpack it now? The original is kept as " + backupName + ". The game runs the unpacked GP.EXE "
+            + "in the same way.", 70),
+            "Unpack GP.EXE", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
+            new String[] { "Unpack", "Cancel" }, "Unpack");
+        if (choice != 0)
+            return null;
+        boolean replaceBackup = false;
+        try
+        {
+            if (game.getBackup() != null && !game.backupMatches())
+            {
+                choice = JOptionPane.showOptionDialog(this, wrap(
+                    game.getBackup().getName() + " already exists in this folder. Overwrite it with the GP.EXE "
+                    + "that is there now?\n\nIf you do not, " + game.getBackup().getName() + " is kept as it is "
+                    + "and the current GP.EXE is not kept.", 70),
+                    "Backup Already Exists", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                    new String[] { "Overwrite", "Don't Overwrite", "Cancel" }, "Don't Overwrite");
+                if (choice != 0 && choice != 1)
+                    return null;
+                replaceBackup = choice == 0;
+            }
+            game.unpackExecutable(replaceBackup);
+        }
+        catch (java.io.IOException e)
+        {
+            JOptionPane.showMessageDialog(this, "GP.EXE could not be unpacked, so nothing was changed.",
+                "Unpack GP.EXE", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        return GameFolder.open(game.getFolder());
+    }
+
+    /** Breaks a message into lines of about {@code width} characters. */
+    private static String wrap(String text, int width)
+    {
+        StringBuilder out = new StringBuilder();
+        for (String paragraph : text.split("\n", -1))
+        {
+            int line = 0;
+            for (String word : paragraph.split(" "))
+            {
+                if (line > 0 && line + word.length() > width)
+                {
+                    out.append('\n');
+                    line = 0;
+                }
+                else if (line > 0)
+                {
+                    out.append(' ');
+                    line++;
+                }
+                out.append(word);
+                line += word.length();
+            }
+            out.append('\n');
+        }
+        return out.toString().trim();
     }
 
     public boolean openExecutableFile(String fileName)
@@ -605,8 +756,8 @@ public class MainGUI extends JFrame
         return false;
     }
 
-    /** Opens files dropped on the window: .EXE as an executable, anything
-        else as a track. */
+    /** Opens what is dropped on the window: a folder as the game folder, an
+        .EXE as the game folder it is in, anything else as a track. */
     private class FileDropHandler extends TransferHandler
     {
         public boolean canImport(TransferSupport support)
@@ -623,8 +774,10 @@ public class MainGUI extends JFrame
                     .getTransferData(java.awt.datatransfer.DataFlavor.javaFileListFlavor);
                 for (File f : files)
                 {
-                    if (f.getName().toLowerCase().endsWith(".exe"))
-                        openExecutableFile(f.getPath());
+                    if (f.isDirectory())
+                        openGameFolder(f.getPath());
+                    else if (f.getName().toLowerCase().endsWith(".exe"))
+                        openGameFolder(f.getAbsoluteFile().getParent());
                     else
                         openTrackFile(f.getPath());
                 }

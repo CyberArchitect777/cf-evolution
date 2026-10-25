@@ -55,6 +55,18 @@ public class FileDialog extends javax.swing.JDialog {
         
     }
     
+    /** Chooses folders rather than files, starting at {@code folder}. */
+    public void setFolderMode(String folder)
+    {
+        fileChooser.setFileSelectionMode(javax.swing.JFileChooser.DIRECTORIES_ONLY);
+        fileChooser.setDialogTitle("Choose the game folder");
+        if (folder != null && folder.length() > 0 && new File(folder).isDirectory())
+        {
+            fileChooser.setCurrentDirectory(new File(folder).getAbsoluteFile().getParentFile());
+            fileChooser.setSelectedFile(new File(folder).getAbsoluteFile());
+        }
+    }
+
     public void setInitialDirectory(String directoryName)
     {
         fileChooser.setCurrentDirectory(new File(directoryName));
