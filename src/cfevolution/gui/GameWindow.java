@@ -53,14 +53,35 @@ public class GameWindow extends JPanel implements EditorTab
         top.setBorder(BorderFactory.createEmptyBorder(14, 16, 10, 16));
         add(top, BorderLayout.NORTH);
 
-        JPanel rows = new JPanel(new GridBagLayout());
         rows.setBorder(BorderFactory.createEmptyBorder(0, 16, 16, 16));
+        JScrollPane scroll = new JScrollPane(rows);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        add(scroll, BorderLayout.CENTER);
+        fillRows();
+    }
+
+    private final JPanel rows = new JPanel(new GridBagLayout());
+
+    private static final String[] KIND_NAMES = { "Name file", "Set-up", "Championship save" };
+
+    /** Lists everything in the folder the editor can open; called again when files are added. */
+    public void fillRows()
+    {
+        rows.removeAll();
         int y = 0;
         addHeading(rows, y++, "Game");
         addRow(rows, y++, "", "Game settings",
                "GP.EXE, version 1.05 " + game.getBuildName() + ": drivers, teams, points, liveries and rules",
                game.getExecutable(), "open-game", new Runnable() {
                    public void run() { openGame(); } });
+        final File prefs = game.getPreferences();
+        addRow(rows, y++, "", "Game options",
+               prefs != null ? "F1PREFS.DAT: opposition, race distance, driving aids, files loaded at start-up"
+                             : "F1PREFS.DAT is not here yet: the game writes it with Save Options",
+               prefs, "open-options", new Runnable() {
+                   public void run() { GameWindow.this.mainWindow.openGameFile(prefs, game); } });
+
         addHeading(rows, y++, "Circuits");
         for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
         {
@@ -70,15 +91,109 @@ public class GameWindow extends JPanel implements EditorTab
                    track, "open-" + slot, new Runnable() {
                        public void run() { GameWindow.this.mainWindow.openTrackFile(track.getPath()); } });
         }
+
+        addHeading(rows, y++, "Pictures");
+        String[] pictureNames = { "Menu helmets", "Language flags", "Menu backgrounds", "Circuit pictures" };
+        String[] pictureDetails = { "the helmet beside each driver on the driver menus", "the flags on the language screen",
+                                    "the full-screen pictures behind the menus", "each circuit's picture on the circuit menu" };
+        for (int i = 0; i < GameFolder.PICTURE_FILES.length; i++)
+        {
+            final File f = game.getPictureFile(GameFolder.PICTURE_FILES[i]);
+            addRow(rows, y++, "", pictureNames[i],
+                   f != null ? GameFolder.PICTURE_FILES[i] + ": " + pictureDetails[i]
+                             : GameFolder.PICTURE_FILES[i] + " is not in this folder",
+                   f, "open-" + GameFolder.PICTURE_FILES[i], new Runnable() {
+                       public void run() { GameWindow.this.mainWindow.openGameFile(f, game); } });
+        }
+
+        addHeading(rows, y++, "Sounds");
+        final File sounds = game.getSoundEffects();
+        addRow(rows, y++, "", "Sound effects",
+               sounds != null ? "XSOUND.BIN: the engine, tyres, passing cars, crashes and pit stops (AdLib and Sound Blaster)"
+                              : game.hasSoundEffects() ? "The game is set up for another sound card: only the AdLib and Sound Blaster effects can be edited"
+                                                       : "XSOUND.BIN is not here: the game's installer puts it there",
+               sounds, "open-sounds", new Runnable() {
+                   public void run() { GameWindow.this.mainWindow.openGameFile(sounds, game); } });
+
+        addHeading(rows, y++, "Saved files (GPSAVES)");
+        JButton saveNames = new JButton("Save the Game's Names as a Name File...");
+        saveNames.setName("save-names");
+        saveNames.setToolTipText("Writes the driver, team and engine names in GP.EXE to a name file the game can load");
+        saveNames.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { saveNamesFile(); }
+        });
+        GridBagConstraints b = new GridBagConstraints();
+        b.gridy = y++;
+        b.gridx = 1;
+        b.gridwidth = 3;
+        b.anchor = GridBagConstraints.WEST;
+        b.insets = new Insets(3, 0, 6, 0);
+        rows.add(saveNames, b);
+        java.util.List<GameFolder.SavedFile> saved = game.getSavedFiles();
+        if (saved.isEmpty())
+        {
+            JLabel none = new JLabel("No name files, set-ups or championship saves yet.");
+            none.setForeground(new Color(0xA0A6AE));
+            GridBagConstraints c = new GridBagConstraints();
+            c.gridy = y++;
+            c.gridx = 1;
+            c.gridwidth = 3;
+            c.anchor = GridBagConstraints.WEST;
+            rows.add(none, c);
+        }
+        for (final GameFolder.SavedFile f : saved)
+        {
+            String kind = KIND_NAMES[f.kind.ordinal()];
+            if (f.kind == GameFolder.SavedKind.SETUP && f.file.length() == cfevolution.data.gamefiles.SetupFile.SEASON_SIZE)
+                kind = "Season set-ups";
+            addRow(rows, y++, "", kind, f.name, f.file, "open-saved-" + f.name, new Runnable() {
+                public void run() { GameWindow.this.mainWindow.openGameFile(f.file, game); } });
+        }
+
         GridBagConstraints filler = new GridBagConstraints();
         filler.gridy = y;
         filler.weighty = 1;
         rows.add(Box.createGlue(), filler);
+        rows.revalidate();
+        rows.repaint();
+    }
 
-        JScrollPane scroll = new JScrollPane(rows);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.getVerticalScrollBar().setUnitIncrement(16);
-        add(scroll, BorderLayout.CENTER);
+    /** Asks for a short name and writes GP.EXE's names to GPSAVES as a .NAM file. */
+    private void saveNamesFile()
+    {
+        String name = JOptionPane.showInputDialog(this,
+            "Name for the file, up to 8 letters or digits (the game shows DOS names):", "NAMES");
+        if (name == null)
+            return;
+        name = name.trim().toUpperCase();
+        if (name.endsWith(".NAM"))
+            name = name.substring(0, name.length() - 4);
+        if (!name.matches("[A-Z0-9_-]{1,8}"))
+        {
+            JOptionPane.showMessageDialog(this, "Use 1 to 8 letters, digits, - or _.", "Name File Not Saved",
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        File saves = game.getSavesFolder();
+        if (saves == null)
+            saves = new File(game.getFolder(), "GPSAVES");
+        File target = new File(saves, name + ".NAM");
+        if (target.exists() && JOptionPane.showOptionDialog(this, target.getName() + " already exists. Replace it?",
+                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
+            return;
+        try
+        {
+            mainWindow.writeNameFileFromGame(game, target);
+        }
+        catch (java.io.IOException ex)
+        {
+            JOptionPane.showMessageDialog(this, target.getName() + " could not be saved.", "Name File Not Saved",
+                                          JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        fillRows();
+        mainWindow.openGameFile(target, game);
     }
 
     private void openGame()
