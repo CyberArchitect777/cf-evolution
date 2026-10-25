@@ -873,6 +873,12 @@ public class TrackPanel extends javax.swing.JPanel {
         repaint();
     }
 
+    /** Zooms and moves the map so the whole track fits the window, as when it was first shown. */
+    public void fitToWindow() {
+        m_fFirstTime = true;
+        repaint();
+    }
+
     public void panCenter() {
         moveTo(getWidth() / 2, -getHeight() / 2);
     }

@@ -176,7 +176,18 @@ public class HeaderTableModel extends StandardTableModel
         {
             public void actionPerformed(java.awt.event.ActionEvent typeEvent)
             {
+                // Rebuild for the new kerb type, keeping what has been typed but
+                // not yet applied, and tell the table its rows changed so the
+                // second kerb colours appear (or go) at once (Hrvoje, 2026-10-24)
+                Object[][] typed = tableData;
                 getInfoForType(curbType.getSelectedIndex());
+                for (int row = 0; row < Math.min(typed.length, tableData.length); row++)
+                    if (row != 13 && typed[row][1] != null && tableData[row][1] != null
+                        && typed[row][1].getClass() == tableData[row][1].getClass())
+                        tableData[row][1] = typed[row][1];
+                javax.swing.SwingUtilities.invokeLater(new Runnable() {
+                    public void run() { fireTableDataChanged(); }
+                });
             }
         });
     }

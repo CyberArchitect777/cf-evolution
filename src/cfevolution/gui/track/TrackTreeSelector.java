@@ -312,6 +312,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             {
                 java.awt.Color mark = text.endsWith("Turn Left") ? new java.awt.Color(0x2F6FBF)
                                     : text.endsWith("Turn Right") ? new java.awt.Color(0xC2553A)
+                                    : text.endsWith("Straight") ? new java.awt.Color(0x2E7D4F)   // dark green (Hrvoje)
                                     : new java.awt.Color(0x9AA3AD);
                 setIcon(new DotIcon(mark));
             }

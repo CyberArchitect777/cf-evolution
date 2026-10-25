@@ -56,7 +56,10 @@ public class TrackGraphicalViewer extends JPanel {
     private final Action centreAction = new AbstractAction("Centre Map") {
         public void actionPerformed(ActionEvent e) { m_trackPanel.panCenter(); }
     };
-    private final Action layoutAction = new AbstractAction("Layout Mode") {
+    private final Action fitAction = new AbstractAction("Fit to Window") {
+        public void actionPerformed(ActionEvent e) { m_trackPanel.fitToWindow(); }
+    };
+    private final Action layoutAction = new AbstractAction("Layout Only") {
         public void actionPerformed(ActionEvent e) { toggleLayoutMode(); }
     };
 
@@ -73,6 +76,7 @@ public class TrackGraphicalViewer extends JPanel {
     public Action getZoomInAction() { return zoomInAction; }
     public Action getZoomOutAction() { return zoomOutAction; }
     public Action getCentreAction() { return centreAction; }
+    public Action getFitAction() { return fitAction; }
     public Action getLayoutAction() { return layoutAction; }
 
     private JToolBar createToolbar()
@@ -85,9 +89,12 @@ public class TrackGraphicalViewer extends JPanel {
         bar.add(toolButton(zoomOutAction, "\u2212", "Zoom out (Ctrl+Minus)"));
         bar.add(toolButton(zoomInAction, "+", "Zoom in (Ctrl+Plus)"));
         bar.add(toolButton(centreAction, "Centre", "Centre the map (Ctrl+0)"));
+        bar.add(toolButton(fitAction, "Fit", "Zoom and move the map so the whole track fits the window (Ctrl+F)"));
         bar.addSeparator();
-        layoutModeButton = new JToggleButton("Layout Mode");
-        layoutModeButton.setToolTipText("Draw the track as its segment layout");
+        layoutModeButton = new JToggleButton("Layout Only");
+        layoutModeButton.setName("layoutOnly");
+        layoutModeButton.setToolTipText("<html>Shows the track as its segments build it: the best line is hidden, and the lap<br>"
+            + "is not closed up at the start line the way the game does it. Useful while building a track.</html>");
         layoutModeButton.setFocusable(false);
         layoutModeButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(ActionEvent e) { toggleLayoutMode(); }

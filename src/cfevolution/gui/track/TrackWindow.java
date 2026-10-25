@@ -364,6 +364,9 @@ public class TrackWindow extends JPanel implements EditorTab
         viewMenu.add(zoomIn);
         viewMenu.add(zoomOut);
         viewMenu.add(centre);
+        JMenuItem fit = new JMenuItem(mapWindow.getFitAction());
+        fit.setAccelerator(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_F, java.awt.event.InputEvent.CTRL_DOWN_MASK));
+        viewMenu.add(fit);
         viewMenu.addSeparator();
         viewMenu.add(new JMenuItem(mapWindow.getLayoutAction()));
         viewMenu.addSeparator();

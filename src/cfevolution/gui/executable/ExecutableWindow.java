@@ -179,7 +179,51 @@ public class ExecutableWindow extends JPanel implements EditorTab
         model.addTableModelListener(new javax.swing.event.TableModelListener() {
             public void tableChanged(javax.swing.event.TableModelEvent e) { setModified(true); }
         });
+        fitColumnOnDoubleClick(table);
         return table;
+    }
+
+    /** Double-clicking the border between two column headings widens or narrows the column on its left
+        to fit its heading and contents, as spreadsheets do (Hrvoje, 2026-10-24). */
+    static void fitColumnOnDoubleClick(final JTable table)
+    {
+        table.getTableHeader().addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() != 2 || !SwingUtilities.isLeftMouseButton(e))
+                    return;
+                javax.swing.table.JTableHeader header = table.getTableHeader();
+                for (int c = 0; c < table.getColumnCount(); c++)
+                {
+                    Rectangle r = header.getHeaderRect(c);
+                    if (Math.abs(e.getX() - (r.x + r.width)) <= 3)
+                    {
+                        fitColumn(table, c);
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    static void fitColumn(JTable table, int c)
+    {
+        javax.swing.table.TableColumn column = table.getColumnModel().getColumn(c);
+        javax.swing.table.TableCellRenderer headRenderer = column.getHeaderRenderer() != null
+            ? column.getHeaderRenderer() : table.getTableHeader().getDefaultRenderer();
+        int width = headRenderer.getTableCellRendererComponent(table, column.getHeaderValue(), false, false, -1, c)
+                                .getPreferredSize().width;
+        for (int r = 0; r < table.getRowCount(); r++)
+            width = Math.max(width, table.prepareRenderer(table.getCellRenderer(r, c), r, c).getPreferredSize().width);
+        width += 10;
+        column.setMinWidth(Math.min(column.getMinWidth(), width));
+        if (column.getMaxWidth() < width)
+            column.setMaxWidth(width);
+        column.setPreferredWidth(width);
+        column.setWidth(width);
+        table.getTableHeader().setResizingColumn(column);   // the other columns give way, not this one
+        table.doLayout();
+        table.getTableHeader().setResizingColumn(null);
+        table.getTableHeader().repaint();
     }
 
     /** Light striping, numbers on the right, read-only cells greyed. */
@@ -257,8 +301,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     if (text == null || text.equals(drivers.getDriverName(r))) return;
                     drivers.setDriverName(r, text);
                 } else {
-                    // 0 would make the game treat a driver as better than the best
-                    Integer n = number(v, 1, 255, "Skill");
+                    // The game uses skill - 1 as a signed rank (GetDriverRank, IDA 0x4C4E), so 0 is one step
+                    // better than 1. Other editors write 0, so it is accepted (owner, 2026-10-25).
+                    Integer n = number(v, 0, 255, "Skill");
                     if (n == null || n.intValue() == (Integer) getValueAt(r, c)) return;
                     if (c == 2) drivers.setQualifyingGrip(r, n); else drivers.setRaceGrip(r, n);
                 }
@@ -267,7 +312,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         };
         JTable table = table(model, new int[] { 50, 0, 130, 110 });
         return page("Drivers",
-            "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers (1 is the best).",
+            "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers: 1 is the game's best, and 0, which some editors use, is faster still.",
             new JScrollPane(table));
     }
 
@@ -404,7 +449,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         int setColour(int row, int slot);
     }
 
-    /** The game's pictures for one tab: either one picture the user can turn, or a fixed group. */
+    /** The game's pictures for one tab: either one picture the user can turn, or several to step through. */
     private static class Pictures
     {
         final int first, last, start, scale;
@@ -416,10 +461,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
             this.first = first; this.last = last; this.start = start; this.scale = scale; this.group = null;
         }
 
-        /** A large picture and smaller ones beside it. */
-        Pictures(int main, int[] others)
+        /** Pictures shown one at a time, with buttons to step between them. */
+        Pictures(int[] pictures)
         {
-            this.first = main; this.last = main; this.start = main; this.scale = 2; this.group = others;
+            this.first = pictures[0]; this.last = pictures[0]; this.start = 0; this.scale = 2; this.group = pictures;
         }
     }
 
@@ -493,7 +538,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get(int r, int p) { return liveries.getPitCrewColour(r, p); }
             public void set(int r, int p, int c) { liveries.setPitCrewColour(r, p, c); }
             public int setColour(int r, int s) { return liveries.getPitCrewSetColour(r, s); }
-        }, new Pictures(GameSprites.PIT_CREW_MAIN, GameSprites.PIT_CREW_POSES)));
+        }, new Pictures(GameSprites.PIT_CREW)));
         return page("Liveries",
             "Colours of each team's cars and pit crew, and each driver's helmet. Click a colour, or part of the picture, to change it.",
             tabs);
@@ -524,8 +569,15 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 d.height = Math.max(d.height, 40);
                 return d;
             }
+            // the full part name, for a column too narrow to show it (Hrvoje, 2026-10-24)
+            public String getToolTipText(java.awt.event.MouseEvent e) {
+                int c = columnAtPoint(e.getPoint());
+                return c > 0 ? parts[c - 1] + " (double-click the border on its right to fit the column)" : null;
+            }
         });
+        ToolTipManager.sharedInstance().registerComponent(table.getTableHeader());
         table.getTableHeader().setReorderingAllowed(false);
+        fitColumnOnDoubleClick(table);
         table.setCellSelectionEnabled(true);
         table.getColumnModel().getColumn(0).setPreferredWidth(170);
         table.getColumnModel().getColumn(0).setMinWidth(120);
@@ -644,7 +696,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 else if (pictures.group == null)
                     panel.add(turningPicture(pictures, colours, shown), BorderLayout.CENTER);
                 else
-                    panel.add(pictureGroup(pictures, colours, shown), BorderLayout.CENTER);
+                    panel.add(steppedPicture(pictures, colours, shown), BorderLayout.CENTER);
                 refresh.run();
                 panel.revalidate();
                 panel.repaint();
@@ -716,35 +768,58 @@ public class ExecutableWindow extends JPanel implements EditorTab
         return holder;
     }
 
-    /** A large picture with smaller ones below it. */
-    private JComponent pictureGroup(Pictures pictures, LiveryPicture.Colours colours,
-                                    java.util.List<LiveryPicture> shown)
+    /** One picture at a time, with Previous and Next buttons stepping through the rest. */
+    private JComponent steppedPicture(final Pictures pictures, LiveryPicture.Colours colours,
+                                      java.util.List<LiveryPicture> shown)
     {
-        LiveryPicture main = new LiveryPicture(pictures.scale, colours);
-        main.setName("liveryPicture");
-        main.setSprite(sprites.get(pictures.first), false);
-        shown.add(main);
+        final LiveryPicture picture = new LiveryPicture(pictures.scale, colours);
+        picture.setName("liveryPicture");
+        shown.add(picture);
+        final int[] index = { pictures.start };
+        final JLabel count = new JLabel("", SwingConstants.CENTER);
+        count.setName("liveryPictureNumber");
+        final JButton previous = new JButton("\u25C0"), next = new JButton("\u25B6");
+        previous.setName("liveryPrevious");
+        next.setName("liveryNext");
+        previous.setToolTipText("Previous picture");
+        next.setToolTipText("Next picture");
+        final Runnable show = new Runnable() {
+            public void run() {
+                picture.setSprite(sprites.get(pictures.group[index[0]]), false);
+                count.setText("Picture " + (index[0] + 1) + " of " + pictures.group.length);
+            }
+        };
+        previous.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                index[0] = (index[0] + pictures.group.length - 1) % pictures.group.length;
+                show.run();
+            }
+        });
+        next.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                index[0] = (index[0] + 1) % pictures.group.length;
+                show.run();
+            }
+        });
+        show.run();
 
-        JPanel others = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
-        others.setOpaque(false);
-        for (int index : pictures.group)
-        {
-            LiveryPicture p = new LiveryPicture(1, colours);
-            p.setSprite(sprites.get(index), false);
-            shown.add(p);
-            others.add(p);
-        }
-
-        JPanel stage = new JPanel(new BorderLayout(0, 12));
+        JPanel stage = new JPanel(new BorderLayout());
         stage.setBackground(PICTURE_BACKGROUND);
         stage.setBorder(BorderFactory.createEmptyBorder(12, 8, 12, 8));
-        stage.add(main, BorderLayout.CENTER);
-        stage.add(others, BorderLayout.SOUTH);
+        stage.add(picture, BorderLayout.CENTER);
 
-        JPanel box = new JPanel(new BorderLayout());
+        JPanel buttons = new JPanel(new BorderLayout(6, 0));
+        buttons.add(previous, BorderLayout.WEST);
+        buttons.add(count, BorderLayout.CENTER);
+        buttons.add(next, BorderLayout.EAST);
+        JPanel below = new JPanel(new BorderLayout());
+        below.add(buttons, BorderLayout.NORTH);
+        below.add(pictureHint("Click part of the picture to change its colour."), BorderLayout.SOUTH);
+
+        JPanel box = new JPanel(new BorderLayout(0, 8));
         box.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
         box.add(stage, BorderLayout.NORTH);
-        box.add(pictureHint("Click part of a picture to change its colour."), BorderLayout.CENTER);
+        box.add(below, BorderLayout.CENTER);
         JPanel holder = new JPanel(new BorderLayout());
         holder.add(box, BorderLayout.NORTH);
         return holder;

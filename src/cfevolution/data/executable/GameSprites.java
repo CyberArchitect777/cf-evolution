@@ -53,7 +53,9 @@ public class GameSprites
     public static final int CAR_FIRST = 176, CAR_LAST = 220;
     public static final int HELMET_FIRST = 66, HELMET_LAST = 74;
     public static final int PIT_CREW_MAIN = 169;
-    public static final int[] PIT_CREW_POSES = { 157, 160, 166, 167 };
+    /** Every pit crew picture: the large one at a pit stop, a crew member running out to the car
+        (155-159, an animation), the wheel men and the others. */
+    public static final int[] PIT_CREW = { 169, 155, 156, 157, 158, 159, 160, 161, 162, 166, 167, 168 };
 
     /** One decoded image: a slot per pixel, -1 where nothing is drawn. */
     public static class Sprite
