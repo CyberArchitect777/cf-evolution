@@ -22,11 +22,14 @@ import cfevolution.data.executable.GameLiveries;
 import cfevolution.data.gamefiles.MediaContainer;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Reads the car sets of other editors into a {@link Dataset}, in the same
@@ -93,6 +96,10 @@ public class OtherEditorFiles
 
     // --- F1ED -----------------------------------------------------------------
 
+    /** F1ED's Damage1-4, as its own labels number them. */
+    private static final String[] F1ED_DAMAGE = { "retire after hitting a wall", "retire after hitting a car",
+        "wing breaks after hitting a wall", "wing breaks after hitting a car" };
+
     static Dataset readF1Ed(String text)
     {
         Dataset ini = Dataset.parse(text);     // its sections and keys, lower-cased
@@ -133,11 +140,9 @@ public class OtherEditorFiles
         {
             copy(ini, "aigrip", d, "computer grip level");
             copy(ini, "humanbhp", d, "player power");
-            // Damage1-4 in GP.EXE's order: retire after a wall, after a car, then the wing after a car, after a wall
-            copy(ini, "damage1", d, "retire after hitting a wall");
-            copy(ini, "damage2", d, "retire after hitting a car");
-            copy(ini, "damage3", d, "wing breaks after hitting a car");
-            copy(ini, "damage4", d, "wing breaks after hitting a wall");
+            // Damage1-4 as F1ED's own labels number them (its form's DamageLabel index 1-4)
+            for (int i = 0; i < F1ED_DAMAGE.length; i++)
+                copy(ini, "damage" + (i + 1), d, F1ED_DAMAGE[i]);
             copy(ini, "yellowflag", d, "yellow flags after seconds");
             copy(ini, "removecrashedcar", d, "retired cars removed after seconds");
             copy(ini, "wetrace", d, "chance of rain");
@@ -145,6 +150,8 @@ public class OtherEditorFiles
                 d.put("rules", "unlimited qualifying tyres", Dataset.yesNo("1".equals(ini.get("f1ed", "qtyres"))));
             if (ini.get("f1ed", "wetracephoenix") != null)
                 d.put("rules", "rain at dry circuits", Dataset.yesNo("1".equals(ini.get("f1ed", "wetracephoenix"))));
+            if (ini.get("f1ed", "fastfade") != null)       // the same patch as the Game Settings page's faster menus
+                d.put("rules", "faster menus", Dataset.yesNo("1".equals(ini.get("f1ed", "fastfade"))));
         }
         if (ini.hasSection("computercarsetup"))
             d.addNote("F1ED's computer car settings for each circuit were not imported (they belong in the circuit files).");
@@ -281,6 +288,308 @@ public class OtherEditorFiles
             d.put(section, key, ((Number) v).intValue());
         else if (v instanceof String)
             d.put(section, key, (String) v);
+    }
+
+    // --- writing F1ED and ArgEditor car sets ---------------------------------------
+
+    /** What an F1ED car set holds; all of it is always written. */
+    public static final Set<DatasetGroup> F1ED_GROUPS =
+        EnumSet.of(DatasetGroup.TEAMS, DatasetGroup.DRIVERS, DatasetGroup.COLOURS, DatasetGroup.RULES);
+    /** What an ArgEditor car set always holds; menu helmet pictures may be added. */
+    public static final Set<DatasetGroup> ARGEDITOR_GROUPS =
+        EnumSet.of(DatasetGroup.TEAMS, DatasetGroup.DRIVERS, DatasetGroup.COLOURS, DatasetGroup.POINTS);
+    /** ArgEditor's teams; two drivers each. */
+    public static final int ARGEDITOR_TEAMS = 18;
+
+    /**
+     * A dataset as an F1ED car set (.1ED). The colours a dataset does not
+     * name (bytes 0, 9 and 10 of a car's) are taken from base, the game's own
+     * colour sets, so F1ED writes them back unchanged; base may be null.
+     * Notes on anything left out are added to notes.
+     */
+    public static byte[] writeF1Ed(Dataset d, GameLiveries base, List<String> notes)
+    {
+        StringBuilder sb = new StringBuilder();
+        line(sb, "[Drivers]");
+        for (int c = 1; c <= GameDataset.CARS; c++)
+        {
+            String s = "driver " + c;
+            line(sb, c + "=" + f1EdName(d.get(s, "name")) + "," + num(d, s, "qualifying skill", 0) + ","
+                 + num(d, s, "race skill", 0) + ",0");
+        }
+        line(sb, "[Teams]");
+        for (int t = 1; t <= GameDataset.TEAMS; t++)
+        {
+            String s = "team " + t;
+            line(sb, t + "=" + f1EdName(d.get(s, "name")) + "," + f1EdName(d.get(s, "engine")) + "," + num(d, s, "power", 0) + ","
+                 + num(d, s, "first car", 0) + "," + num(d, s, "second car", 0));
+        }
+        line(sb, "[CarColours]");
+        for (int t = 1; t <= GameDataset.TEAMS; t++)
+            line(sb, t + "=" + colourLine(d, "team " + t, "car ", GameLiveries.CAR_PARTS, GameLiveries.CAR_BYTES,
+                                          base == null ? null : carSet(base, t - 1)));
+        line(sb, "[PitColours]");
+        for (int t = 1; t <= GameDataset.TEAMS; t++)
+            line(sb, t + "=" + colourLine(d, "team " + t, "pit crew ", GameLiveries.PIT_CREW_PARTS, GameLiveries.PIT_CREW_BYTES,
+                                          base == null ? null : pitSet(base, t - 1)));
+        line(sb, "[HelmetColours]");
+        for (int c = 1; c <= GameDataset.CARS; c++)
+            line(sb, c + "=" + colourLine(d, "driver " + c, "helmet ", GameLiveries.HELMET_PARTS, GameLiveries.HELMET_BYTES,
+                                          base == null ? null : helmetSet(base, c - 1)));
+        line(sb, "[F1Ed]");
+        Integer v = d.getInt("rules", "computer grip level");
+        if (v != null) line(sb, "AIGrip=" + v);
+        v = d.getInt("rules", "player power");
+        if (v != null)
+        {
+            line(sb, "HumanBHP=" + v);
+            line(sb, "BHPLegalise=" + (v == 716 ? 1 : 0));      // F1ED's lock at the game's own 716
+        }
+        for (int i = 0; i < F1ED_DAMAGE.length; i++)
+        {
+            v = d.getInt("rules", F1ED_DAMAGE[i]);
+            if (v != null) line(sb, "Damage" + (i + 1) + "=" + v);
+        }
+        v = d.getInt("rules", "yellow flags after seconds");
+        if (v != null) line(sb, "YellowFlag=" + v);
+        v = d.getInt("rules", "retired cars removed after seconds");
+        if (v != null) line(sb, "RemoveCrashedCar=" + v);
+        Boolean b = d.getBoolean("rules", "faster menus");
+        if (b != null) line(sb, "FastFade=" + (b ? 1 : 0));
+        b = d.getBoolean("rules", "unlimited qualifying tyres");
+        if (b != null) line(sb, "QTyres=" + (b ? 1 : 0));
+        b = d.getBoolean("rules", "rain at dry circuits");
+        if (b != null) line(sb, "WetRacePhoenix=" + (b ? 1 : 0));
+        v = d.getInt("rules", "chance of rain");
+        if (v != null) line(sb, "WetRace=" + v);
+        if (d.hasSection("points"))
+            notes.add("An F1ED car set has no points table, so the points were left out.");
+        return sb.toString().getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    /**
+     * A dataset as an ArgEditor car set (.arged, FileVersion 3). ArgEditor
+     * keeps 18 teams and only the drivers in them, so anything else is left
+     * out with a note. helmetPalette (may be null) turns the menu helmet
+     * pictures back into the game's colours.
+     */
+    public static byte[] writeArgEditor(Dataset d, int[] helmetPalette, List<String> notes)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\r\n  \"FileVersion\": 3,\r\n  \"Teams\": [");
+        boolean[] seated = new boolean[GameDataset.CARS + 1];
+        int[][] lineUp = new int[ARGEDITOR_TEAMS][2];
+        for (int t = 0; t < ARGEDITOR_TEAMS; t++)
+        {
+            String s = "team " + (t + 1);
+            sb.append(t == 0 ? "\r\n" : ",\r\n").append("    {\r\n");
+            sb.append("      \"Name\": ").append(jsonString(d.get(s, "name"))).append(",\r\n");
+            sb.append("      \"Engine\": ").append(jsonString(d.get(s, "engine"))).append(",\r\n");
+            sb.append("      \"Horsepower\": ").append(num(d, s, "power", 0)).append(",\r\n");
+            sb.append("      \"CarColors\": {");
+            for (int i = 0; i < ARG_CAR.length; i++)
+                field(sb, i, 8, ARG_CAR[i], num(d, s, "car " + part(GameLiveries.CAR_PARTS, GameLiveries.CAR_BYTES, ARG_CAR_BYTES[i]), 0));
+            sb.append("\r\n      },\r\n      \"PitCrewColors\": {");
+            for (int i = 0; i < ARG_PIT.length; i++)
+                field(sb, i, 8, ARG_PIT[i], num(d, s, "pit crew " + part(GameLiveries.PIT_CREW_PARTS, GameLiveries.PIT_CREW_BYTES, ARG_PIT_BYTES[i]), 0));
+            sb.append("\r\n      }\r\n    }");
+            for (int seat = 0; seat < 2; seat++)
+            {
+                int c = num(d, s, seat == 0 ? "first car" : "second car", 0);
+                if (c < 1 || c > GameDataset.CARS || seated[c])
+                    c = 0;
+                lineUp[t][seat] = c;
+                seated[c] = c > 0;
+            }
+        }
+        sb.append("\r\n  ],\r\n  \"Drivers\": [");
+        boolean pictureLeftOut = false;
+        for (int j = 0; j < 2 * ARGEDITOR_TEAMS; j++)
+        {
+            int c = lineUp[j / 2][j % 2];
+            String s = "driver " + c;
+            sb.append(j == 0 ? "\r\n" : ",\r\n").append("    {\r\n");
+            sb.append("      \"Number\": ").append(c).append(",\r\n");
+            sb.append("      \"Name\": ").append(jsonString(c == 0 ? "" : d.get(s, "name"))).append(",\r\n");
+            sb.append("      \"RaceGripLevel\": ").append(c == 0 ? 1 : num(d, s, "race skill", 1)).append(",\r\n");
+            sb.append("      \"QualifyingGripLevel\": ").append(c == 0 ? 1 : num(d, s, "qualifying skill", 1)).append(",\r\n");
+            sb.append("      \"HelmetColors\": {");
+            for (int i = 0; i < ARG_HELMET.length; i++)
+            {
+                // an empty seat gets ArgEditor's own plain helmet
+                int plain = ARG_HELMET_BYTES[i] == 0 ? 0 : ARG_HELMET_BYTES[i] == 6 ? 6 : 8;
+                int v = c == 0 ? plain : num(d, s, "helmet " + part(GameLiveries.HELMET_PARTS, GameLiveries.HELMET_BYTES, ARG_HELMET_BYTES[i]), plain);
+                field(sb, i, 8, ARG_HELMET[i], v);
+            }
+            sb.append("\r\n      },\r\n      \"MenuImage\": ");
+            String image = "";
+            byte[] png = c == 0 ? null : d.getFile(String.format("helmets/car%02d.png", c));
+            if (png != null)
+            {
+                byte[] px = helmetPalette == null ? null : GameDataset.pictureIndices(png, 48, 48, helmetPalette);
+                if (px != null)
+                    image = java.util.Base64.getEncoder().encodeToString(px);
+                else
+                    pictureLeftOut = true;
+            }
+            sb.append(jsonString(image)).append("\r\n    }");
+        }
+        sb.append("\r\n  ],\r\n  \"PointsSystem\": {");
+        for (int i = 0; i < 26; i++)
+            field(sb, i, 4, "PointsFor" + GameDataset.place(i), num(d, "points", GameDataset.place(i), 0));
+        sb.append("\r\n  }\r\n}");
+
+        boolean extraTeams = false;
+        for (int t = ARGEDITOR_TEAMS + 1; t <= GameDataset.TEAMS; t++)
+            extraTeams |= num(d, "team " + t, "first car", 0) > 0 || num(d, "team " + t, "second car", 0) > 0;
+        if (extraTeams)
+            notes.add("ArgEditor holds 18 teams, so teams 19 and 20 and their drivers were left out.");
+        int unseated = 0;
+        for (int c = 1; c <= GameDataset.CARS; c++)
+            if (!seated[c] && d.get("driver " + c, "name") != null && !d.get("driver " + c, "name").trim().isEmpty())
+                unseated++;
+        if (unseated > 0)
+            notes.add("ArgEditor keeps only the drivers in the teams, so " + unseated + " driver" + (unseated == 1 ? "" : "s")
+                      + " without a seat " + (unseated == 1 ? "was" : "were") + " left out.");
+        if (pictureLeftOut)
+            notes.add("Some menu helmet pictures could not be read and were left out.");
+        return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void line(StringBuilder sb, String s)
+    {
+        sb.append(s).append("\r\n");
+    }
+
+    private static int num(Dataset d, String section, String key, int otherwise)
+    {
+        Integer v = d.getInt(section, key);
+        return v == null ? otherwise : v;
+    }
+
+    /** A name for an F1ED line, which separates its fields with commas. */
+    private static String f1EdName(String s)
+    {
+        return s == null ? "" : s.replace(',', ' ');
+    }
+
+    private static int[] carSet(GameLiveries l, int team)
+    {
+        int[] v = new int[16];
+        for (int i = 0; i < 16; i++) v[i] = l.getCarSetColour(team, i);
+        return v;
+    }
+
+    private static int[] pitSet(GameLiveries l, int team)
+    {
+        int[] v = new int[16];
+        for (int i = 0; i < 16; i++) v[i] = l.getPitCrewSetColour(team, i);
+        return v;
+    }
+
+    private static int[] helmetSet(GameLiveries l, int car)
+    {
+        int[] v = new int[16];
+        for (int i = 0; i < 16; i++) v[i] = l.getHelmetSetColour(car, i);
+        return v;
+    }
+
+    /** 16 colours in the game's byte order: start (or zeros), with the dataset's named parts put in. */
+    private static String colourLine(Dataset d, String section, String prefix, String[] parts, int[] bytes, int[] start)
+    {
+        int[] v = start == null ? new int[16] : start.clone();
+        for (int p = 0; p < parts.length; p++)
+        {
+            Integer x = d.getInt(section, prefix + parts[p].toLowerCase());
+            if (x != null) v[bytes[p]] = x;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 16; i++)
+            sb.append(i == 0 ? "" : ",").append(v[i]);
+        return sb.toString();
+    }
+
+    private static void field(StringBuilder sb, int i, int indent, String key, int value)
+    {
+        sb.append(i == 0 ? "\r\n" : ",\r\n");
+        for (int k = 0; k < indent; k++)
+            sb.append(' ');
+        sb.append('"').append(key).append("\": ").append(value);
+    }
+
+    private static String jsonString(String s)
+    {
+        if (s == null)
+            s = "";
+        StringBuilder sb = new StringBuilder("\"");
+        for (char ch : s.toCharArray())
+        {
+            if (ch == '"' || ch == '\\')
+                sb.append('\\').append(ch);
+            else if (ch < 0x20)
+                sb.append(String.format("\\u%04x", (int) ch));
+            else
+                sb.append(ch);
+        }
+        return sb.append('"').toString();
+    }
+
+    // --- ArgEditor's single colour files: .car (a team's car), .hel (a helmet) -------
+
+    /** Which of the game's 16 car colours each byte of a .car file holds (read from files ArgEditor saved). */
+    private static final int[] CAR_FILE_ORDER = { 0, 7, 3, 9, 4, 6, 15, 10, 5, 1, 13, 14, 12, 2, 8, 11 };
+    private static final String CAR_FILE_MARK = "TKF1", HELMET_FILE_MARK = "TKHE";
+
+    /** A team's 16 car colours (the game's order) as a .car file. */
+    public static byte[] writeCarFile(int[] colours)
+    {
+        byte[] out = mark(CAR_FILE_MARK);
+        for (int i = 0; i < 16; i++)
+            out[4 + i] = (byte) colours[CAR_FILE_ORDER[i]];
+        return out;
+    }
+
+    /** A .car file's 16 car colours in the game's order, or null if it is not one. */
+    public static int[] readCarFile(byte[] file)
+    {
+        if (!marked(file, CAR_FILE_MARK))
+            return null;
+        int[] out = new int[16];
+        for (int i = 0; i < 16; i++)
+            out[CAR_FILE_ORDER[i]] = file[4 + i] & 0xFF;
+        return out;
+    }
+
+    /** A driver's 16 helmet colours (the game's order, which a .hel file keeps) as a .hel file. */
+    public static byte[] writeHelmetFile(int[] colours)
+    {
+        byte[] out = mark(HELMET_FILE_MARK);
+        for (int i = 0; i < 16; i++)
+            out[4 + i] = (byte) colours[i];
+        return out;
+    }
+
+    /** A .hel file's 16 helmet colours, or null if it is not one. */
+    public static int[] readHelmetFile(byte[] file)
+    {
+        if (!marked(file, HELMET_FILE_MARK))
+            return null;
+        int[] out = new int[16];
+        for (int i = 0; i < 16; i++)
+            out[i] = file[4 + i] & 0xFF;
+        return out;
+    }
+
+    private static byte[] mark(String m)
+    {
+        byte[] out = new byte[20];
+        System.arraycopy(m.getBytes(StandardCharsets.ISO_8859_1), 0, out, 0, 4);
+        return out;
+    }
+
+    private static boolean marked(byte[] file, String m)
+    {
+        return file != null && file.length == 20 && new String(file, 0, 4, StandardCharsets.ISO_8859_1).equals(m);
     }
 
     // --- a whole HELMETS.DAT, as shared with some car sets ----------------------

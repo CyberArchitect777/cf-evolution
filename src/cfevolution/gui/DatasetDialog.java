@@ -45,6 +45,12 @@ public class DatasetDialog extends JDialog
     private final Map<DatasetGroup, JCheckBox> boxes = new EnumMap<DatasetGroup, JCheckBox>(DatasetGroup.class);
     private boolean accepted;
 
+    /** What Export Dataset can save as. */
+    private static final String[] FORMATS = { "CF Evolution dataset (.cfe)", "ArgEditor car set (.arged)", "F1ED car set (.1ED)" };
+    private static final int CFE = 0, ARGEDITOR = 1, F1ED = 2;
+    private int format = CFE;
+    private Set<DatasetGroup> possible = java.util.EnumSet.noneOf(DatasetGroup.class);
+
     private DatasetDialog(Window owner, String title)
     {
         super(owner, title, ModalityType.APPLICATION_MODAL);
@@ -53,6 +59,7 @@ public class DatasetDialog extends JDialog
 
     private JPanel groupList(Set<DatasetGroup> offered, Set<DatasetGroup> possible)
     {
+        this.possible = possible;
         JPanel p = new JPanel(new GridLayout(0, 1, 0, 2));
         p.setBorder(BorderFactory.createTitledBorder("Include"));
         for (DatasetGroup g : DatasetGroup.values())
@@ -73,9 +80,45 @@ public class DatasetDialog extends JDialog
         return p;
     }
 
+    /** The groups a format always holds; null for a .cfe, which holds what is ticked. */
+    private Set<DatasetGroup> fixedGroups()
+    {
+        return format == ARGEDITOR ? OtherEditorFiles.ARGEDITOR_GROUPS : format == F1ED ? OtherEditorFiles.F1ED_GROUPS : null;
+    }
+
+    /** Ticks and greys the boxes for the format chosen: another editor's car set holds what it holds. */
+    private void showFormat()
+    {
+        Set<DatasetGroup> fixed = fixedGroups();
+        for (Map.Entry<DatasetGroup, JCheckBox> e : boxes.entrySet())
+        {
+            DatasetGroup g = e.getKey();
+            JCheckBox box = e.getValue();
+            boolean can = possible.contains(g);
+            if (fixed == null)
+            {
+                box.setEnabled(can);
+                box.setSelected(can && !g.files);
+            }
+            else if (fixed.contains(g))
+            {
+                box.setEnabled(false);
+                box.setSelected(true);
+            }
+            else
+            {
+                boolean optional = format == ARGEDITOR && g == DatasetGroup.HELMET_PICTURES && can;
+                box.setEnabled(optional);
+                box.setSelected(false);
+            }
+        }
+    }
+
     private Set<DatasetGroup> chosen()
     {
         Set<DatasetGroup> out = java.util.EnumSet.noneOf(DatasetGroup.class);
+        if (fixedGroups() != null)
+            out.addAll(fixedGroups());
         for (Map.Entry<DatasetGroup, JCheckBox> e : boxes.entrySet())
             if (e.getValue().isSelected() && e.getValue().isEnabled())
                 out.add(e.getKey());
@@ -143,18 +186,41 @@ public class DatasetDialog extends JDialog
                                           JOptionPane.ERROR_MESSAGE);
             return;
         }
-        DatasetDialog d = new DatasetDialog(main, "Export Dataset");
+        final DatasetDialog d = new DatasetDialog(main, "Export Dataset");
+        final JComboBox<String> formatBox = new JComboBox<String>(FORMATS);
+        formatBox.setName("dataset format");
         JTextField title = new JTextField(24);
         title.setName("dataset title");
-        JPanel top = new JPanel(new BorderLayout(8, 0));
-        top.add(new JLabel("Title (optional):"), BorderLayout.WEST);
-        top.add(title, BorderLayout.CENTER);
+        JPanel top = new JPanel(new GridBagLayout());
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.anchor = GridBagConstraints.WEST;
+        gc.insets = new Insets(0, 0, 6, 8);
+        top.add(new JLabel("Save as:"), gc);
+        gc.gridx = 1;
+        top.add(formatBox, gc);
+        gc.gridx = 0;
+        gc.gridy = 1;
+        top.add(new JLabel("Title (optional):"), gc);
+        gc.gridx = 1;
+        gc.fill = GridBagConstraints.HORIZONTAL;
+        gc.weightx = 1;
+        top.add(title, gc);
         JPanel content = new JPanel(new BorderLayout(0, 10));
         content.add(top, BorderLayout.NORTH);
         content.add(d.groupList(java.util.EnumSet.allOf(DatasetGroup.class), data.available()), BorderLayout.CENTER);
         JPanel south = new JPanel(new BorderLayout());
-        south.add(note("The dataset is a text file (.cfe) anyone can read. With pictures or circuits it is saved as a zip<br>"
-                       + "holding the text file and folders of PNG pictures and circuit files."), BorderLayout.NORTH);
+        final JLabel formatNote = note(CFE_NOTE);
+        formatNote.setName("format note");
+        south.add(formatNote, BorderLayout.NORTH);
+        formatBox.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e)
+            {
+                d.format = formatBox.getSelectedIndex();
+                d.showFormat();
+                formatNote.setText("<html>" + (d.format == ARGEDITOR ? ARGEDITOR_NOTE : d.format == F1ED ? F1ED_NOTE : CFE_NOTE) + "</html>");
+                d.pack();
+            }
+        });
         south.add(d.buttons("Export..."), BorderLayout.SOUTH);
         content.add(south, BorderLayout.SOUTH);
         d.showDialog(content);
@@ -162,6 +228,11 @@ public class DatasetDialog extends JDialog
             return;
 
         Set<DatasetGroup> groups = d.chosen();
+        if (d.format != CFE)
+        {
+            exportOtherEditor(main, game, data, groups, title.getText(), d.format);
+            return;
+        }
         boolean zip = false;
         for (DatasetGroup g : groups)
             zip |= g.files;
@@ -191,6 +262,48 @@ public class DatasetDialog extends JDialog
         }
         JOptionPane.showMessageDialog(main, "The dataset was saved as " + written.getName() + ".", "Export Dataset",
                                       JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private static final String CFE_NOTE = "The dataset is a text file (.cfe) anyone can read. With pictures or circuits it is saved as a zip<br>"
+        + "holding the text file and folders of PNG pictures and circuit files.";
+    private static final String ARGEDITOR_NOTE = "For ArgEditor: the first 18 teams with their drivers, the colours and the points.<br>"
+        + "Drivers without a seat, teams 19 and 20, and anything else are left out.";
+    private static final String F1ED_NOTE = "For F1ED: all 20 teams and 40 drivers, the colours, and the game settings F1ED has.<br>"
+        + "F1ED has no points table; anything else is left out.";
+
+    private static void exportOtherEditor(MainGUI main, GameFolder game, GameDataset data, Set<DatasetGroup> groups, String title, int format)
+    {
+        String ext = format == ARGEDITOR ? ".arged" : ".1ED";
+        JFileChooser chooser = new JFileChooser(game.getFolder().getParentFile());
+        chooser.setDialogTitle("Export Dataset");
+        chooser.setFileFilter(new FileNameExtensionFilter(FORMATS[format].replace("(.", "(*."), ext.substring(1)));
+        String base = title.trim().replaceAll("[^A-Za-z0-9 _-]", "").trim();
+        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), (base.isEmpty() ? "carset" : base) + ext));
+        if (chooser.showSaveDialog(main) != JFileChooser.APPROVE_OPTION)
+            return;
+        File target = chooser.getSelectedFile();
+        File written = new File(target.getParentFile(), baseName(target) + ext);
+        if (written.exists() && JOptionPane.showOptionDialog(main, written.getName() + " already exists. Replace it?",
+                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
+            return;
+        Dataset dataset = data.export(groups, title);
+        java.util.List<String> notes = new java.util.ArrayList<String>();
+        byte[] bytes = format == ARGEDITOR ? OtherEditorFiles.writeArgEditor(dataset, data.helmetPalette(), notes)
+                                           : OtherEditorFiles.writeF1Ed(dataset, data.getExecutable().getGameLiveries(), notes);
+        try
+        {
+            java.nio.file.Files.write(written.toPath(), bytes);
+        }
+        catch (IOException e)
+        {
+            JOptionPane.showMessageDialog(main, written.getName() + " could not be saved.", "Export Dataset", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        StringBuilder msg = new StringBuilder("The car set was saved as " + written.getName() + ".");
+        for (String n : notes)
+            msg.append("\n").append(n);
+        JOptionPane.showMessageDialog(main, msg.toString(), "Export Dataset", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private static String baseName(File f)

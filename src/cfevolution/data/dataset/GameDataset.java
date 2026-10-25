@@ -664,9 +664,32 @@ public class GameDataset
         else if (namesChanged)
             exeChanged = true;
 
+        if (groups.contains(DatasetGroup.TEAMS))
+        {
+            int seated = seatedCars();
+            if (seated < GRID)
+                report.add("Only " + seated + " cars have a seat in a team. The game always starts " + GRID + " cars, and with fewer "
+                           + "the empty places on the grid are taken by cars that do not race properly. Give at least " + GRID
+                           + " cars a seat on the executable's Teams page.");
+        }
+
         writeChanges();
         report.add(0, groups.isEmpty() ? "Nothing was imported." : "Imported: " + labels(groups) + ".");
         return new ArrayList<String>(report);
+    }
+
+    /** The cars the game starts in a race; fewer seated cars leave places taken by cars that do not race (seen in the game). */
+    public static final int GRID = 26;
+
+    /** How many cars have a seat in a team. */
+    public int seatedCars()
+    {
+        int n = 0;
+        for (int t = 0; t < TEAMS; t++)
+            for (int seat = 0; seat < 2; seat++)
+                if (exe.getGameTeams().getTeamCar(t, seat) != 0)
+                    n++;
+        return n;
     }
 
     private static String labels(Set<DatasetGroup> groups)
@@ -1072,6 +1095,27 @@ public class GameDataset
             in = scaled;
         }
         return in.getRGB(0, 0, w, h, null, 0, w);
+    }
+
+    /**
+     * A picture file's pixels as palette indices: its own indices if they are
+     * this palette's, else matched to the nearest colours; null if it is not a picture.
+     */
+    static byte[] pictureIndices(byte[] file, int w, int h, int[] pal)
+    {
+        BufferedImage im;
+        try
+        {
+            im = ImageIO.read(new ByteArrayInputStream(file));
+        }
+        catch (IOException e)
+        {
+            return null;
+        }
+        if (im == null)
+            return null;
+        byte[] px = exactIndices(im, w, h, pal, 0);
+        return px != null ? px : ColourReducer.match(rgb(im, w, h), pal, 0);
     }
 
     /** Puts a small picture in place: its own indices if they are this palette's, else matched to the nearest colours. */

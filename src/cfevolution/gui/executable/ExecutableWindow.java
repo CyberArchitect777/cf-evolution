@@ -24,6 +24,8 @@
  */
 package cfevolution.gui.executable;
 
+import cfevolution.data.dataset.OtherEditorFiles;
+
 import cfevolution.data.executable.*;
 import cfevolution.gui.*;
 import java.awt.*;
@@ -520,7 +522,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get(int r, int p) { return liveries.getCarColour(r, p); }
             public void set(int r, int p, int c) { liveries.setCarColour(r, p, c); }
             public int setColour(int r, int s) { return liveries.getCarSetColour(r, s); }
-        }, new Pictures(GameSprites.CAR_FIRST, GameSprites.CAR_LAST, 212, 6)));
+        }, new Pictures(GameSprites.CAR_FIRST, GameSprites.CAR_LAST, 212, 6), CAR_FILE));
         tabs.addTab("Helmets", colourTable(liveries, new ColourTable() {
             public int rows() { return GameLiveries.DRIVERS; }
             public String rowName(int r) { return (r + 1) + "  " + drivers.getDriverName(r); }
@@ -529,7 +531,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get(int r, int p) { return liveries.getHelmetColour(r, p); }
             public void set(int r, int p, int c) { liveries.setHelmetColour(r, p, c); }
             public int setColour(int r, int s) { return liveries.getHelmetSetColour(r, s); }
-        }, new Pictures(GameSprites.HELMET_FIRST, GameSprites.HELMET_LAST, 70, 12)));
+        }, new Pictures(GameSprites.HELMET_FIRST, GameSprites.HELMET_LAST, 70, 12), HELMET_FILE));
         tabs.addTab("Pit crews", colourTable(liveries, new ColourTable() {
             public int rows() { return GameLiveries.TEAMS; }
             public String rowName(int r) { return teams.getTeamName(r); }
@@ -538,13 +540,17 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int get(int r, int p) { return liveries.getPitCrewColour(r, p); }
             public void set(int r, int p, int c) { liveries.setPitCrewColour(r, p, c); }
             public int setColour(int r, int s) { return liveries.getPitCrewSetColour(r, s); }
-        }, new Pictures(GameSprites.PIT_CREW)));
+        }, new Pictures(GameSprites.PIT_CREW), null));
         return page("Liveries",
             "Colours of each team's cars and pit crew, and each driver's helmet. Click a colour, or part of the picture, to change it.",
             tabs);
     }
 
-    private JComponent colourTable(final GameLiveries liveries, final ColourTable source, final Pictures pictures)
+    /** ArgEditor's file for one team's car colours, or one driver's helmet colours. */
+    private static final String CAR_FILE = "car", HELMET_FILE = "hel";
+
+    private JComponent colourTable(final GameLiveries liveries, final ColourTable source, final Pictures pictures,
+                                   final String fileKind)
     {
         final String[] parts = source.parts();
         final AbstractTableModel model = new AbstractTableModel() {
@@ -630,7 +636,84 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel tab = new JPanel(new BorderLayout());
         tab.add(new JScrollPane(table), BorderLayout.CENTER);
         tab.add(picturePanel(liveries, source, pictures, table, model, choose), BorderLayout.EAST);
+        if (fileKind != null)
+            tab.add(colourFileButtons(source, table, model, fileKind), BorderLayout.SOUTH);
         return tab;
+    }
+
+    /** Import and export of the selected row's colours as ArgEditor's .car or .hel file. */
+    private JComponent colourFileButtons(final ColourTable source, final JTable table, final AbstractTableModel model,
+                                         final String kind)
+    {
+        final boolean car = kind.equals(CAR_FILE);
+        final String what = car ? "car colours" : "helmet colours";
+        final javax.swing.filechooser.FileNameExtensionFilter filter =
+            new javax.swing.filechooser.FileNameExtensionFilter("ArgEditor " + what + " (*." + kind + ")", kind);
+        JButton in = new JButton("Import ." + kind + "...");
+        in.setName("import " + kind);
+        in.setToolTipText("Bring in " + what + " saved by ArgEditor, for the selected " + (car ? "team" : "driver"));
+        in.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int r = Math.max(0, table.getSelectedRow());
+                JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
+                chooser.setDialogTitle("Import " + what + " for " + source.rowName(r));
+                chooser.setFileFilter(filter);
+                if (chooser.showOpenDialog(table) != JFileChooser.APPROVE_OPTION)
+                    return;
+                int[] colours = null;
+                try
+                {
+                    byte[] b = java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath());
+                    colours = car ? OtherEditorFiles.readCarFile(b) : OtherEditorFiles.readHelmetFile(b);
+                }
+                catch (java.io.IOException ex) { /* reported below */ }
+                if (colours == null)
+                {
+                    JOptionPane.showMessageDialog(table, chooser.getSelectedFile().getName() + " is not an ArgEditor ." + kind
+                        + " file, so nothing was changed.", "Import ." + kind, JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                // only the colours the page offers; the others stay as the game has them
+                int[] slots = source.slots();
+                for (int p = 0; p < slots.length; p++)
+                    source.set(r, p, colours[slots[p]]);
+                model.fireTableRowsUpdated(r, r);
+            }
+        });
+        JButton out = new JButton("Export ." + kind + "...");
+        out.setName("export " + kind);
+        out.setToolTipText("Save the selected " + (car ? "team's " : "driver's ") + what + " for ArgEditor");
+        out.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int r = Math.max(0, table.getSelectedRow());
+                JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
+                chooser.setDialogTitle("Export " + what + " of " + source.rowName(r));
+                chooser.setFileFilter(filter);
+                String base = source.rowName(r).replaceAll("^[0-9]+ +", "").replaceAll("[^A-Za-z0-9 _-]", "").trim();
+                chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), (base.isEmpty() ? kind : base) + "." + kind));
+                if (chooser.showSaveDialog(table) != JFileChooser.APPROVE_OPTION)
+                    return;
+                File f = chooser.getSelectedFile();
+                if (!f.getName().toLowerCase().endsWith("." + kind))
+                    f = new File(f.getParentFile(), f.getName() + "." + kind);
+                int[] colours = new int[16];
+                for (int s = 0; s < 16; s++)
+                    colours[s] = source.setColour(r, s);
+                try
+                {
+                    java.nio.file.Files.write(f.toPath(), car ? OtherEditorFiles.writeCarFile(colours) : OtherEditorFiles.writeHelmetFile(colours));
+                }
+                catch (java.io.IOException ex)
+                {
+                    JOptionPane.showMessageDialog(table, f.getName() + " could not be saved.", "Export ." + kind, JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        p.add(in);
+        p.add(out);
+        p.add(new JLabel("<html><font color='#6A7380'>for the selected " + (car ? "team" : "driver") + ", in ArgEditor's file</font></html>"));
+        return p;
     }
 
     /**
