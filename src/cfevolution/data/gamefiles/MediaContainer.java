@@ -103,7 +103,12 @@ public class MediaContainer
 
     public static MediaContainer load(File file) throws IOException
     {
-        byte[] d = Files.readAllBytes(file.toPath());
+        return load(Files.readAllBytes(file.toPath()));
+    }
+
+    /** A picture file's contents, already read (e.g. from a zip). */
+    public static MediaContainer load(byte[] d) throws IOException
+    {
         if (d.length < 10 || !java.util.Arrays.equals(java.util.Arrays.copyOf(d, 8), SIGNATURE))
             throw new IOException("not a picture file");
         MediaContainer c = new MediaContainer();

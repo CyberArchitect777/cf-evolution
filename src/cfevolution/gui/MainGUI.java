@@ -758,6 +758,38 @@ public class MainGUI extends JFrame
         }
     }
 
+    /**
+     * Before a dataset is exported from or imported into a game folder: the
+     * folder's files open in tabs are saved (export, asking first) or closed
+     * (import, so no tab writes an old copy back over the import). The game
+     * folder's own tab stays. False if the user cancels.
+     */
+    public boolean releaseGameFiles(GameFolder game, boolean close)
+    {
+        String folder = game.getFolder().getAbsolutePath() + File.separator;
+        for (EditorTab tab : new ArrayList<EditorTab>(tabs))
+        {
+            if (tab instanceof GameWindow || !new File(tab.getFilePath()).getAbsolutePath().startsWith(folder))
+                continue;
+            if (close)
+            {
+                if (!closeTab(tab))
+                    return false;
+            }
+            else if (tab.isModified())
+            {
+                tabPane.setSelectedIndex(tabs.indexOf(tab));
+                int choice = JOptionPane.showOptionDialog(this,
+                    tab.getTabTitle() + " has unsaved changes. Save them, so they go into the dataset?",
+                    "Unsaved Changes", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                    new String[] { "Save", "Leave Them Out", "Cancel" }, "Save");
+                if (choice == 0 ? !tab.save() : choice != 1)
+                    return false;
+            }
+        }
+        return true;
+    }
+
     /** Writes the names in a game folder's GP.EXE (as saved) to a name file:
         the 1,480 bytes there are laid out exactly as a name file is. */
     public void writeNameFileFromGame(GameFolder game, File target) throws java.io.IOException

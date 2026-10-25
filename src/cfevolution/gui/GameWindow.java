@@ -115,6 +115,33 @@ public class GameWindow extends JPanel implements EditorTab
                sounds, "open-sounds", new Runnable() {
                    public void run() { GameWindow.this.mainWindow.openGameFile(sounds, game); } });
 
+        addHeading(rows, y++, "Datasets");
+        JButton exportData = new JButton("Export Dataset...");
+        exportData.setName("export-dataset");
+        exportData.setToolTipText("Saves teams, drivers, colours, rules, pictures and more from this game as a dataset to share");
+        exportData.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { DatasetDialog.exportDataset(GameWindow.this.mainWindow, game); }
+        });
+        JButton importData = new JButton("Import Dataset...");
+        importData.setName("import-dataset");
+        importData.setToolTipText("Brings a dataset, or an F1ED or ArgEditor car set, into this game");
+        importData.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                DatasetDialog.importDataset(GameWindow.this.mainWindow, game, new Runnable() { public void run() { fillRows(); } });
+            }
+        });
+        JPanel dataButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        dataButtons.add(exportData);
+        dataButtons.add(Box.createHorizontalStrut(8));
+        dataButtons.add(importData);
+        GridBagConstraints db = new GridBagConstraints();
+        db.gridy = y++;
+        db.gridx = 1;
+        db.gridwidth = 3;
+        db.anchor = GridBagConstraints.WEST;
+        db.insets = new Insets(3, 0, 6, 0);
+        rows.add(dataButtons, db);
+
         addHeading(rows, y++, "Saved files (GPSAVES)");
         JButton saveNames = new JButton("Save the Game's Names as a Name File...");
         saveNames.setName("save-names");

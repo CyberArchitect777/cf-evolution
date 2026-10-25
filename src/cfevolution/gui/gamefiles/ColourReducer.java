@@ -26,14 +26,14 @@ package cfevolution.gui.gamefiles;
  *
  * @author barrie
  */
-class ColourReducer
+public class ColourReducer
 {
     private ColourReducer()
     {
     }
 
     /** A palette for the picture: colours 0..keep-1 from {@code base}, the rest by median cut. */
-    static int[] palette(int[] rgb, int[] base, int keep)
+    public static int[] palette(int[] rgb, int[] base, int keep)
     {
         int[] pal = base.clone();
         java.util.List<int[]> boxes = new java.util.ArrayList<int[]>();
@@ -99,7 +99,7 @@ class ColourReducer
     }
 
     /** The nearest palette colour (from index {@code first} up) for each pixel. */
-    static byte[] match(int[] rgb, int[] pal, int first)
+    public static byte[] match(int[] rgb, int[] pal, int first)
     {
         byte[] out = new byte[rgb.length];
         java.util.Map<Integer, Integer> cache = new java.util.HashMap<Integer, Integer>();
