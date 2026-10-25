@@ -96,6 +96,9 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         // back over the limit. Returns a new line — it re-fits the lap
         // downstream of every straightening, so the result must be taken.
         ccLine = CCLineQuantizer.capCoachingEntries(context.geometry, ccLine);
+        // Then towards the originals' number of entries, if that does no harm:
+        // fewer suggested-gear changes and phantom corners for the AI.
+        ccLine = CCLineQuantizer.easeCoachingEntries(context.geometry, ccLine);
 
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 

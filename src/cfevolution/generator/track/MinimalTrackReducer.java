@@ -25,6 +25,7 @@ import cfevolution.data.track.Track;
 import cfevolution.data.track.TrackSegment;
 import cfevolution.data.track.TrackSegments;
 import cfevolution.generator.pitlane.PitLaneFitter;
+import cfevolution.generator.pitlane.PitMouth;
 
 import java.util.Vector;
 
@@ -346,7 +347,10 @@ public class MinimalTrackReducer {
         r.pitOffset = dPitOffset;
 
         track.setLayoutMode(false);
-        track.calculateTrackLayout();
+        // The rebuilt tapers move where the lane leaves and rejoins the road;
+        // set the pit lane objects, joins and wall gaps up there (lays out).
+        if (!PitMouth.place(track))
+            track.calculateTrackLayout();
         r.resultTlu = segs.getTotalTlu();
         r.gapTlu = TrackHeadingClosure.gapTlu(track);
         r.drawnError = drawnError(track.getTrackSegments());

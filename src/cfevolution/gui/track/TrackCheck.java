@@ -39,7 +39,7 @@ public class TrackCheck
     public static final int OK = 1, WARNING = 2, ERROR = 3;
 
     /** What a check's button does. */
-    public static final int ACTION_NONE = 0, ACTION_MOVE_TRACK = 1, ACTION_MATCH_HEADING = 2, ACTION_GENERATE_LINE = 3;
+    public static final int ACTION_NONE = 0, ACTION_MOVE_TRACK = 1, ACTION_MATCH_HEADING = 2, ACTION_GENERATE_LINE = 3, ACTION_PIT_MOUTHS = 4;
 
     /** Same thresholds as GenerateCCLineDialog.lineQualityWarning, which
         were calibrated so that no original trips them. */
@@ -109,7 +109,11 @@ public class TrackCheck
         else
             r.ok(layout, "The end of the track lines up with the start");
 
-        if (TrackCoordinateEdge.shouldMove(track))
+        if (TrackCoordinateEdge.shouldMove(track) && TrackCoordinateEdge.isOpen(track))
+            r.add(layout, WARNING, "The track crosses the edge of the game's map area near a corner",
+                "The game would build a wrong line for the computer cars there. Moving the track puts the crossing "
+              + "on a straight; then generate the best line again.", ACTION_MOVE_TRACK);
+        else if (TrackCoordinateEdge.shouldMove(track))
             r.add(layout, WARNING, "The track runs over the edge of the game's map area",
                 "The game would build a wrong line for the computer cars. Moving the track changes nothing else about it.",
                 ACTION_MOVE_TRACK);
@@ -136,6 +140,20 @@ public class TrackCheck
                 "The game will freeze while loading it. Shorten the pit lane's straight sections.", ACTION_NONE);
         else if (nPitSegs > 0)
             r.ok(pit, "The pit lane's length fits the game");
+
+        // Only for tracks that already have the pit lane objects (an older random
+        // track, say); adding them to a converted track that has none can make the
+        // game draw faults (PitMouth.hasPitObjects).
+        if (nPitSegs > 0 && !track.getLayoutMode()
+            && cfevolution.generator.pitlane.PitMouth.hasPitObjects(track))
+        {
+            if (cfevolution.generator.pitlane.PitMouth.looksRight(track))
+                r.ok(pit, "The pit lane's entrance and exit are set up for the game");
+            else
+                r.add(pit, WARNING, "The pit lane's entrance and exit are not set up the way the game expects",
+                    "The game may not draw the pit lane where it leaves the track, or may draw a wall across it. "
+                  + "The editor can set them up from the pit lane's shape.", ACTION_PIT_MOUTHS);
+        }
 
         // --- Best line ----------------------------------------------------
         int ccTlu = track.getCCLineTlu();

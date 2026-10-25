@@ -19,6 +19,7 @@
 
 package cfevolution.generator.track;
 
+import cfevolution.data.track.TrackSegment;
 import cfevolution.data.track.Seg;
 import cfevolution.data.track.Track;
 import cfevolution.data.track.TrackDataHeader;
@@ -55,16 +56,52 @@ public class TrackCoordinateEdge {
 
     public static class Result {
         public boolean moved;      // the start point was changed
+        public boolean open;       // too long to clear the edge: crossings put on straights instead
         public String failure;     // why not, or null; plain language
     }
 
-    /** True when the track crosses the edge AND could be moved clear of it.
-        A track longer than the coordinate space in some direction (an open
-        or straight track, such as the minimal-track canvas or Mike Saunders'
-        straight Monza) cannot help crossing; those are left alone and not
-        warned about. Needs the layout calculated. */
+    /** True when the track crosses the edge and moving it would help: it can
+        be moved clear of the edge, or (an open track, longer than the
+        coordinate space in some direction) it crosses the edge at or near a
+        corner and could cross it on a straight instead. Needs the layout
+        calculated.
+
+        OPEN TRACKS (2026-10-25). A track longer than the space, such as the
+        minimal-track canvas or the owner's Straight Kink Check track, cannot
+        help crossing. Until this date they were left alone, but the turn one
+        snap on the Kink Check track (1,035 units, the line blinking out in the
+        game) IS its crossing, which sits inside turn one at Seg 405. With the
+        start slid so the crossing lands on the straight and the line generated
+        again, the worst step on the whole lap is 378 and turn one's 323, both
+        under the AI's 640 dead-band; at the original placement a regenerated
+        line steps 2,218 there. A best line belongs to its placement: moving an
+        open track needs a new line. */
     public static boolean shouldMove(Track track) {
-        return track.crossesCoordinateEdge() && fits(span(track));
+        if (!track.crossesCoordinateEdge())
+            return false;
+        if (fits(span(track)))
+            return true;
+        return isOpenTrackCrossingAtCorner(track);
+    }
+
+    /** True for an open track whose crossings could be moved further from
+        corners than they are, and are now closer than CORNER_CLEARANCE. */
+    public static boolean isOpenTrackCrossingAtCorner(Track track) {
+        if (!track.crossesCoordinateEdge() || fits(span(track)))
+            return false;
+        int[] avoid = avoidDistance(track);
+        int now = Math.min(crossingScore(track, avoid, 0), crossingScore(track, avoid, 1));
+        return now < CORNER_CLEARANCE;
+    }
+
+    /** How far, in Segs, an open track's edge crossings should be from any
+        corner and from the start/finish line. */
+    private static final int CORNER_CLEARANCE = 24;
+
+    /** True when the track is longer than the coordinate space in some
+        direction, so it cannot be moved clear of the edge. */
+    public static boolean isOpen(Track track) {
+        return !fits(span(track));
     }
 
     /** {width, height} of the track and pit lane, unwrapped. */
@@ -105,10 +142,14 @@ public class TrackCoordinateEdge {
         double[] b = bounds(track);
         double minX = b[0], maxX = b[1], minY = b[2], maxY = b[3];
         if (!fits(new double[] { maxX - minX, maxY - minY })) {
-            r.failure = "This track is longer than the game's map area in one direction,\n"
-                      + "as open or straight tracks often are, so it cannot be moved\n"
-                      + "clear of the edge. It has been left as it is.";
-            return r;
+            if (!isOpenTrackCrossingAtCorner(track)) {
+                r.failure = "This track is longer than the game's map area in one direction,\n"
+                          + "as open or straight tracks often are, so it always crosses the\n"
+                          + "edge somewhere. It already crosses on a straight, away from the\n"
+                          + "corners, so it has been left as it is.";
+                return r;
+            }
+            return placeOpenTrack(track, r, minX, maxX, minY, maxY);
         }
 
         // Seg 0's display position is its real one, so shifting by minus
@@ -128,5 +169,85 @@ public class TrackCoordinateEdge {
         }
         r.moved = true;
         return r;
+    }
+
+    /** An open track: each axis it fits in is centred as usual; along an axis
+        it does not fit in, the start is slid (in whole TLU) to put every
+        crossing as far as possible from corners and the start/finish line,
+        preferring placements where the pit lane does not cross. */
+    private static Result placeOpenTrack(Track track, Result r,
+                                         double minX, double maxX, double minY, double maxY) {
+        TrackDataHeader header = track.getTrackDataHeader();
+        int nRoom = TrackSegments.COORD_WRAP - 2 * MARGIN;
+        int[] avoid = avoidDistance(track);
+        double[] mins = { minX, minY }, maxs = { maxX, maxY };
+        for (int axis = 0; axis < 2; axis++) {
+            int nOld = header.getStartPos(axis);
+            if (maxs[axis] - mins[axis] < nRoom) {
+                header.setStartPos(axis, nOld - (int) Math.round((mins[axis] + maxs[axis]) / 2.0 / 8.0));
+                continue;
+            }
+            int nBest = nOld, nBestScore = Integer.MIN_VALUE;
+            for (int s = 0; s < TrackSegments.COORD_WRAP / 1024; s++) {
+                header.setStartPos(axis, nOld + s * 128);
+                track.calculateTrackLayout();
+                int score = crossingScore(track, avoid, axis);
+                if (score > nBestScore) { nBestScore = score; nBest = nOld + s * 128; }
+            }
+            header.setStartPos(axis, nBest);
+        }
+        track.calculateTrackLayout();
+        r.moved = true;
+        r.open = true;
+        return r;
+    }
+
+    /** Per track Seg: how many Segs to the nearest Seg of a curved section or
+        to the start/finish line (the line's seam and overshoot sit there). */
+    private static int[] avoidDistance(Track track) {
+        TrackSegments segs = track.getTrackSegments();
+        int n = segs.getMaxTrackSegIndex() + 1;
+        boolean[] bad = new boolean[n];
+        int t = 0;
+        for (int i = 0; i < segs.size(); i++) {
+            TrackSegment ts = segs.get(i);
+            for (int k = 0; k < ts.getTlu() && t < n; k++, t++)
+                if (ts.getCurvature() != 0) bad[t] = true;
+        }
+        bad[0] = true;
+        int[] d = new int[n];
+        for (int i = 0; i < n; i++) {
+            int best = n;
+            for (int k = 0; k < n; k++) if (bad[k]) {
+                int g = Math.abs(i - k);
+                best = Math.min(best, Math.min(g, n - g));
+            }
+            d[i] = best;
+        }
+        return d;
+    }
+
+    /** The smallest avoidDistance over the track's crossings on one axis
+        (0 = X, 1 = Y), less a large penalty when the pit lane crosses on it.
+        A track with no crossing on that axis scores the most. */
+    private static int crossingScore(Track track, int[] avoid, int axis) {
+        int score = Integer.MAX_VALUE / 2;
+        TrackSegments segs = track.getTrackSegments();
+        int n = Math.min(avoid.length, segs.getMaxTrackSegIndex() + 1);
+        for (int i = 1; i < n; i++)
+            if (crosses(segs.getSegAt(i - 1), segs.getSegAt(i), axis))
+                score = Math.min(score, avoid[i]);
+        TrackSegments pit = track.getPitlaneSegments();
+        for (int i = 1; i <= pit.getMaxTrackSegIndex(); i++)
+            if (crosses(pit.getSegAt(i - 1), pit.getSegAt(i), axis)) {
+                score -= 100000;
+                break;
+            }
+        return score;
+    }
+
+    private static boolean crosses(Seg a, Seg b, int axis) {
+        int d = axis == 0 ? b.getPosX() - a.getPosX() : b.getPosY() - a.getPosY();
+        return Math.abs(d) > TrackSegments.COORD_WRAP / 2;
     }
 }

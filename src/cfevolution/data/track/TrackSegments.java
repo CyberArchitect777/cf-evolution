@@ -799,16 +799,15 @@ public class TrackSegments extends Vector<TrackSegment> {
     // Returns the Seg at `segOffset` TLUs into the given sector on the given TrackSegments.
     private Seg findPitCommandSeg(TrackSegments trackSegments, int sectorIdx, int segOffset)
     {
-        int count = 0;
-        for (int i = 0; i <= trackSegments.getMaxTrackSegIndex(); i++)
+        // The offset counts Segs from the sector's first Seg and may run past the
+        // sector's end, as in the game, which walks on (wrapping at the lap's end).
+        // Until 2026-10-25 such a connect was not found and no pit lane was built.
+        int n = trackSegments.getMaxTrackSegIndex() + 1;
+        for (int i = 0; i < n; i++)
         {
             Seg s = trackSegments.getSegAt(i);
             if (s != null && s.m_nTrackSector == sectorIdx)
-            {
-                if (count == segOffset)
-                    return s;
-                count++;
-            }
+                return trackSegments.getSegAt((i + segOffset) % n);
         }
         return null;
     }

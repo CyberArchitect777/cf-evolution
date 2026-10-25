@@ -297,6 +297,13 @@ public class GenerateTrackDialog extends JDialog {
         // below the road. Must run AFTER the new segments are installed.
         cfevolution.generator.pitlane.PitLaneFitter.followTrackHeights(
             track.getPitlaneSegments(), segs);
+
+        // Now the lane's shape is final: put the pit lane objects, the pit
+        // joins and the wall gaps where it leaves and rejoins the road, and the
+        // header's pit side where the lane really goes (always the left here;
+        // twelve donors said right, so the game opened the wrong wall).
+        track.setLayoutMode(false);
+        cfevolution.generator.pitlane.PitMouth.place(track);
     }
 
     private void generationFinished(RandomTrackGenerator.Result layout,

@@ -279,7 +279,40 @@ public class CCLineQuantizer {
         calibrated default. */
     public static CCLine capCoachingEntries(CCLineTrackGeometry geo, CCLine ccLine,
                                             int nWindowTlu) {
-        int nBudget = geo.coachingBudget;
+        return cap(geo, ccLine, nWindowTlu, geo.coachingBudget, false);
+    }
+
+    /** The originals carry 18-36 coaching entries (median about 23). */
+    public static final int COMFORT_COACHING_ENTRIES = 36;
+
+    /**
+        Brings a line that is already inside the game's limit down towards the
+        originals' number of coaching entries, COMFORT_COACHING_ENTRIES, by the
+        same straighten-and-repair steps as capCoachingEntries (2026-10-25).
+
+        Each entry is a point where the cockpit's suggested gear changes and
+        where the game's computer car slows for a corner when it works out the
+        cars' target speeds. Generated lines carried 44-66 against the
+        originals' 18-36, most of them arcs so gentle they are hardly corners,
+        so the suggested gear flickered about twice as often as on a shipped
+        circuit. Measured on the twelve sweep tracks and the raced one,
+        easing to 36 leaves no Seg clear of the road and every step under the
+        AI's 640 dead-band.
+
+        Unlike the hard cap this is optional: a line is only returned if it
+        does no damage by the cap's own measures and its worst step grows by
+        no more than a tenth; otherwise the line comes back unchanged.
+    */
+    public static CCLine easeCoachingEntries(CCLineTrackGeometry geo, CCLine ccLine) {
+        int nTarget = Math.min(geo.coachingBudget, COMFORT_COACHING_ENTRIES);
+        CCLine eased = cap(geo, ccLine, CAP_REPAIR_WINDOW_TLU, nTarget, true);
+        return eased != null ? eased : ccLine;
+    }
+
+    /** The cap itself. With fUndamagedOnly it returns null rather than a
+        damaged line. */
+    private static CCLine cap(CCLineTrackGeometry geo, CCLine ccLine, int nWindowTlu,
+                              int nBudget, boolean fUndamagedOnly) {
         if (ccLine.getCoachingEntryCount() <= nBudget)
             return ccLine;
 
@@ -336,7 +369,8 @@ public class CCLineQuantizer {
             if (ccLine.getCoachingEntryCount() > nBudget)
                 continue;
             CapQuality q = new CapQuality(geo, new CCLineSimulator(geo).run(ccLine));
-            double dDamage = q.damageAgainst(startQuality);
+            double dDamage = fUndamagedOnly ? q.strictDamageAgainst(startQuality)
+                                            : q.damageAgainst(startQuality);
             if (dDamage == 0)
                 return ccLine;
             if (dDamage < dBestDamage) {
@@ -344,6 +378,8 @@ public class CCLineQuantizer {
                 best = ccLine;
             }
         }
+        if (fUndamagedOnly)
+            return null;
         return best != null ? best : ccLine;
     }
 
@@ -372,6 +408,15 @@ public class CCLineQuantizer {
             int nSeam = geo.segCount > 0 ? r.walkedTlu % geo.segCount : 0;
             if (nSeam > 0 && nSeam < r.ccLine.length)
                 nHandover = Math.abs(r.ccLine[nSeam] - r.ccLine[nSeam - 1]);
+        }
+
+        /** For the optional easing: as damageAgainst, but the worst step may
+            grow by at most a tenth, even below the dead-band. Without that,
+            SeamGate's d8-s4 went from 380 to 621 (2026-10-25). */
+        double strictDamageAgainst(CapQuality start) {
+            double d = damageAgainst(start);
+            d += Math.max(0, nStep - start.nStep * 1.10);
+            return d;
         }
 
         /** 0 when nothing got worse than the uncapped line allows, else a

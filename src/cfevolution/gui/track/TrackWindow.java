@@ -301,6 +301,7 @@ public class TrackWindow extends JPanel implements EditorTab
                 {
                     case TrackCheck.ACTION_MOVE_TRACK: moveTrackFromEdge(); break;
                     case TrackCheck.ACTION_MATCH_HEADING: addEndHeadingSegment(); break;
+                    case TrackCheck.ACTION_PIT_MOUTHS: setUpPitMouths(); break;
                     case TrackCheck.ACTION_GENERATE_LINE:
                         openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
                         break;
@@ -555,7 +556,9 @@ public class TrackWindow extends JPanel implements EditorTab
         // edge of its coordinate space (see TrackCoordinateEdge).
         if ( cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack) )
         {
-            addWarning("This track runs over the edge of the game's map area, so the game's AI line will be wrong.",
+            addWarning(cfevolution.generator.track.TrackCoordinateEdge.isOpen(currentTrack)
+                       ? "This track crosses the edge of the game's map area near a corner, so the game's AI line will be wrong there."
+                       : "This track runs over the edge of the game's map area, so the game's AI line will be wrong.",
                        "Move Track", new Runnable() { public void run() { moveTrackFromEdge(); } });
             any = true;
         }
@@ -630,8 +633,12 @@ public class TrackWindow extends JPanel implements EditorTab
                 return;
             }
             updateTrackMap();
-            JOptionPane.showMessageDialog(this,
-                "This track ran over the edge of the game's map area, which makes\n"
+            JOptionPane.showMessageDialog(this, moved.open
+              ? "This track crossed the edge of the game's map area at a corner, which\n"
+              + "makes the game build its best line wrongly there. It has been moved so\n"
+              + "that it crosses on a straight first. Nothing else about the track has\n"
+              + "changed."
+              : "This track ran over the edge of the game's map area, which makes\n"
               + "the game build its best line wrongly. It has been moved to the\n"
               + "middle of the map area first. Nothing else about the track has\n"
               + "changed.", "Generate Best Line", JOptionPane.INFORMATION_MESSAGE);
@@ -824,6 +831,28 @@ public class TrackWindow extends JPanel implements EditorTab
 
     /** Tools > moves a track that runs over the edge of the game's
         coordinate space into the middle of it (see TrackCoordinateEdge). */
+    /** Track checker fix: the pit lane objects, joins and wall gaps where the
+        lane leaves and rejoins the road (PitMouth). */
+    private void setUpPitMouths()
+    {
+        if (!cfevolution.generator.pitlane.PitMouth.place(currentTrack))
+        {
+            JOptionPane.showMessageDialog(this,
+                "The editor could not find where the pit lane leaves and rejoins the track,\n"
+              + "so nothing was changed.", "Pit Lane Entrance and Exit", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        treeWindow.rebuildTrackNodes();
+        currentTrack.calculateCCLine();
+        updateTrackMap();
+        JOptionPane.showMessageDialog(this,
+            "The pit lane's entrance and exit have been set up where the pit lane\n"
+          + "leaves and rejoins the track, the way the original circuits do it.\n"
+          + "The shape of the track and the pit lane is unchanged.\n\n"
+          + "Save the track to keep the change.", "Pit Lane Entrance and Exit",
+            JOptionPane.INFORMATION_MESSAGE);
+    }
+
     private void moveTrackFromEdge()
     {
         if (!currentTrack.crossesCoordinateEdge())
@@ -843,6 +872,17 @@ public class TrackWindow extends JPanel implements EditorTab
             return;
         }
         updateTrackMap();
+        if (result.open)
+        {
+            JOptionPane.showMessageDialog(this,
+                "This track is longer than the game's map area, so it always crosses\n"
+              + "the edge somewhere. It has been moved so that it crosses on a straight,\n"
+              + "away from the corners, where the game builds the best line correctly.\n\n"
+              + "Generate the best line again: the old one was made for the old position.\n"
+              + "Save the track to keep the change.", "Move Track Away From Map Edge",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
         JOptionPane.showMessageDialog(this,
             "The track has been moved to the middle of the game's map area.\n"
           + "It ran over the edge, which makes the game build a wrong best line.\n"

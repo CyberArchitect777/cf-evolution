@@ -324,12 +324,14 @@ public class TrackDataHeader extends CFDataObject {
     }
     
 
+    /** Pits on the left. The game reads bit 1 of this flags byte (wTCTrackDataFlags)
+        for the entry side and bit 3 for the exit side; the four left-pit originals
+        store both (10), the others 0. */
     public boolean getPitSide() {
-        if ( m_nPitSide > 0  )
-            return true;
-        else
-            return false;
+        return (m_nPitSide & PITS_LEFT_ENTRY) != 0;
     }
+
+    private static final int PITS_LEFT_ENTRY = 0x02, PITS_LEFT_EXIT = 0x08;
     
     public void setPitSide(boolean pitSide)
     {
@@ -341,13 +343,15 @@ public class TrackDataHeader extends CFDataObject {
         {
             return;
         }
+        // Until 2026-10-25 this wrote 1, a bit the game never reads, so a track
+        // switched to left-hand pits still raced as right-hand ones
         if (pitSide == false)
         {
-            m_nPitSide = 0;
+            m_nPitSide &= ~(PITS_LEFT_ENTRY | PITS_LEFT_EXIT);
         }
         else
         {
-            m_nPitSide = 1;
+            m_nPitSide |= PITS_LEFT_ENTRY | PITS_LEFT_EXIT;
         }
     }
     
