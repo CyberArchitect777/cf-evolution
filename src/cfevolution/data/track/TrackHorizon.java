@@ -188,6 +188,17 @@ public final class TrackHorizon
         return out;
     }
 
+    /**
+     * Horizon bytes from a raw horizon file: ArgTrack's .arghoriz (exactly the
+     * 4096 bytes, checked 2026-10-25 against a file ArgTrack saved) or a track
+     * file, whose first 4096 bytes are its horizon; ArgTrack's Load Horizon
+     * takes either the same way. Null if the file is shorter than a horizon.
+     */
+    public static byte[] fromHorizonFile(byte[] file)
+    {
+        return file == null || file.length < BYTES ? null : java.util.Arrays.copyOf(file, BYTES);
+    }
+
     private static int nearest(int c, int[] pal)
     {
         if ((c & 0xFCFCFC) == (pal[SKY] & 0xFCFCFC))

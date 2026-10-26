@@ -28,7 +28,8 @@ import javax.swing.*;
 /**
  * Edit > Horizon (2026-10-25): the picture of distant scenery the game draws
  * along the horizon. Shown enlarged; click to paint in the chosen colour,
- * right-click to pick up a colour, and export or import it as a PNG. Changes
+ * right-click to pick up a colour, and export or import it as a PNG or as
+ * ArgTrack's .arghoriz, or take another track's. Changes
  * reach the track only with OK.
  */
 public class HorizonDialog extends JDialog
@@ -136,12 +137,12 @@ public class HorizonDialog extends JDialog
             }
         });
         showColour();
-        JButton export = new JButton("Export PNG...");
+        JButton export = new JButton("Export...");
         export.setName("horizonExport");
         export.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { exportPng(); }
         });
-        JButton importButton = new JButton("Import PNG...");
+        JButton importButton = new JButton("Import...");
         importButton.setName("horizonImport");
         importButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { importPng(); }
@@ -218,17 +219,38 @@ public class HorizonDialog extends JDialog
         File dir = track.getFile() == null ? null : track.getFile().getAbsoluteFile().getParentFile();
         JFileChooser chooser = new JFileChooser(dir);
         chooser.setDialogTitle("Export the horizon");
-        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png"));
-        String base = track.getFile() == null ? "horizon" : track.getFile().getName().replaceAll("\\.[^.]*$", "");
+        final javax.swing.filechooser.FileNameExtensionFilter png =
+            new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png");
+        final javax.swing.filechooser.FileNameExtensionFilter arg =
+            new javax.swing.filechooser.FileNameExtensionFilter("ArgTrack horizon (*.arghoriz)", "arghoriz");
+        chooser.addChoosableFileFilter(png);
+        chooser.addChoosableFileFilter(arg);
+        chooser.setAcceptAllFileFilterUsed(false);
+        chooser.setFileFilter(png);
+        final String base = track.getFile() == null ? "horizon" : track.getFile().getName().replaceAll("\\.[^.]*$", "");
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), base + "-horizon.png"));
+        chooser.addPropertyChangeListener(JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new java.beans.PropertyChangeListener() {
+            public void propertyChange(java.beans.PropertyChangeEvent e) {
+                JFileChooser c = (JFileChooser) e.getSource();
+                String ext = c.getFileFilter() == arg ? ".arghoriz" : ".png";
+                c.setSelectedFile(new File(c.getCurrentDirectory(), base + "-horizon" + ext));
+            }
+        });
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         File f = chooser.getSelectedFile();
-        if (!f.getName().toLowerCase().endsWith(".png"))
+        String name = f.getName().toLowerCase();
+        boolean raw = name.endsWith(".arghoriz") || (!name.endsWith(".png") && chooser.getFileFilter() == arg);
+        if (raw && !name.endsWith(".arghoriz"))
+            f = new File(f.getParentFile(), f.getName() + ".arghoriz");
+        else if (!raw && !name.endsWith(".png"))
             f = new File(f.getParentFile(), f.getName() + ".png");
         try
         {
-            javax.imageio.ImageIO.write(TrackHorizon.toImage(work, palette), "png", f);
+            if (raw)
+                java.nio.file.Files.write(f.toPath(), work);
+            else
+                javax.imageio.ImageIO.write(TrackHorizon.toImage(work, palette), "png", f);
         }
         catch (java.io.IOException e)
         {
@@ -241,22 +263,37 @@ public class HorizonDialog extends JDialog
         File dir = track.getFile() == null ? null : track.getFile().getAbsoluteFile().getParentFile();
         JFileChooser chooser = new JFileChooser(dir);
         chooser.setDialogTitle("Import a horizon");
-        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png"));
+        javax.swing.filechooser.FileNameExtensionFilter all = new javax.swing.filechooser.FileNameExtensionFilter(
+            "Horizons (*.png, *.arghoriz, track files *.dat)", "png", "arghoriz", "dat");
+        chooser.addChoosableFileFilter(all);
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png"));
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("ArgTrack horizon (*.arghoriz)", "arghoriz"));
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Another track's horizon (*.dat)", "dat"));
+        chooser.setFileFilter(all);
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
+        File f = chooser.getSelectedFile();
+        boolean picture = f.getName().toLowerCase().endsWith(".png");
         byte[] h = null;
         try
         {
-            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(chooser.getSelectedFile());
-            if (img != null)
-                h = TrackHorizon.fromImage(img, palette);
+            if (picture)
+            {
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
+                if (img != null)
+                    h = TrackHorizon.fromImage(img, palette);
+            }
+            else
+                h = TrackHorizon.fromHorizonFile(java.nio.file.Files.readAllBytes(f.toPath()));
         }
         catch (java.io.IOException e) { /* reported below */ }
         if (h == null)
         {
-            JOptionPane.showMessageDialog(this,
-                "A horizon picture must be 512 by 8 pixels (or that size enlarged a whole number of\n"
-              + "times, such as 1024 by 16). Nothing was changed.", "Import", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, picture
+                ? "A horizon picture must be 512 by 8 pixels (or that size enlarged a whole number of\n"
+                  + "times, such as 1024 by 16). Nothing was changed."
+                : f.getName() + " is too short to hold a horizon. Nothing was changed.",
+                "Import", JOptionPane.WARNING_MESSAGE);
             return;
         }
         System.arraycopy(h, 0, work, 0, TrackHorizon.BYTES);

@@ -43,22 +43,34 @@ public class CCLineTrackGeometry {
     /** Lateral curvature correction factor per Seg. */
     public final int[] angleZChangeMulHalfPI;
 
-    /** Drivable track half-width per Seg, from the game's own formula:
-        sqrt((wLeftAndRightSideX + bExtraSideX)^2 / 64
-           + (wLeftAndRightSideY + bExtraSideY)^2 / 64) * 8 */
+    /** NOT the game's figure: sqrt((wLeftAndRightSideX + bExtraSideX)^2 / 64
+           + (wLeftAndRightSideY + bExtraSideY)^2 / 64) * 8, about 8x what
+        TCCompareCCLineToTrackWidth (IDA 0x6CFF) computes. The game shifts each
+        side word right by 6 BEFORE adding the extra:
+        sqrt(((sideX >> 6) + extraX)^2 + ((sideY >> 6) + extraY)^2) * 8.
+        Kept as it is because physicalBound (this / 8) is the road edge the
+        line corridors are calibrated against; see the note there. */
     public final double[] trackWidth;
 
-    /** The game's tolerance bound per Seg: trackWidth - 0x340. This is
-        what TCCompareCCLineToTrackWidth checks — but it is ~8x the
-        physical road (see physicalBound) and nearly vacuous; treat it as
-        the game's flag threshold, not the road edge. */
+    /** trackWidth - 0x340. Since trackWidth is ~8x the game's, this is NOT
+        the game's flag threshold and is nearly vacuous (no Seg of any
+        original's line reaches it). The game's own threshold, game width -
+        0x340, is the opposite: a band well inside the road that 50-80% of
+        each original's Segs lie outside (measured 2026-10-25,
+        harnesses/WidthCheck.java). Used only as a loose clamp. */
     public final double[] usableBound;
 
     /** PHYSICAL road half-width per Seg in wCCLine units: trackWidth / 8
         — the same scale the map draws edges at (width >> 3 from centre).
         Established 2026-07-19: hand-tuned lines average 50-60% of this
         and peak at 0.9-1.36x (kerb clipping); it is the real corridor
-        for line generation. */
+        for line generation.
+        The game's width is 58-91 units more on every Seg of every original
+        (2026-10-25): its extras are built from the width + 0x50
+        (TrackSegments, wTrk_WidthPlus0x50), so its figure is this road edge
+        plus a fixed 80-unit allowance, not a wider road. Do not "correct"
+        this to the game's figure: that would move every corridor outward
+        by ~0.4 m with nothing to say the road is wider. */
     public final double[] physicalBound;
 
     /** How many coaching-table entries the best line may use on this track

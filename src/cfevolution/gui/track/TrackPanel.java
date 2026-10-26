@@ -1351,14 +1351,17 @@ public class TrackPanel extends javax.swing.JPanel {
     }
 
     /**
-        Returns true if the CCLine point for a Seg is outside the drivable track
-        boundary. Uses the game's track width formula and 0x340 car-width margin.
+        Returns true if the CCLine point for a Seg is well off the road: more
+        than TrackCheck's limit (twice the road's half-width), so the orange
+        stretches are the ones Check Track's warning points to. Until
+        2026-10-25 this used an 8x-inflated reading of the game's width check
+        and only fired at about seven half-widths.
     */
     private boolean isCCLineOutOfBounds(Seg seg) {
         double wx = seg.getTrackWidthX() + seg.getExtraSideX();
         double wy = seg.getTrackWidthY() + seg.getExtraSideY();
-        double trackWidth = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0) * 8.0;
-        return Math.abs(seg.getCCLine()) >= (trackWidth - 0x340);
+        double halfRoad = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0);
+        return Math.abs(seg.getCCLine()) > TrackCheck.WORST_EXCURSION_WARNING * halfRoad;
     }
 
     /**

@@ -64,6 +64,27 @@ public class TrackSegment extends CFDataObject {
         m_nWidthChangeEnd = 0;        
     }
 
+    /** A copy of the stored fields and commands (the derived layout fields
+        are recalculated by calculateLayout). Used where one generated
+        section list is installed into more than one track: the pit mouth
+        step splits and edits sections in place (2026-10-25). */
+    public TrackSegment copy()
+    {
+        TrackSegment c = new TrackSegment();
+        c.m_nType = m_nType;
+        c.m_nSign = m_nSign;
+        c.m_nTlu = m_nTlu;
+        c.m_nCurvature = m_nCurvature;
+        c.m_nHeightChange = m_nHeightChange;
+        c.m_nFlags = m_nFlags;
+        c.m_nFenceDistL = m_nFenceDistL;
+        c.m_nFenceDistR = m_nFenceDistR;
+        for (Command cmd : m_Commands)
+            c.m_Commands.add(new Command(cmd.getType(), cmd.getParam(0), cmd.getParam(1), cmd.getParam(2),
+                                         cmd.getParam(3), cmd.getParam(4), cmd.getParam(5)));
+        return c;
+    }
+
     public void load( FileInputStream fis )
     {
         // Read a track segment from track file.

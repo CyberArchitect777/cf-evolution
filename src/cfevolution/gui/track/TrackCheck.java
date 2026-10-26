@@ -43,7 +43,7 @@ public class TrackCheck
 
     /** Same thresholds as GenerateCCLineDialog.lineQualityWarning, which
         were calibrated so that no original trips them. */
-    private static final double WORST_EXCURSION_WARNING = 2.0;
+    static final double WORST_EXCURSION_WARNING = 2.0;
     private static final int MAX_KICK_WARNING = 3000;
 
     public static class Item

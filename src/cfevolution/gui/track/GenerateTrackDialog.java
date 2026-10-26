@@ -273,8 +273,12 @@ public class GenerateTrackDialog extends JDialog {
         cfevolution.data.track.TrackSegment dummy = segs.get(segs.size() - 1);
         dummy.setCommands(new java.util.Vector<cfevolution.data.track.Command>());
         segs.clear();
+        // Copies: this runs twice on one layout (the best line is worked out on
+        // a scratch track first), and PitMouth.place below splits and edits
+        // sections in place. Sharing them cut the applied track short of the
+        // one the line was made for, and wrecked the line (2026-10-25).
         for (int i = 0; i < layout.segments.size(); i++)
-            segs.add(layout.segments.get(i));
+            segs.add(layout.segments.get(i).copy());
         segs.add(dummy);
         if (layout.moveStart) {
             track.getTrackDataHeader().setStartPos(0, layout.startPos[0]);
