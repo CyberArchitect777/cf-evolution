@@ -378,6 +378,14 @@ public class Track {
         return m_Objects;
     }
 
+    /** How far to the side the object a 0x80 command places stands: the +4
+        word of its definition, which the second parameter points at. 32 is
+        the road edge, a negative value the left side. */
+    public int getObjectSideOffset(int nObjectRef)
+    {
+        return m_Objects.getWord(m_FileHeader.getObjDataOffset() + nObjectRef + 4);
+    }
+
     // Note: CCLine TLU exceeding track TLU is normal (the game wraps and
     // re-stamps the first Segs; original tracks deliberately overrun).
     // Only CCLine TLU < track TLU indicates a problem. See docs/BESTLINE.md.

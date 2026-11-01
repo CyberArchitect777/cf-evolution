@@ -54,6 +54,15 @@ public class CCLineWindowRepair {
     public static CCLine replaceAndRepair(CCLineTrackGeometry geo, CCLine line,
                                           int nSector, CCLineSegment[] replacement,
                                           int nWindowTlu, double[] targetOffsets) {
+        return replaceAndRepair(geo, line, nSector, replacement, nWindowTlu, targetOffsets, false);
+    }
+
+    /** As above; fLimitSteps re-fits the window with the quantiser's step
+        charge on (CCLineQuantizer.limitSteps). */
+    public static CCLine replaceAndRepair(CCLineTrackGeometry geo, CCLine line,
+                                          int nSector, CCLineSegment[] replacement,
+                                          int nWindowTlu, double[] targetOffsets,
+                                          boolean fLimitSteps) {
         int nCount = line.size();
         if (nSector < 1 || nSector > nCount || replacement == null || replacement.length == 0)
             return null;
@@ -86,6 +95,7 @@ public class CCLineWindowRepair {
         CCLineLateralProfile profile = new CCLineLateralProfile(geo.segCount);
         System.arraycopy(targetOffsets, 0, profile.offset, 0, geo.segCount);
         CCLineQuantizer quantizer = new CCLineQuantizer(geo, profile, 0);
+        quantizer.limitSteps = fLimitSteps;
 
         // Walk state at the window start (untouched prefix + replacement)
         CCLineSimulator.State stStart = simulator.initialState();

@@ -108,6 +108,21 @@ public class CCLineQuantizer {
     public static java.io.PrintStream DEBUG_OUT = null;
     public static int DEBUG_FROM = -1, DEBUG_TO = -1;
 
+    /** Steps between neighbouring Segs up to this are free (see limitSteps).
+        Well under the 640 dead-band on purpose: measured on the generated
+        Japan (885), charging from 600 left 765, from 500 691, from 400 615,
+        from 300 578 (2026-11-01). It only applies in reduceSteps' re-fits. */
+    public static final int STEP_FREE = 300;
+    /** Error added per unit a step goes past STEP_FREE. */
+    private static final double STEP_PENALTY = 1.0;
+
+    /** When set, a candidate is charged for every single-Seg step over
+        STEP_FREE. The AI reads the line through a 640-unit dead-band: under
+        it a step cannot be seen, over it the car sees a kink (2026-08-24).
+        Used by reduceSteps only. Off by default: the originals' own steps run
+        to 1,083, and a round trip of them must not fight that. */
+    public boolean limitSteps = false;
+
     public CCLineQuantizer(CCLineTrackGeometry geometry, CCLineLateralProfile lateralProfile,
                            int seamOvershoot) {
         geo = geometry;
@@ -381,6 +396,116 @@ public class CCLineQuantizer {
         if (fUndamagedOnly)
             return null;
         return best != null ? best : ccLine;
+    }
+
+    /** The largest single-Seg step reduceSteps leaves alone: the AI's
+        dead-band. */
+    public static final int STEP_LIMIT = 640;
+
+    /**
+        Takes a finished line's single-Seg steps under STEP_LIMIT where it can
+        (2026-11-01). The AI reads the line through a 640-unit dead-band, so a
+        step past it is a kink the car reacts to. Generated lines landed over
+        it on 2 of 16 donors (690 and 885, 2026-10-26), always where the fit,
+        which only looks one sector ahead, arrived late at a fast crossing of
+        the road and caught up with one big heading kick. The polish cannot
+        undo that: its moves do not touch a kick beside an arc.
+
+        So the stretch before the worst step is fitted again, starting a few
+        sectors earlier, against the line smoothed there, with the fit
+        charging each step over STEP_FREE. A new line is kept only if its
+        worst step is smaller, it stays inside the coaching budget, and it does
+        no damage by the cap's measures (no new Segs clear of or off the road,
+        no worse start/finish handover). Otherwise the line comes back as it
+        was.
+    */
+    public static CCLine reduceSteps(CCLineTrackGeometry geo, CCLine ccLine) {
+        CCLineSimulator sim = new CCLineSimulator(geo);
+        CCLine line = ccLine;
+        for (int nPass = 0; nPass < STEP_REPAIR_PASSES; nPass++) {
+            CCLineSimulator.Result r = sim.run(line);
+            CapQuality now = new CapQuality(geo, r);
+            if (now.nStep < STEP_LIMIT)
+                break;
+            int nAt = worstStepSeg(geo, r);
+            int nSector = sectorAtTlu(line, nAt);
+            double[] adTarget = smoothedAround(geo, r, nAt);
+
+            CCLine best = null;
+            int nBestStep = now.nStep;
+            for (int nBack = 1; nBack <= STEP_REPAIR_BACK; nBack++) {
+                int nFrom = nSector - nBack;     // the window starts after this sector
+                if (nFrom < 1)
+                    break;
+                for (int w = 0; w < STEP_REPAIR_WINDOWS.length; w++) {
+                    CCLine cand = CCLineWindowRepair.replaceAndRepair(geo, line, nFrom,
+                        new CCLineSegment[] { copyLine(line).getAt(nFrom) },
+                        STEP_REPAIR_WINDOWS[w], adTarget, true);
+                    if (cand == null || cand.getCoachingEntryCount() > geo.coachingBudget)
+                        continue;
+                    CapQuality q = new CapQuality(geo, sim.run(cand));
+                    if (q.nClear > now.nClear || q.nOff > Math.max(now.nOff, 21)
+                        || q.nHandover > Math.max(now.nHandover, 113))
+                        continue;
+                    if (q.nStep < nBestStep) {
+                        nBestStep = q.nStep;
+                        best = cand;
+                    }
+                }
+            }
+            if (best == null)
+                break;
+            line = best;
+        }
+        return line;
+    }
+
+    private static final int STEP_REPAIR_PASSES = 6;
+    /** How many sectors before the step the re-fit may start. */
+    private static final int STEP_REPAIR_BACK = 10;
+    private static final int[] STEP_REPAIR_WINDOWS = { 32, 64, 128, 192, 256, 320 };
+    /** Segs each side of the step that the re-fit's target is smoothed over. */
+    private static final int STEP_SMOOTH_SPAN = 24;
+
+    /** The Seg after the line's largest single-Seg step. */
+    private static int worstStepSeg(CCLineTrackGeometry geo, CCLineSimulator.Result r) {
+        int nWorst = -1, nAt = 0;
+        for (int s = 1; s < geo.segCount && s < r.ccLine.length; s++) {
+            int nStep = Math.abs(r.ccLine[s] - r.ccLine[s - 1]);
+            if (nStep > nWorst) {
+                nWorst = nStep;
+                nAt = s;
+            }
+        }
+        return nAt;
+    }
+
+    /** The sector (1-based) the line walks through at lap TLU nTlu. */
+    private static int sectorAtTlu(CCLine line, int nTlu) {
+        int nCum = 0;
+        for (int i = 1; i <= line.size(); i++) {
+            nCum += line.getAt(i).getTlu();
+            if (nCum > nTlu)
+                return i;
+        }
+        return line.size();
+    }
+
+    /** The line's own offsets, with a moving average of +-4 Segs laid over
+        the STEP_SMOOTH_SPAN Segs either side of nAt. */
+    private static double[] smoothedAround(CCLineTrackGeometry geo, CCLineSimulator.Result r, int nAt) {
+        int n = geo.segCount;
+        double[] ad = new double[n];
+        for (int i = 0; i < n && i < r.ccLine.length; i++)
+            ad[i] = r.ccLine[i];
+        for (int d = -STEP_SMOOTH_SPAN; d <= STEP_SMOOTH_SPAN; d++) {
+            int i = ((nAt + d) % n + n) % n;
+            double dSum = 0;
+            for (int k = -4; k <= 4; k++)
+                dSum += r.ccLine[((i + k) % n + n) % n];
+            ad[i] = dSum / 9.0;
+        }
+        return ad;
     }
 
     /** How far past the budget the cap may keep straightening while looking
@@ -747,6 +872,15 @@ public class CCLineQuantizer {
         }
     }
 
+    /** How far the steps from the Seg before the sector to its last Seg go
+        past STEP_FREE, summed, as the trial just stamped them. */
+    private double stepExcess(int nStartTlu, int nLen) {
+        double dExcess = 0.0;
+        for (int t = Math.max(1, nStartTlu); t < nStartTlu + nLen; t++)
+            dExcess += Math.max(0, Math.abs(scratch.ccLine[segAt(t)] - scratch.ccLine[segAt(t - 1)]) - STEP_FREE);
+        return dExcess;
+    }
+
     private static CCLineSegment[] single(CCLineSegment seg) {
         return new CCLineSegment[] { seg };
     }
@@ -776,6 +910,8 @@ public class CCLineQuantizer {
             wrapAngle((short) (trial.wTmpAngleZ - geo.angleZ[segAt(st.walkedTlu + nLen - 1)]))
             - dRelStart));
         dPenalty += Math.max(0.0, dRelChange - REL_RATE_ALLOWANCE * nLen) * KICK_PENALTY;
+        if (limitSteps)
+            dPenalty += stepExcess(st.walkedTlu, nLen) * STEP_PENALTY;
 
         double dSumSq = 0.0;
         // A fired Pythagoras clamp means this radius breaks the game's

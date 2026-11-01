@@ -222,9 +222,18 @@ public class ExecutableWindow extends JPanel implements EditorTab
             column.setMaxWidth(width);
         column.setPreferredWidth(width);
         column.setWidth(width);
-        table.getTableHeader().setResizingColumn(column);   // the other columns give way, not this one
-        table.doLayout();
-        table.getTableHeader().setResizingColumn(null);
+        if (table.getAutoResizeMode() == JTable.AUTO_RESIZE_OFF)
+        {
+            // A table scrolling sideways just grows or shrinks; the trick below
+            // would size the column back to the table's old width
+            table.revalidate();
+        }
+        else
+        {
+            table.getTableHeader().setResizingColumn(column);   // the other columns give way, not this one
+            table.doLayout();
+            table.getTableHeader().setResizingColumn(null);
+        }
         table.getTableHeader().repaint();
     }
 
@@ -558,21 +567,21 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public int getColumnCount() { return parts.length + 1; }
             public String getColumnName(int c) {
                 if (c == 0) return "";
-                // Two-word part names go on two lines so the columns stay narrow
-                String part = parts[c - 1];
-                int space = part.indexOf(' ');
-                return space < 0 ? part : "<html><center>" + part.substring(0, space) + "<br>" + part.substring(space + 1);
+                // A word to a line so the columns stay narrow: on two lines
+                // "Wing endplates", "Sidepods" and the three "Engine cover"
+                // columns were cut off at 1400 px (2026-10-26)
+                return "<html><center>" + parts[c - 1].replace(" ", "<br>");
             }
             public Class<?> getColumnClass(int c) { return c == 0 ? String.class : Integer.class; }
             public boolean isCellEditable(int r, int c) { return false; }
             public Object getValueAt(int r, int c) { return c == 0 ? source.rowName(r) : (Object) source.get(r, c - 1); }
         };
         final JTable table = table(model, new int[0]);
-        // Room for the two-line part names
+        // Room for part names of up to three lines
         table.setTableHeader(new javax.swing.table.JTableHeader(table.getColumnModel()) {
             public Dimension getPreferredSize() {
                 Dimension d = super.getPreferredSize();
-                d.height = Math.max(d.height, 40);
+                d.height = Math.max(d.height, getFontMetrics(getFont()).getHeight() * 3 + 8);
                 return d;
             }
             // the full part name, for a column too narrow to show it (Hrvoje, 2026-10-24)
@@ -588,8 +597,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
         // several rows at once, so one Paste covers them (Shift/Ctrl+click)
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.getColumnModel().getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.getColumnModel().getColumn(0).setPreferredWidth(170);
-        table.getColumnModel().getColumn(0).setMinWidth(120);
+        table.getColumnModel().getColumn(0).setPreferredWidth(130);
+        table.getColumnModel().getColumn(0).setMinWidth(110);
         DefaultTableCellRenderer swatch = new DefaultTableCellRenderer() {
             public Component getTableCellRendererComponent(JTable t, Object value, boolean selected,
                                                            boolean focus, int row, int column) {
@@ -601,10 +610,18 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 return this;
             }
         };
+        // Each colour column keeps room for the longest word of its name. At
+        // 1400 px the table squeezed them to 48 px, cutting off "endplates",
+        // "Cockpit" and "Sidepods" (2026-11-01); now it scrolls sideways instead.
+        javax.swing.table.TableCellRenderer headRenderer = table.getTableHeader().getDefaultRenderer();
         for (int c = 1; c < model.getColumnCount(); c++)
         {
-            table.getColumnModel().getColumn(c).setCellRenderer(swatch);
-            table.getColumnModel().getColumn(c).setPreferredWidth(64);
+            javax.swing.table.TableColumn column = table.getColumnModel().getColumn(c);
+            column.setCellRenderer(swatch);
+            int heading = headRenderer.getTableCellRendererComponent(table, column.getHeaderValue(),
+                                                                     false, false, -1, c).getPreferredSize().width;
+            column.setMinWidth(Math.max(40, heading + 6));
+            column.setPreferredWidth(Math.max(64, heading + 6));
         }
 
         final Runnable choose = new Runnable() {
@@ -637,7 +654,20 @@ public class ExecutableWindow extends JPanel implements EditorTab
         table.getActionMap().put("chooseColour", chooseAction);
 
         JPanel tab = new JPanel(new BorderLayout());
-        tab.add(new JScrollPane(table), BorderLayout.CENTER);
+        final JScrollPane tableScroll = new JScrollPane(table);
+        // Fill the width when the columns fit; scroll sideways when they do not
+        tableScroll.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
+            public void componentResized(java.awt.event.ComponentEvent e) {
+                int needed = 0;
+                for (int c = 0; c < table.getColumnCount(); c++)
+                    needed += table.getColumnModel().getColumn(c).getMinWidth();
+                int mode = tableScroll.getViewport().getWidth() < needed
+                    ? JTable.AUTO_RESIZE_OFF : JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS;
+                if (table.getAutoResizeMode() != mode)
+                    table.setAutoResizeMode(mode);
+            }
+        });
+        tab.add(tableScroll, BorderLayout.CENTER);
         tab.add(picturePanel(liveries, source, pictures, table, model, choose), BorderLayout.EAST);
         JPanel south = new JPanel();
         south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
@@ -1105,7 +1135,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             row(computerCars, "Grip level", 1, 100, new Setting() {
                 public int get() { return settings.getAIGripLevel(); }
                 public void set(int v) { settings.setAIGripLevel(v); } },
-                "1 is the original game. Higher gives every car more grip in corners, yours too.");
+                "1 is the original game. Higher gives all cars more grip, yours too.");
         else
             note(computerCars, "The grip setting in this file was changed by another tool, so it is left as it is.");
         row(computerCars, "Team engine power measured against (BHP)", 100, 2000, new Setting() {

@@ -99,6 +99,9 @@ public class MinCurvatureCCLineGenerator implements CCLineGenerator {
         // Then towards the originals' number of entries, if that does no harm:
         // fewer suggested-gear changes and phantom corners for the AI.
         ccLine = CCLineQuantizer.easeCoachingEntries(context.geometry, ccLine);
+        // Last, so nothing after it can bring a big step back: under the AI's
+        // dead-band wherever that does no harm.
+        ccLine = CCLineQuantizer.reduceSteps(context.geometry, ccLine);
 
         CCLineEvaluator.Score score = context.evaluator.score(ccLine);
 

@@ -73,6 +73,12 @@ public class TrackFileHeader extends CFDataObject {
         m_nChecksumOffset = (int) (nChecksumOffset - m_nSizeBase);
     }
 
+    /** Where the object definitions start in the objects block. */
+    public int getObjDataOffset()
+    {
+        return m_nObjDataOffset;
+    }
+
     public int getChecksumOffset()
     {
         // Give out the value to be stored in track data file.

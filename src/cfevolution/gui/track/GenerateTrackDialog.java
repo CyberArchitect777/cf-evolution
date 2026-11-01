@@ -308,6 +308,12 @@ public class GenerateTrackDialog extends JDialog {
         // twelve donors said right, so the game opened the wrong wall).
         track.setLayoutMode(false);
         cfevolution.generator.pitlane.PitMouth.place(track);
+
+        // The donor's scenery keeps its distance from the road, which can put
+        // it on another part of the new layout (a tree over a generated
+        // Adelaide's road, 2026-10-26).
+        track.calculateTrackLayout();
+        cfevolution.generator.track.SceneryClearance.removeObjectsOverRoad(track);
     }
 
     private void generationFinished(RandomTrackGenerator.Result layout,

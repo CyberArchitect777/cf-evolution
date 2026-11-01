@@ -63,6 +63,14 @@ public class TrackObjects extends CFDataObject {
         return 2 + m_baData.length;
     }
 
+    /** The signed 16-bit word at nIndex of the objects block, or 0 past its end. */
+    public int getWord(int nIndex)
+    {
+        if (m_baData == null || nIndex < 0 || nIndex + 1 >= m_baData.length)
+            return 0;
+        return (short) ((m_baData[nIndex] & 0xFF) | (m_baData[nIndex + 1] & 0xFF) << 8);
+    }
+
     // data members
     protected byte m_baData[];
     protected int m_nNumObj;
