@@ -50,6 +50,13 @@ public class GameWindow extends JPanel implements EditorTab
         JPanel top = new JPanel(new BorderLayout(0, 4));
         top.add(heading, BorderLayout.NORTH);
         top.add(path, BorderLayout.CENTER);
+        if (game.getOriginalsFolder().isDirectory())
+        {
+            JLabel originals = new JLabel("Your game files as they were when the editor first opened this folder are kept in "
+                + GameFolder.BACKUP_FOLDER + File.separator + GameFolder.ORIGINALS_FOLDER + ".");
+            originals.setForeground(new Color(0x5A626C));
+            top.add(originals, BorderLayout.SOUTH);
+        }
         top.setBorder(BorderFactory.createEmptyBorder(14, 16, 10, 16));
         add(top, BorderLayout.NORTH);
 

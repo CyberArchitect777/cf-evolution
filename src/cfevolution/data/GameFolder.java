@@ -318,6 +318,71 @@ public class GameFolder
         }
     }
 
+    /** The folder, inside the game folder, where the editor keeps copies of
+        files before changing them (also used by dataset imports). */
+    public static final String BACKUP_FOLDER = "CFE-BACKUP";
+
+    /** The folder in BACKUP_FOLDER holding the files as they were when the
+        editor first opened this game folder. */
+    public static final String ORIGINALS_FOLDER = "original";
+
+    /** Where the first-open copies are kept, whether or not they exist yet. */
+    public File getOriginalsFolder()
+    {
+        return new File(new File(folder, BACKUP_FOLDER), ORIGINALS_FOLDER);
+    }
+
+    /**
+     * The first time the editor opens this folder, copies every file it can
+     * change into CFE-BACKUP/original, under their own names (GPSAVES files
+     * in a GPSAVES folder there), so the user can always go back (owner,
+     * 2026-11-01). Never touched again once made: the copies are filled in a
+     * temporary folder that is renamed only when complete, so a failure
+     * leaves nothing that would stop the next open from trying again.
+     * Returns true if the copies were made now, false if they already exist.
+     */
+    public boolean keepOriginals() throws IOException
+    {
+        File originals = getOriginalsFolder();
+        if (originals.exists())
+            return false;
+        File filling = new File(originals.getParentFile(), ORIGINALS_FOLDER + ".tmp");
+        deleteTree(filling);
+        if (!filling.mkdirs())
+            throw new IOException("could not create " + filling);
+        List<File> files = new ArrayList<File>();
+        if (executable != null)
+            files.add(executable);
+        for (File track : tracks)
+            if (track != null)
+                files.add(track);
+        files.add(fileIgnoringCase(folder, "F1PREFS.DAT"));
+        for (String name : PICTURE_FILES)
+            files.add(fileIgnoringCase(folder, name));
+        files.add(fileIgnoringCase(folder, "XSOUND.BIN"));
+        for (File f : files)
+            if (f != null)
+                Files.copy(f.toPath(), new File(filling, f.getName()).toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+        File saves = getSavesFolder();
+        for (SavedFile s : getSavedFiles())
+        {
+            File to = new File(new File(filling, saves.getName()), s.name);
+            to.getParentFile().mkdirs();
+            Files.copy(s.file.toPath(), to.toPath(), StandardCopyOption.COPY_ATTRIBUTES);
+        }
+        Files.move(filling.toPath(), originals.toPath());
+        return true;
+    }
+
+    private static void deleteTree(File f)
+    {
+        File[] inside = f.listFiles();
+        if (inside != null)
+            for (File g : inside)
+                deleteTree(g);
+        f.delete();
+    }
+
     private static File fileIgnoringCase(File folder, String name)
     {
         String[] names = folder.list();

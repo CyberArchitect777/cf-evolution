@@ -62,7 +62,7 @@ import javax.imageio.ImageIO;
  */
 public class GameDataset
 {
-    public static final String BACKUP_FOLDER = "CFE-BACKUP";
+    public static final String BACKUP_FOLDER = cfevolution.data.GameFolder.BACKUP_FOLDER;
 
     public static final int TEAMS = 20, CARS = 40;
     private static final int TEAM_NAME = 12, DRIVER_NAME = 23;
@@ -1279,6 +1279,17 @@ public class GameDataset
 
     private void writeChanges() throws IOException
     {
+        // A folder never opened in the editor gets its first-open copy too;
+        // the dated copies below cover it if that cannot be made.
+        try
+        {
+            if (game.keepOriginals())
+                report.add("The game files as they were are kept in " + BACKUP_FOLDER + File.separator
+                           + GameFolder.ORIGINALS_FOLDER + " in the game folder.");
+        }
+        catch (IOException e)
+        {
+        }
         if (exeChanged)
         {
             backup(game.getExecutable());

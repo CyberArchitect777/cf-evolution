@@ -655,6 +655,22 @@ public class MainGUI extends JFrame
                 return true;
             }
         }
+        // Before anything can change, the first time: a packed GP.EXE is kept
+        // packed in the copy.
+        if (game.getProblem() == null || game.isPacked())
+        {
+            try
+            {
+                game.keepOriginals();
+            }
+            catch (java.io.IOException e)
+            {
+                JOptionPane.showMessageDialog(this, wrap("A copy of the game files could not be kept in "
+                    + GameFolder.BACKUP_FOLDER + File.separator + GameFolder.ORIGINALS_FOLDER
+                    + ". The folder is opened anyway. Nothing in it has been changed.", 70),
+                    "Copy Not Kept", JOptionPane.WARNING_MESSAGE);
+            }
+        }
         if (game.isPacked())
         {
             game = offerToUnpack(game);
