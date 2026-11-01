@@ -298,6 +298,8 @@ public class OtherEditorFiles
     /** What an ArgEditor car set always holds; menu helmet pictures may be added. */
     public static final Set<DatasetGroup> ARGEDITOR_GROUPS =
         EnumSet.of(DatasetGroup.TEAMS, DatasetGroup.DRIVERS, DatasetGroup.COLOURS, DatasetGroup.POINTS);
+    /** The player power an F1ED car set holds (ArgEditor clamps to this when writing one). */
+    public static final int F1ED_MIN_BHP = 450, F1ED_MAX_BHP = 999;
     /** ArgEditor's teams; two drivers each. */
     public static final int ARGEDITOR_TEAMS = 18;
 
@@ -342,6 +344,13 @@ public class OtherEditorFiles
         v = d.getInt("rules", "player power");
         if (v != null)
         {
+            if (v < F1ED_MIN_BHP || v > F1ED_MAX_BHP)
+            {
+                int kept = Math.max(F1ED_MIN_BHP, Math.min(F1ED_MAX_BHP, v));
+                notes.add("An F1ED car set holds a player power of " + F1ED_MIN_BHP + " to " + F1ED_MAX_BHP
+                          + " BHP, so " + v + " was saved as " + kept + ".");
+                v = kept;
+            }
             line(sb, "HumanBHP=" + v);
             line(sb, "BHPLegalise=" + (v == 716 ? 1 : 0));      // F1ED's lock at the game's own 716
         }
