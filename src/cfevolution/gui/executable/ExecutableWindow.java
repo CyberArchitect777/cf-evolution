@@ -27,6 +27,7 @@ package cfevolution.gui.executable;
 import cfevolution.data.dataset.OtherEditorFiles;
 
 import cfevolution.data.executable.*;
+import cfevolution.data.gamefiles.SetupFile;
 import cfevolution.gui.*;
 import java.awt.*;
 import java.io.File;
@@ -45,7 +46,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 public class ExecutableWindow extends JPanel implements EditorTab
 {
     private static final String[] PAGES = { "Drivers", "Teams", "Points", "Liveries", "Game Settings",
-                                            "Pit Lane", "Set-ups", "Lap Records", "Car Physics", "Opposition Levels" };
+                                            "Pit Lane", "Setups", "Lap Records", "Car Physics", "Opposition Levels" };
 
     private MainGUI appFrame;
     private String fileName;
@@ -1283,7 +1284,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         group.add(hintLabel, c);
     }
 
-    // --- Number tables (set-ups, physics, opposition) ------------------------
+    // --- Number tables (setups, physics, opposition) ------------------------
 
     /** One grid of stored numbers: a row label, then a column per value. */
     private interface Cells
@@ -1427,7 +1428,11 @@ public class ExecutableWindow extends JPanel implements EditorTab
         return team + "  " + (team >= 1 && team <= 20 ? teams.getTeamName(team - 1) : "?");
     }
 
-    // --- Set-ups ------------------------------------------------------------
+    // --- Setups ------------------------------------------------------------
+
+    /** The setup last copied, shared by every tab and executable, so one can go from a car to a circuit
+        or from one game to another. */
+    private static int[] copiedSetup;
 
     private JComponent setupsPage()
     {
@@ -1436,16 +1441,340 @@ public class ExecutableWindow extends JPanel implements EditorTab
         String[] carRows = new String[40];
         for (int i = 0; i < 40; i++) carRows[i] = (i + 1) + "  " + drivers.getDriverName(i);
         String[] circuitRows = CIRCUITS;
-        JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Each car", setupGrid(carRows, tables.carSetups, 0));
-        tabs.addTab("Each circuit", setupGrid(circuitRows, tables.circuitSetups, 0));
-        tabs.addTab("Each circuit, other session", setupGrid(circuitRows, tables.circuitSetups, 16));
-        return page("Set-ups",
-            "Starting car set-ups: each car's default, and each circuit's. The second circuit set is used when race and qualifying set-ups are kept separate.",
-            tabs);
+        // Only human drivers' cars read these; the computer cars read the
+        // circuit file's CC setup (Car.bID bit 7 picks arCarSetups or
+        // strTrkCCSetup). sub_4A9E copies the circuit's setup over all 40 at
+        // the start of a weekend and of main-menu Practice, and the race setup
+        // at the warm-up when they are separate (sub_4A8B). DoQuickRace does not
+        // copy, so a quick race run first in a run of the game uses these (GP1E).
+        // Saved games carry them. Hrvoje, 2026-11-02; the tools below, 2026-11-03.
+        final JTabbedPane tabs = new JTabbedPane();
+        final JTable[] grids = {
+            setupTable(circuitRows, tables.circuitSetups, 0, "qualifying setups"),
+            setupTable(circuitRows, tables.circuitSetups, 16, "race setups"),
+            setupTable(carRows, tables.carSetups, 0, "quick race setups") };
+        final GameTables.Table[] sources = { tables.circuitSetups, tables.circuitSetups, tables.carSetups };
+        final int[] firstRows = { 0, 16, 0 };
+        tabs.addTab("Qualifying setup", new JScrollPane(grids[0]));
+        tabs.addTab("Race setup", new JScrollPane(grids[1]));
+        tabs.addTab("Quick Race setup", new JScrollPane(grids[2]));
+
+        final JCheckBox separate = new JCheckBox("Separate race and qualifying setups", tables.separateSetups.word(0) != 0);
+        separate.setName("separate setups");
+        separate.setToolTipText("The game's own option, as it is when the game starts. When off, the one setup is used all weekend.");
+        final JButton toRace = new JButton("Copy Qualifying to Race");
+        final JButton toQualifying = new JButton("Copy Race to Qualifying");
+        final Runnable showSeparate = new Runnable() {
+            public void run() {
+                boolean on = separate.isSelected();
+                tabs.setTitleAt(0, on ? "Qualifying setup" : "Setup");
+                tabs.setEnabledAt(1, on);
+                tabs.setToolTipTextAt(1, on ? null : "Used only when race and qualifying setups are separate");
+                if (!on && tabs.getSelectedIndex() == 1)
+                    tabs.setSelectedIndex(0);
+                toRace.setEnabled(on);
+                toQualifying.setEnabled(on);
+            }
+        };
+        showSeparate.run();
+        separate.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                tables.separateSetups.setWord(0, separate.isSelected() ? 0xFFFF : 0);
+                setModified(true);
+                showSeparate.run();
+            }
+        });
+
+        // Copy, Paste and Apply to All work on the tab showing
+        final JButton paste = new JButton("Paste");
+        paste.setName("paste setup");
+        paste.setToolTipText("Give every selected row the copied setup");
+        paste.setEnabled(copiedSetup != null);
+        final JButton applyAll = new JButton("Apply to All Circuits");
+        applyAll.setName("apply setup to all");
+        final JLabel copied = new JLabel(" ");
+        copied.setForeground(new Color(0x6A7380));
+        tabs.addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) {
+                boolean cars = tabs.getSelectedIndex() == 2;
+                applyAll.setText(cars ? "Apply to All Cars" : "Apply to All Circuits");
+                applyAll.setToolTipText("Give every " + (cars ? "car" : "circuit") + " on this tab the selected row's setup");
+            }
+        });
+        applyAll.setToolTipText("Give every circuit on this tab the selected row's setup");
+        final Runnable copy = new Runnable() {
+            public void run() {
+                int tab = tabs.getSelectedIndex();
+                int r = grids[tab].getSelectedRow();
+                if (r < 0)
+                    return;
+                copiedSetup = readSetup(sources[tab], firstRows[tab] + r);
+                paste.setEnabled(true);
+                copied.setText("Copied: " + tabs.getTitleAt(tab).toLowerCase() + ", " + String.valueOf(grids[tab].getValueAt(r, 0)).replaceAll("^[0-9]+ +", ""));
+            }
+        };
+        final Runnable pasteRun = new Runnable() {
+            public void run() {
+                int tab = tabs.getSelectedIndex();
+                if (copiedSetup != null)
+                    writeSetups(grids[tab], sources[tab], firstRows[tab], grids[tab].getSelectedRows(), copiedSetup);
+            }
+        };
+        JButton copyButton = new JButton("Copy");
+        copyButton.setName("copy setup");
+        copyButton.setToolTipText("Copy the selected row's setup, to paste on this tab or another");
+        copyButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { copy.run(); }
+        });
+        paste.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { pasteRun.run(); }
+        });
+        applyAll.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int tab = tabs.getSelectedIndex();
+                JTable grid = grids[tab];
+                if (grid.getSelectedRow() < 0)
+                {
+                    JOptionPane.showMessageDialog(grid, "Select the row whose setup the others should have.",
+                        applyAll.getText(), JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                int[] all = new int[grid.getRowCount()];
+                for (int r = 0; r < all.length; r++) all[r] = r;
+                writeSetups(grid, sources[tab], firstRows[tab], all, readSetup(sources[tab], firstRows[tab] + grid.getSelectedRow()));
+            }
+        });
+        int menuKey = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
+        for (JTable grid : grids)
+        {
+            grid.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_C, menuKey), "copySetup");
+            grid.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_V, menuKey), "pasteSetup");
+            grid.getActionMap().put("copySetup", new AbstractAction() {
+                public void actionPerformed(java.awt.event.ActionEvent e) { copy.run(); }
+            });
+            grid.getActionMap().put("pasteSetup", new AbstractAction() {
+                public void actionPerformed(java.awt.event.ActionEvent e) { pasteRun.run(); }
+            });
+        }
+
+        toRace.setName("copy qualifying to race");
+        toRace.setToolTipText("Give every circuit's race setup its qualifying setup");
+        toQualifying.setName("copy race to qualifying");
+        toQualifying.setToolTipText("Give every circuit's qualifying setup its race setup");
+        java.awt.event.ActionListener between = new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                boolean race = e.getSource() == toRace;
+                if (JOptionPane.showConfirmDialog(tabs, "Replace all 16 " + (race ? "race" : "qualifying") + " setups with the "
+                        + (race ? "qualifying" : "race") + " setups?", ((JButton) e.getSource()).getText(),
+                        JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION)
+                    return;
+                for (int c = 0; c < 16; c++)
+                    writeSetups(grids[race ? 1 : 0], tables.circuitSetups, race ? 16 : 0, new int[] { c },
+                                readSetup(tables.circuitSetups, (race ? 0 : 16) + c));
+            }
+        };
+        toRace.addActionListener(between);
+        toQualifying.addActionListener(between);
+
+        JPanel edit = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        edit.add(copyButton);
+        edit.add(paste);
+        edit.add(applyAll);
+        edit.add(toRace);
+        edit.add(toQualifying);
+        edit.add(copied);
+
+        JPanel south = new JPanel();
+        south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
+        south.add(edit);
+        south.add(setupFileButtons(tabs, grids, sources, firstRows, tables, separate, showSeparate));
+
+        JPanel content = new JPanel(new BorderLayout(0, 6));
+        content.add(separate, BorderLayout.NORTH);
+        content.add(tabs, BorderLayout.CENTER);
+        content.add(south, BorderLayout.SOUTH);
+        return page("Setups",
+            "<html>The setups the game gives human drivers' cars. The computer cars do not use these:<br>"
+            + "theirs are in each circuit file (open a circuit, then Edit &gt; Car and AI Settings).<br>"
+            + "With separate setups, the race setup is used from the warm-up on; otherwise the one setup is used all weekend.<br>"
+            + "Quick Race setup: each car's setup in a quick race started before any other session since the game was loaded.<br>"
+            + "A race weekend or practice replaces them with the circuit's setup until the game is restarted.<br>"
+            + "If the game's options load a setup file when the game starts, that file's setups are used instead.<br>"
+            + "Select several rows (Shift or Ctrl and click) to paste or load onto them all.</html>",
+            content);
     }
 
-    private JComponent setupGrid(final String[] rows, final GameTables.Table t, final int firstRow)
+    private static int[] readSetup(GameTables.Table t, int row)
+    {
+        int[] setup = new int[GameTables.SETUP_SIZE];
+        for (int i = 0; i < setup.length; i++)
+            setup[i] = t.getByte(row * GameTables.SETUP_SIZE + i);
+        return setup;
+    }
+
+    /** Puts one setup into each of the given rows of a tab and redraws them. */
+    private static void writeSetups(JTable grid, GameTables.Table t, int firstRow, int[] rows, int[] setup)
+    {
+        for (int r : rows)
+        {
+            for (int i = 0; i < setup.length; i++)
+                t.setByte((firstRow + r) * GameTables.SETUP_SIZE + i, setup[i]);
+            ((AbstractTableModel) grid.getModel()).fireTableRowsUpdated(r, r);
+        }
+    }
+
+    /** The game's own setup files: one setup (any row) or a season's (every circuit, both sessions). */
+    private JComponent setupFileButtons(final JTabbedPane tabs, final JTable[] grids, final GameTables.Table[] sources,
+                                        final int[] firstRows, final GameTables tables, final JCheckBox separate,
+                                        final Runnable showSeparate)
+    {
+        final File exeFolder = new File(fileName).getAbsoluteFile().getParentFile();
+        final File saves = new File(exeFolder, "GPSAVES").isDirectory() ? new File(exeFolder, "GPSAVES") : exeFolder;
+
+        JButton loadOne = new JButton("Load Setup File...");
+        loadOne.setName("load setup file");
+        loadOne.setToolTipText("Give the selected rows a setup saved from the game's setup screen");
+        loadOne.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int tab = tabs.getSelectedIndex();
+                int[] rows = grids[tab].getSelectedRows();
+                if (rows.length == 0)
+                {
+                    JOptionPane.showMessageDialog(tabs, "Select the " + (tab == 2 ? "cars" : "circuits") + " to load the setup onto.",
+                        "Load Setup File", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                File f = chooseSetupFile(saves, "Load Setup File", null);
+                if (f == null)
+                    return;
+                cfevolution.data.gamefiles.SetupFile file = loadSetupFile(f, false);
+                if (file == null)
+                    return;
+                int[] setup = new int[GameTables.SETUP_SIZE];
+                for (int i = 0; i < setup.length; i++) setup[i] = file.getByte(i);
+                writeSetups(grids[tab], sources[tab], firstRows[tab], rows, setup);
+            }
+        });
+        JButton saveOne = new JButton("Save Setup File...");
+        saveOne.setName("save setup file");
+        saveOne.setToolTipText("Save the selected row's setup as a file the game's setup screen can load");
+        saveOne.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int tab = tabs.getSelectedIndex();
+                int r = grids[tab].getSelectedRow();
+                if (r < 0)
+                {
+                    JOptionPane.showMessageDialog(tabs, "Select the " + (tab == 2 ? "car" : "circuit") + " whose setup to save.",
+                        "Save Setup File", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                String name = String.valueOf(grids[tab].getValueAt(r, 0)).replaceAll("^[0-9]+ +", "").replaceAll("[^A-Za-z0-9]", "");
+                File f = chooseSetupFile(saves, "Save Setup File", name.length() > 8 ? name.substring(0, 8).toUpperCase() : name.toUpperCase());
+                if (f == null)
+                    return;
+                cfevolution.data.gamefiles.SetupFile file = cfevolution.data.gamefiles.SetupFile.create(false);
+                int[] setup = readSetup(sources[tab], firstRows[tab] + r);
+                for (int i = 0; i < setup.length; i++) file.setByte(i, setup[i]);
+                saveSetupFile(file, f);
+            }
+        });
+        JButton loadSeason = new JButton("Load Season Setups...");
+        loadSeason.setName("load season setups");
+        loadSeason.setToolTipText("Give every circuit the qualifying and race setups of a season setup file");
+        loadSeason.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                File f = chooseSetupFile(saves, "Load Season Setups", null);
+                if (f == null)
+                    return;
+                cfevolution.data.gamefiles.SetupFile file = loadSetupFile(f, true);
+                if (file == null)
+                    return;
+                for (int i = 0; i < 32 * GameTables.SETUP_SIZE; i++)
+                    tables.circuitSetups.setByte(i, file.getByte(2 + i));
+                // the game takes the file's choice of separate setups with it, as here
+                separate.setSelected(file.isSeparateRaceSetups());
+                tables.separateSetups.setWord(0, file.isSeparateRaceSetups() ? 0xFFFF : 0);
+                showSeparate.run();
+                ((AbstractTableModel) grids[0].getModel()).fireTableDataChanged();
+                ((AbstractTableModel) grids[1].getModel()).fireTableDataChanged();
+            }
+        });
+        JButton saveSeason = new JButton("Save Season Setups...");
+        saveSeason.setName("save season setups");
+        saveSeason.setToolTipText("Save every circuit's qualifying and race setups as one file, as the game's Save Current Car Setups does");
+        saveSeason.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                File f = chooseSetupFile(saves, "Save Season Setups", "SEASON");
+                if (f == null)
+                    return;
+                cfevolution.data.gamefiles.SetupFile file = cfevolution.data.gamefiles.SetupFile.create(true);
+                file.setSeparateRaceSetups(separate.isSelected());
+                for (int i = 0; i < 32 * GameTables.SETUP_SIZE; i++)
+                    file.setByte(2 + i, tables.circuitSetups.getByte(i));
+                saveSetupFile(file, f);
+            }
+        });
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        p.add(loadOne);
+        p.add(saveOne);
+        p.add(loadSeason);
+        p.add(saveSeason);
+        p.add(new JLabel("<html><font color='#6A7380'>the game's own setup files (Load-Save Menu, and the setup screen)</font></html>"));
+        return p;
+    }
+
+    private File chooseSetupFile(File folder, String title, String suggested)
+    {
+        JFileChooser chooser = new JFileChooser(folder);
+        chooser.setDialogTitle(title);
+        if (suggested == null)
+            return chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION ? chooser.getSelectedFile() : null;
+        chooser.setSelectedFile(new File(folder, suggested));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+            return null;
+        File f = chooser.getSelectedFile();
+        if (f.exists() && JOptionPane.showConfirmDialog(this, f.getName() + " already exists. Replace it?", title,
+                                                        JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION)
+            return null;
+        return f;
+    }
+
+    /** The file as a setup file of the kind wanted, or null after saying why not. */
+    private cfevolution.data.gamefiles.SetupFile loadSetupFile(File f, boolean season)
+    {
+        try
+        {
+            if (cfevolution.data.gamefiles.SetupFile.isSetupFile(f))
+            {
+                cfevolution.data.gamefiles.SetupFile file = cfevolution.data.gamefiles.SetupFile.load(f);
+                if (file.isSeason() == season)
+                    return file;
+                JOptionPane.showMessageDialog(this, f.getName() + (season
+                    ? " holds one setup, not a season's. Use Load Setup File for it."
+                    : " holds a season's setups, not one. Use Load Season Setups for it."),
+                    "Nothing Loaded", JOptionPane.WARNING_MESSAGE);
+                return null;
+            }
+        }
+        catch (java.io.IOException e) { /* reported below */ }
+        JOptionPane.showMessageDialog(this, f.getName() + " is not a setup file saved by the game, so nothing was changed.",
+            "Nothing Loaded", JOptionPane.WARNING_MESSAGE);
+        return null;
+    }
+
+    private void saveSetupFile(cfevolution.data.gamefiles.SetupFile file, File f)
+    {
+        try
+        {
+            file.save(f);
+        }
+        catch (java.io.IOException e)
+        {
+            JOptionPane.showMessageDialog(this, f.getName() + " could not be saved.", "Not Saved", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private JTable setupTable(final String[] rows, final GameTables.Table t, final int firstRow, String name)
     {
         final String[] cols = { "Front wing", "Rear wing", "Gear 1", "Gear 2", "Gear 3", "Gear 4", "Gear 5", "Gear 6", "Tyres", "Brake balance" };
         final AbstractTableModel model = new AbstractTableModel() {
@@ -1457,28 +1786,27 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public Object getValueAt(int r, int c) {
                 if (c == 0) return rows[r];
                 int v = t.getByte(at(r, c));
-                if (c == 9) return v < COMPOUNDS.length ? COMPOUNDS[v] : String.valueOf(v);
+                if (c == 9) return v < SetupFile.COMPOUNDS.length ? SetupFile.COMPOUNDS[v] : String.valueOf(v);
                 if (c == 10) return (int) (byte) v;
                 return v;
             }
             public void setValueAt(Object v, int r, int c) {
-                int n;
-                if (c == 9)
-                {
-                    n = java.util.Arrays.asList(COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
-                    if (n < 0)
-                    {
-                        JOptionPane.showMessageDialog(ExecutableWindow.this, "Tyres must be one of A, B, C, D, Q or W.",
-                            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                }
+                // The game's own limits (Hrvoje, 2026-11-05: wings went to 255, the game's screen stops at 64)
+                int field = c - 1, n;
+                if (field == SetupFile.TYRES)
+                    n = java.util.Arrays.asList(SetupFile.COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
                 else
                 {
-                    Integer i = c == 10 ? number(v, -127, 127, "Brake balance") : number(v, 0, 255, cols[c - 1]);
-                    if (i == null) return;
-                    n = i & 0xFF;
+                    try { n = Integer.parseInt(String.valueOf(v).trim()); }
+                    catch (NumberFormatException e) { n = Integer.MIN_VALUE; }
                 }
+                String problem = SetupFile.problem(readSetup(t, firstRow + r), field, n);
+                if (problem != null)
+                {
+                    JOptionPane.showMessageDialog(ExecutableWindow.this, problem, "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                n &= 0xFF;
                 if (n == t.getByte(at(r, c))) return;
                 t.setByte(at(r, c), n);
                 fireTableCellUpdated(r, c);
@@ -1487,7 +1815,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
         int[] widths = new int[cols.length + 1];
         widths[0] = 170;
         for (int i = 1; i < widths.length; i++) widths[i] = 76;
-        return new JScrollPane(table(model, widths));
+        widths[10] = 104;   // room for "Brake balance"
+        JTable table = table(model, widths);
+        table.setName(name);
+        // tyres chosen from the game's four compounds (Hrvoje, 2026-11-05)
+        table.getColumnModel().getColumn(9).setCellEditor(new DefaultCellEditor(new JComboBox<String>(SetupFile.COMPOUNDS)));
+        // several rows at once, so one Paste or Load covers them
+        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        return table;
     }
 
     // --- Lap records --------------------------------------------------------

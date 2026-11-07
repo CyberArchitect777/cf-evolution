@@ -70,7 +70,7 @@ public class GameWindow extends JPanel implements EditorTab
 
     private final JPanel rows = new JPanel(new GridBagLayout());
 
-    private static final String[] KIND_NAMES = { "Name file", "Set-up", "Championship save" };
+    private static final String[] KIND_NAMES = { "Name file", "Setup", "Championship save" };
 
     /** Lists everything in the folder the editor can open; called again when files are added. */
     public void fillRows()
@@ -166,7 +166,7 @@ public class GameWindow extends JPanel implements EditorTab
         java.util.List<GameFolder.SavedFile> saved = game.getSavedFiles();
         if (saved.isEmpty())
         {
-            JLabel none = new JLabel("No name files, set-ups or championship saves yet.");
+            JLabel none = new JLabel("No name files, setups or championship saves yet.");
             none.setForeground(new Color(0xA0A6AE));
             GridBagConstraints c = new GridBagConstraints();
             c.gridy = y++;
@@ -179,7 +179,7 @@ public class GameWindow extends JPanel implements EditorTab
         {
             String kind = KIND_NAMES[f.kind.ordinal()];
             if (f.kind == GameFolder.SavedKind.SETUP && f.file.length() == cfevolution.data.gamefiles.SetupFile.SEASON_SIZE)
-                kind = "Season set-ups";
+                kind = "Season setups";
             addRow(rows, y++, "", kind, f.name, f.file, "open-saved-" + f.name, new Runnable() {
                 public void run() { GameWindow.this.mainWindow.openGameFile(f.file, game); } });
         }

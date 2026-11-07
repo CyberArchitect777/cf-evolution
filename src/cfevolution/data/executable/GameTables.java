@@ -24,7 +24,7 @@ import java.io.*;
 /**
  * The executable's larger data tables that no other editor offers (added
  * 2026-10-24 from the F1GP-SDL reference, every one read back in all three
- * unpacked builds first): the pit lane team order, the default car set-ups,
+ * unpacked builds first): the pit lane team order, the default car setups,
  * the default lap records, the car physics tables and the opposition level
  * tables.
  *
@@ -34,8 +34,9 @@ import java.io.*;
  *
  * Two areas, both European file offsets:
  *  - "ss" data (seg004): file = 173520 + ss offset. Pit order ss:28D8h; car
- *    set-ups ss:1286h (40 x 10); per-circuit set-ups ss:1418h (16 x 10, then
- *    16 x 10 more used when race and qualifying set-ups are separate); lap
+ *    setups ss:1286h (40 x 10); per-circuit setups ss:1418h (16 x 10, then
+ *    16 x 10 more used when race and qualifying setups are separate, as the
+ *    word before them, ss:1416h, says); lap
  *    records ss:2312h (16 x 90: circuit word, then qualifying and race, each a
  *    24-byte driver, 14-byte team, millisecond time and a day count from
  *    1 January 1978).
@@ -76,10 +77,13 @@ public class GameTables
     // Pit lane: team number (1-20) for each position along the pit lane
     public final Table pitOrder = ss(0x28D8, 20);
 
-    // Set-ups: front wing, rear wing, six gears, tyre compound (0 = A), brake balance
+    // Setups: front wing, rear wing, six gears, tyre compound (0 = A), brake balance
     public static final int SETUP_SIZE = 10;
     public final Table carSetups = ss(0x1286, 40 * SETUP_SIZE);
     public final Table circuitSetups = ss(0x1418, 32 * SETUP_SIZE);
+    // Separate race and qualifying setups, the game's starting choice: FFFFh on, 0 off (ss:1416h; the
+    // game's options change it while it runs, and a season setup file loaded at start-up replaces it)
+    public final Table separateSetups = ss(0x1416, 2);
 
     // Lap records
     public static final int RECORD_SIZE = 90, SESSION_SIZE = 44, NAME_LENGTH = 24, TEAM_LENGTH = 14;
@@ -111,7 +115,7 @@ public class GameTables
     public final Table oppWingVariation = ida(0x217A7, 5);
     public final Table wetRacePower = ida(0x2135B, 1);
 
-    private final Table[] all = { pitOrder, carSetups, circuitSetups, lapRecords, torqueRace, torqueQualifying,
+    private final Table[] all = { pitOrder, carSetups, circuitSetups, separateSetups, lapRecords, torqueRace, torqueQualifying,
         tyreGripDry, tyreGripWet, minimumGrip, carWeight, fuel, wingDrag, wingDownforce, downforceFactor,
         engineBraking, revLimits, oppPowerDeduction, oppRankPower, oppOversteerLow, oppOversteerHigh,
         oppCornerBurst, oppVariationLow, oppVariationHigh, globalCornerSpeed, oppWingVariation, wetRacePower };

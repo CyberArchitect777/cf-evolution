@@ -27,7 +27,7 @@ import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 
 /**
- * A set-up file from the game's set-up screen: one set-up, or a whole
+ * A setup file from the game's setup screen: one setup, or a whole
  * season's (qualifying and race for each circuit).
  *
  * @author barrie
@@ -36,7 +36,6 @@ public class SetupFileTab extends GameFileTab
 {
     private static final String[] COLUMNS = { "Front wing", "Rear wing", "Gear 1", "Gear 2", "Gear 3", "Gear 4",
                                               "Gear 5", "Gear 6", "Tyres", "Brake balance" };
-    private static final String[] COMPOUNDS = { "A", "B", "C", "D" };
     private final SetupFile setups;
 
     public SetupFileTab(SetupFile setups, String fileName, MainGUI mainWindow)
@@ -47,10 +46,10 @@ public class SetupFileTab extends GameFileTab
         content.add(new JScrollPane(setupTable()), BorderLayout.CENTER);
         if (setups.isSeason())
         {
-            final JCheckBox separate = new JCheckBox("Separate race and qualifying set-ups",
+            final JCheckBox separate = new JCheckBox("Separate race and qualifying setups",
                                                      setups.isSeparateRaceSetups());
             separate.setName("separate");
-            separate.setToolTipText("When off, the game uses the qualifying set-up in the race too.");
+            separate.setToolTipText("When off, the game uses the qualifying setup in the race too.");
             separate.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
                     if (separate.isSelected() != SetupFileTab.this.setups.isSeparateRaceSetups())
@@ -62,16 +61,16 @@ public class SetupFileTab extends GameFileTab
             });
             content.add(separate, BorderLayout.NORTH);
         }
-        add(page(setups.isSeason() ? "Season Set-ups" : "Set-up",
-                 setups.isSeason() ? "A qualifying and a race set-up for each circuit, as the game's set-up screen saves them."
-                                   : "One car set-up, as the game's set-up screen saves it.",
+        add(page(setups.isSeason() ? "Season Setups" : "Setup",
+                 setups.isSeason() ? "A qualifying and a race setup for each circuit, as the game's setup screen saves them."
+                                   : "One car setup, as the game's setup screen saves it.",
                  content));
     }
 
     private String rowName(int r)
     {
         if (!setups.isSeason())
-            return "Set-up";
+            return "Setup";
         return (r % 16 + 1) + "  " + GameFolder.CIRCUIT_NAMES[r % 16] + (r < 16 ? ", qualifying" : ", race");
     }
 
@@ -85,27 +84,26 @@ public class SetupFileTab extends GameFileTab
             public Object getValueAt(int r, int c) {
                 if (c == 0) return rowName(r);
                 int v = setups.get(r, c - 1);
-                if (c - 1 == SetupFile.TYRES) return v < COMPOUNDS.length ? COMPOUNDS[v] : String.valueOf(v);
+                if (c - 1 == SetupFile.TYRES) return v < SetupFile.COMPOUNDS.length ? SetupFile.COMPOUNDS[v] : String.valueOf(v);
                 return v;
             }
             public void setValueAt(Object v, int r, int c) {
+                // The game's own limits (Hrvoje, 2026-11-05)
                 int field = c - 1, n;
                 if (field == SetupFile.TYRES)
-                {
-                    n = java.util.Arrays.asList(COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
-                    if (n < 0)
-                    {
-                        JOptionPane.showMessageDialog(SetupFileTab.this, "Tyres must be one of A, B, C or D.",
-                            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                }
+                    n = java.util.Arrays.asList(SetupFile.COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
                 else
                 {
-                    Integer i = field == SetupFile.BRAKE_BALANCE ? number(v, -127, 127, "Brake balance")
-                                                                 : number(v, 0, 255, COLUMNS[field]);
-                    if (i == null) return;
-                    n = i;
+                    try { n = Integer.parseInt(String.valueOf(v).trim()); }
+                    catch (NumberFormatException e) { n = Integer.MIN_VALUE; }
+                }
+                int[] setup = new int[SetupFile.SETUP_SIZE];
+                for (int i = 0; i < setup.length; i++) setup[i] = setups.get(r, i);
+                String problem = SetupFile.problem(setup, field, n);
+                if (problem != null)
+                {
+                    JOptionPane.showMessageDialog(SetupFileTab.this, problem, "Value Not Changed", JOptionPane.WARNING_MESSAGE);
+                    return;
                 }
                 if (n == setups.get(r, field)) return;
                 setups.set(r, field, n);
@@ -117,11 +115,12 @@ public class SetupFileTab extends GameFileTab
         for (int i = 1; i < widths.length; i++) widths[i] = 76;
         JTable table = table(model, widths);
         table.setName("setups");
+        table.getColumnModel().getColumn(1 + SetupFile.TYRES).setCellEditor(new DefaultCellEditor(new JComboBox<String>(SetupFile.COMPOUNDS)));
         return table;
     }
 
     public String getStatusText()
     {
-        return setups.isSeason() ? "Season set-up file  ·  16 circuits, qualifying and race" : "Set-up file  ·  one set-up";
+        return setups.isSeason() ? "Season setup file  ·  16 circuits, qualifying and race" : "Setup file  ·  one setup";
     }
 }

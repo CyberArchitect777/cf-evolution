@@ -78,7 +78,7 @@ public class PreferencesTab extends GameFileTab
 
         section("Files loaded when the game starts");
         autoLoad("Name file", PreferencesFile.AUTO_LOAD_NAMES, PreferencesFile.NAME_FILE_PATH);
-        autoLoad("Set-up file", PreferencesFile.AUTO_LOAD_SETUP, PreferencesFile.SETUP_FILE_PATH);
+        autoLoad("Setup file", PreferencesFile.AUTO_LOAD_SETUP, PreferencesFile.SETUP_FILE_PATH);
         autoLoad("Lap records file", PreferencesFile.AUTO_LOAD_RECORDS, PreferencesFile.RECORDS_FILE_PATH);
         note("A file in the game folder, for example gpsaves\\MYNAMES.NAM.");
 

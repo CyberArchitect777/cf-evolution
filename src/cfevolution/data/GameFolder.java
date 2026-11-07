@@ -214,7 +214,7 @@ public class GameFolder
     }
 
     /**
-     * Name files, set-up files and championship saves in GPSAVES and the
+     * Name files, setup files and championship saves in GPSAVES and the
      * folders directly inside it, recognised by size and checksum since the
      * game saves them under any name. Saves made during a race weekend are
      * left out.

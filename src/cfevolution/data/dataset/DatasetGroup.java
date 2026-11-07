@@ -31,7 +31,7 @@ public enum DatasetGroup
     COLOURS("Colours", "car, helmet and pit crew colours", true, false),
     POINTS("Points", "the points for each finishing place", false, false),
     RULES("Rules", "the Game Settings page: power, grip, rain, pit stops, race rules, damage, marshals", false, false),
-    TABLES("Pit lane, set-ups and lap records", "pit lane order, car and circuit set-ups, lap records", false, false),
+    TABLES("Pit lane, setups and lap records", "pit lane order, car and circuit setups, lap records", false, false),
     PHYSICS("Car performance tables", "engine, tyre, weight, wing and opposition tables", false, false),
     OPTIONS("Game options", "F1PREFS.DAT: opposition, race distance, driving aids and display", false, false),
     SOUNDS("Sound effects", "the AdLib and Sound Blaster sound effects", false, false),

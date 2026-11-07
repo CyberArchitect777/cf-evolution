@@ -29,7 +29,7 @@ import java.io.*;
 import cfevolution.data.*;
 
 /**
- * The 38-byte computer car set-up and behaviour block of a track file
+ * The 38-byte computer car setup and behaviour block of a track file
  * ("CC setup", the game's strTrkCCSetup and wTrk* values at seg003:0204h).
  *
  * Kept as the raw bytes read, so it always saves back exactly as loaded;
@@ -57,10 +57,10 @@ public class CCSetup extends CFDataObject {
 
     /** Bytes 0-9. */
     public static final int FRONT_WING = 0, REAR_WING = 1, GEAR_1 = 2, TYRE = 8, BRAKE_BALANCE = 9;
-    /** Stored offsets of the set-up bytes. */
+    /** Stored offsets of the setup bytes. */
     public static final int SETUP_OFFSET = 151, TYRE_OFFSET = 52;
 
-    /** Words 0-13, after the ten set-up bytes. */
+    /** Words 0-13, after the ten setup bytes. */
     public static final int GRIP = 0, AGGRESSION_PRACTICE = 1, AGGRESSION_RACE = 2, CLOCK_PRACTICE = 3,
         POWER = 4, AIR_RESISTANCE = 5, WEAR_QUALIFYING = 6, WEAR_OTHER = 7, FUEL = 8, CLOCK_RACE = 9,
         CC_POWER = 10, AGGRESSION_WET = 11, FORMATION_GAP = 12, BRAKE_THRESHOLD = 13;
@@ -93,7 +93,7 @@ public class CCSetup extends CFDataObject {
         return SIZE;
     }
 
-    /** A raw set-up byte, 0-9. */
+    /** A raw setup byte, 0-9. */
     public int getByte(int index)
     {
         return m_baData[index] & 0xFF;

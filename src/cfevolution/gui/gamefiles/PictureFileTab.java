@@ -52,8 +52,8 @@ public class PictureFileTab extends JPanel implements EditorTab
     private static final String[] BACKDROP_NAMES = {
         "Benetton (title sequence)", "Marshal waving a flag (between races)", "Honda engine (constructors' table)",
         "Title screen", "Two Lotuses", "Mansell's helmet (driver selection)", "Pit board", "Mansell in the pits (Esc in a session)",
-        "Car from behind", "Car in the pits (set-up screen)", "Car in the pits, wheels off (set-up screen)",
-        "Car in the pits, bodywork off (set-up screen)", "Senna with champagne", "Nose of a car",
+        "Car from behind", "Car in the pits (setup screen)", "Car in the pits, wheels off (setup screen)",
+        "Car in the pits, bodywork off (setup screen)", "Senna with champagne", "Nose of a car",
         "Senna and a Williams in the rain", "McLaren and Williams at Monaco (main menu)", "Three drivers on the podium",
         "Drivers together" };
     private static final int FIRST_UI_COLOURS = 32;

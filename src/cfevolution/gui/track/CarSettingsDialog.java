@@ -137,13 +137,15 @@ public class CarSettingsDialog extends JDialog
         row(ai, "Formation lap gap", WORD, CCSetup.FORMATION_GAP, 0, 4000, "Originals: 128 to 512");
         row(ai, "Braking threshold for bends", WORD, CCSetup.BRAKE_THRESHOLD, 0, 4000, "Originals: 256 to 640");
 
-        JPanel car = group("Computer cars' set-up");
-        row(car, "Front wing", SETUP_BYTE, CCSetup.FRONT_WING, 0, 104, "Originals: 18 to 58");
-        row(car, "Rear wing", SETUP_BYTE, CCSetup.REAR_WING, 0, 104, "Originals: 18 to 58");
+        JPanel car = group("Computer cars' setup");
+        row(car, "Front wing", SETUP_BYTE, CCSetup.FRONT_WING, 0, cfevolution.data.gamefiles.SetupFile.WING_MAX, "Originals: 18 to 58");
+        row(car, "Rear wing", SETUP_BYTE, CCSetup.REAR_WING, 0, cfevolution.data.gamefiles.SetupFile.WING_MAX, "Originals: 18 to 58");
         JPanel gears = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         for (int g = 0; g < 6; g++)
         {
-            Field f = new Field(SETUP_BYTE, CCSetup.GEAR_1 + g, 0, 104);
+            // the limits of the game's own setup screen (Hrvoje, 2026-11-05; was 0-104)
+            Field f = new Field(SETUP_BYTE, CCSetup.GEAR_1 + g, cfevolution.data.gamefiles.SetupFile.GEAR_MIN,
+                                cfevolution.data.gamefiles.SetupFile.GEAR_MAX);
             f.editor.setName("gear" + (g + 1));
             fields.add(f);
             gears.add(new JLabel(String.valueOf(g + 1)));

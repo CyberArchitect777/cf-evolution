@@ -728,7 +728,7 @@ public class MainGUI extends JFrame
     }
 
     /** Opens one of the game folder's other files (a picture file, options,
-        name file, set-up file or championship save) in a tab. */
+        name file, setup file or championship save) in a tab. */
     public boolean openGameFile(File file, GameFolder game)
     {
         if (selectIfOpen(file.getPath()))

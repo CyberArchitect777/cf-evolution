@@ -917,11 +917,11 @@ public class GameDataset
                 report.add("The pit lane order was left as it is: it needs 20 team numbers from 1 to 20.");
         }
         for (int c = 0; c < CARS; c++)
-            setBytes(t.carSetups, c * GameTables.SETUP_SIZE, d.getInts("car setups", "car " + (c + 1)), "The set-up of car " + (c + 1));
+            setBytes(t.carSetups, c * GameTables.SETUP_SIZE, d.getInts("car setups", "car " + (c + 1)), "The setup of car " + (c + 1));
         for (int c = 0; c < 32; c++)
             setBytes(t.circuitSetups, c * GameTables.SETUP_SIZE,
                      d.getInts("circuit setups", "circuit " + (c % 16 + 1) + (c < 16 ? "" : " race")),
-                     "A circuit set-up for " + GameFolder.CIRCUIT_NAMES[c % 16]);
+                     "A circuit setup for " + GameFolder.CIRCUIT_NAMES[c % 16]);
         for (int c = 0; c < 16; c++)
             for (int race = 0; race < 2; race++)
             {

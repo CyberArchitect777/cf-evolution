@@ -47,7 +47,7 @@ public class GameSettings
 {
     // `mov cx,4000h` in GetPlayerCarPower: raw = 22 * BHP + 632 (716 BHP = 4000h)
     private static final int PLAYER_POWER = 24600;
-    // 5 bytes in the AI grip set-up: stock `jns +3 / mov ax,4000h`, or the
+    // 5 bytes in the AI grip setup: stock `jns +3 / mov ax,4000h`, or the
     // ArgData patch `nop / add ax,n` that gives every car a fixed grip level
     private static final int AI_GRIP = 24935;
     private static final byte[] AI_GRIP_STOCK = { 0x79, 0x03, (byte)0xB8, 0x00, 0x40 };
