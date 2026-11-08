@@ -69,6 +69,7 @@ public class PreferencesTab extends GameFileTab
         section("Display");
         toggle("Speeds in km/h", KPH_AT, true);
         toggle("Textures", TEXTURES_AT, false);
+        frameRate();
 
         section("Quick race");
         choice("Circuit", GameFolder.CIRCUIT_NAMES, PreferencesFile.QUICK_RACE_CIRCUIT, false, null);
@@ -199,6 +200,57 @@ public class PreferencesTab extends GameFileTab
             }
         });
         addRow(label, box, null);
+    }
+
+    /** The frame rate, stored as 300 / fps. Offers the game's own menu range (25 to 8.1 fps) and,
+     *  with a warning, the faster rates GPFPS allowed down to 50 fps; any other stored value is kept
+     *  unless changed. */
+    private void frameRate()
+    {
+        final int fastest = 6, slowest = PreferencesFile.MENU_SLOWEST_PERIOD;
+        final JComboBox<String> box = new JComboBox<String>();
+        box.setName("Frame rate");
+        for (int p = fastest; p <= slowest; p++)
+            box.addItem(fps(p) + " fps" + (p == PreferencesFile.MENU_FASTEST_PERIOD ? " (the game's fastest)"
+                                         : p == slowest ? " (the game's slowest)"
+                                         : p < PreferencesFile.MENU_FASTEST_PERIOD ? " (faster than the game offers)" : ""));
+        final int v = prefs.getWord(PreferencesFile.FRAME_PERIOD);
+        if (v >= fastest && v <= slowest)
+            box.setSelectedIndex(v - fastest);
+        else
+        {
+            box.addItem("Other (stored as " + v + ")");   // kept unless changed
+            box.setSelectedIndex(box.getItemCount() - 1);
+        }
+        final JLabel warning = new JLabel("<html>Faster than the game's own Options menu allows. The car may spin "
+            + "away at the start of a race; if it does, choose a slower rate.</html>");
+        warning.setName("Frame rate warning");
+        warning.setForeground(new Color(0xB04A00));
+        warning.setVisible(v >= fastest && v < PreferencesFile.MENU_FASTEST_PERIOD);
+        box.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                int i = box.getSelectedIndex();
+                if (i > slowest - fastest)
+                    return;
+                put(PreferencesFile.FRAME_PERIOD, true, fastest + i);
+                warning.setVisible(fastest + i < PreferencesFile.MENU_FASTEST_PERIOD);
+            }
+        });
+        addRow("Frame rate", box, "Faster is smoother if the PC can keep up.");
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridy = row++;
+        c.gridx = 1;
+        c.gridwidth = 2;
+        c.anchor = GridBagConstraints.WEST;
+        c.insets = new Insets(0, 0, 3, 0);
+        form.add(warning, c);
+    }
+
+    /** Frames per second for a stored period, to one decimal place when not whole. */
+    static String fps(int period)
+    {
+        return 300 % period == 0 ? String.valueOf(300 / period)
+                                 : String.valueOf(Math.round(3000.0 / period) / 10.0);
     }
 
     private void aid(String label, final int bit)

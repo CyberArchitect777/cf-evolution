@@ -41,6 +41,9 @@ public class PreferencesFile extends GameFile
     public static final int AUTO_LOAD_NAMES = 1130, AUTO_LOAD_SETUP = 1131, AUTO_LOAD_RECORDS = 1132;
     public static final int OPPOSITION_STANDARD = 1146, OPPOSITION_SPREAD = 1148, RACE_DISTANCE = 1150,
                             QUALIFYING_MINUTES = 1152, PRACTICE_MINUTES = 1154;
+    /** wMenuFrameTime (ss:1230h): 300 / frames per second, a word. The game's Options menu offers
+     *  12 (25 fps) to 37 (8.1 fps, its default); GPFPS (David Gymer, 1995) wrote values below 12. */
+    public static final int FRAME_PERIOD = 1160, MENU_FASTEST_PERIOD = 12, MENU_SLOWEST_PERIOD = 37;
 
     private PreferencesFile(byte[] data)
     {
