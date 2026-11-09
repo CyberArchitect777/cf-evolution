@@ -354,6 +354,16 @@ public class MainGUI extends JFrame
         return false;
     }
 
+    /** True if the file is open in a tab. */
+    public boolean isFileOpen(String fileName)
+    {
+        String wanted = new File(fileName).getAbsolutePath();
+        for (EditorTab tab : tabs)
+            if (new File(tab.getFilePath()).getAbsolutePath().equals(wanted))
+                return true;
+        return false;
+    }
+
     /** Called by a tab when it is changed or saved. */
     public void tabStateChanged(EditorTab tab)
     {

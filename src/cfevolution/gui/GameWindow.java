@@ -28,7 +28,8 @@ import javax.swing.*;
 /**
  * The tab for an open game folder: the game's settings (GP.EXE) and its 16
  * circuits, each opening in its own tab. Nothing is edited here, so there is
- * nothing to save; each file saves from its own tab.
+ * nothing to save; each file saves from its own tab, and the computer cars'
+ * cornering at every circuit saves from its own page (AllCircuitsCarsDialog).
  *
  * @author barrie
  */
@@ -90,6 +91,21 @@ public class GameWindow extends JPanel implements EditorTab
                    public void run() { GameWindow.this.mainWindow.openGameFile(prefs, game); } });
 
         addHeading(rows, y++, "Circuits");
+        JButton allCircuits = new JButton("Computer Cars at Every Circuit...");
+        allCircuits.setName("all-circuits-cars");
+        allCircuits.setToolTipText("How hard the computer cars corner at each circuit, changed for all of them on one page");
+        allCircuits.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                new AllCircuitsCarsDialog(GameWindow.this.mainWindow, game).setVisible(true);
+            }
+        });
+        GridBagConstraints ac = new GridBagConstraints();
+        ac.gridy = y++;
+        ac.gridx = 1;
+        ac.gridwidth = 3;
+        ac.anchor = GridBagConstraints.WEST;
+        ac.insets = new Insets(3, 0, 6, 0);
+        rows.add(allCircuits, ac);
         for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
         {
             final File track = game.getTrack(slot);

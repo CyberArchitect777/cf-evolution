@@ -95,6 +95,7 @@ public class Track {
             m_CCLine.load(fis);
 
             // CCSetup data
+            m_lCCSetupPosition = fc.position();
             m_CCSetup.load(fis);
 
             // pitlane segment data
@@ -203,7 +204,38 @@ public class Track {
         return nBytesWritten;
     }
 
-    protected void calculateChecksum( File file )
+    /**
+     * Writes only the CC setup back to the file it was loaded from, in place,
+     * and reseals the checksum; every other byte stays as it is on disk. Used
+     * by the all-circuits page, which edits the setups of tracks not open in
+     * a tab. False if the file could not be written.
+     */
+    public boolean saveCCSetupOnly()
+    {
+        if (m_File == null || m_lCCSetupPosition < 0)
+            return false;
+        try
+        {
+            RandomAccessFile raf = new RandomAccessFile( m_File, "rw" );
+            try
+            {
+                raf.seek( m_lCCSetupPosition );
+                raf.write( m_CCSetup.getBytes() );
+            }
+            finally
+            {
+                raf.close();
+            }
+        }
+        catch( IOException ioe )
+        {
+            return false;
+        }
+        calculateChecksum( m_File );
+        return true;
+    }
+
+    protected static void calculateChecksum( File file )
     {
         try
         {
@@ -427,6 +459,7 @@ public class Track {
     protected TrackSegments m_TrackSegments;
     protected CCLine m_CCLine;
     protected CCSetup m_CCSetup;
+    protected long m_lCCSetupPosition = -1; // where the CC setup was read from
     protected TrackSegments m_PitlaneSegments;
     protected Footer m_Footer;
 

@@ -93,6 +93,12 @@ public class CCSetup extends CFDataObject {
         return SIZE;
     }
 
+    /** A copy of the 38 bytes as they stand. */
+    public byte[] getBytes()
+    {
+        return m_baData.clone();
+    }
+
     /** A raw setup byte, 0-9. */
     public int getByte(int index)
     {
