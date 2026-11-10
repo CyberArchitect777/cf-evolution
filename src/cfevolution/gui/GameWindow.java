@@ -172,13 +172,24 @@ public class GameWindow extends JPanel implements EditorTab
         saveNames.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) { saveNamesFile(); }
         });
+        // Any name file, wherever it is, not only those in GPSAVES (Hrvoje, 2026-11-05)
+        JButton openNames = new JButton("Open a Name File...");
+        openNames.setName("open-names");
+        openNames.setToolTipText("Opens a name file (.NAM) from any folder to view or change its names");
+        openNames.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { openNamesFile(); }
+        });
+        JPanel nameButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        nameButtons.add(saveNames);
+        nameButtons.add(Box.createHorizontalStrut(8));
+        nameButtons.add(openNames);
         GridBagConstraints b = new GridBagConstraints();
         b.gridy = y++;
         b.gridx = 1;
         b.gridwidth = 3;
         b.anchor = GridBagConstraints.WEST;
         b.insets = new Insets(3, 0, 6, 0);
-        rows.add(saveNames, b);
+        rows.add(nameButtons, b);
         java.util.List<GameFolder.SavedFile> saved = game.getSavedFiles();
         if (saved.isEmpty())
         {
@@ -206,6 +217,34 @@ public class GameWindow extends JPanel implements EditorTab
         rows.add(Box.createGlue(), filler);
         rows.revalidate();
         rows.repaint();
+    }
+
+    /** Asks for a name file anywhere and opens it in a tab. */
+    private void openNamesFile()
+    {
+        File saves = game.getSavesFolder();
+        JFileChooser chooser = new JFileChooser(saves != null ? saves : game.getFolder());
+        chooser.setDialogTitle("Open a Name File");
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Name files (*.NAM)", "nam", "NAM"));
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        File f = chooser.getSelectedFile();
+        boolean ok = f.isFile() && f.length() == cfevolution.data.gamefiles.NameFile.SIZE;
+        try
+        {
+            ok = ok && cfevolution.data.gamefiles.GameFile.checksumOk(java.nio.file.Files.readAllBytes(f.toPath()));
+        }
+        catch (java.io.IOException ex)
+        {
+            ok = false;
+        }
+        if (!ok)
+        {
+            JOptionPane.showMessageDialog(this, f.getName() + " is not a name file the game can read, or it is damaged.",
+                                          "Name File Not Opened", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        mainWindow.openGameFile(f, game);
     }
 
     /** Asks for a short name and writes GP.EXE's names to GPSAVES as a .NAM file. */

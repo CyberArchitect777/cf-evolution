@@ -323,9 +323,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
         };
         JTable table = table(model, new int[] { 50, 0, 130, 110 });
+        nameModels.add(model);
         return page("Drivers",
             "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers: 1 is the game's best, and 0, which some editors use, is faster still.",
-            new JScrollPane(table));
+            withNameFileButtons(new JScrollPane(table), "drivers"));
     }
 
     // --- Teams ------------------------------------------------------------
@@ -392,11 +393,155 @@ public class ExecutableWindow extends JPanel implements EditorTab
         };
         table.getColumnModel().getColumn(4).setCellEditor(carEditor);
         table.getColumnModel().getColumn(5).setCellEditor(carEditor);
+        nameModels.add(model);
         return page("Teams",
             "<html>Team and engine names, each team's engine power, and which cars drive for it. "
           + "Power differences only show with \"1991 Levels\" opposition.<br>"
           + "The game races the first 18 teams. A new line-up takes effect when a new championship is started.</html>",
-            new JScrollPane(table));
+            withNameFileButtons(new JScrollPane(table), "teams"));
+    }
+
+    // --- Names from and to a name file (Hrvoje, 2026-11-05) -----------------
+
+    /** The Drivers and Teams tables, refreshed when names come in from a name file. */
+    private final java.util.List<AbstractTableModel> nameModels = new java.util.ArrayList<AbstractTableModel>();
+
+    /** A page's table with the name file buttons beneath it. */
+    private JComponent withNameFileButtons(JComponent table, String page)
+    {
+        JButton load = new JButton("Load Names from a Name File...");
+        load.setName("load-names " + page);
+        load.setToolTipText("Replace the driver, team and engine names here with those in a name file (.NAM)");
+        load.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { loadNamesFromFile(); }
+        });
+        JButton save = new JButton("Save Names as a Name File...");
+        save.setName("save-names " + page);
+        save.setToolTipText("Write the driver, team and engine names shown here to a name file the game can load");
+        save.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { saveNamesToFile(); }
+        });
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        buttons.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        buttons.add(load);
+        buttons.add(Box.createHorizontalStrut(8));
+        buttons.add(save);
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(table, BorderLayout.CENTER);
+        panel.add(buttons, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    /** Where name files are looked for first: the game's GPSAVES folder, or the executable's own. */
+    private File nameFileFolder()
+    {
+        File folder = new File(fileName).getAbsoluteFile().getParentFile();
+        String[] names = folder == null ? null : folder.list();
+        if (names != null)
+            for (String n : names)
+                if (n.equalsIgnoreCase("GPSAVES") && new File(folder, n).isDirectory())
+                    return new File(folder, n);
+        return folder;
+    }
+
+    private static final javax.swing.filechooser.FileNameExtensionFilter NAME_FILES =
+        new javax.swing.filechooser.FileNameExtensionFilter("Name files (*.NAM)", "nam", "NAM");
+
+    /** Asks for a name file and which names to take from it, then puts them into this executable. */
+    private void loadNamesFromFile()
+    {
+        JFileChooser chooser = new JFileChooser(nameFileFolder());
+        chooser.setDialogTitle("Load Names from a Name File");
+        chooser.setFileFilter(NAME_FILES);
+        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        File f = chooser.getSelectedFile();
+        cfevolution.data.gamefiles.NameFile names;
+        try
+        {
+            names = cfevolution.data.gamefiles.NameFile.load(f);
+        }
+        catch (java.io.IOException ex)
+        {
+            JOptionPane.showMessageDialog(this, f.getName() + " is not a name file the game can read, or it is damaged.",
+                "Names Not Loaded", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        JCheckBox drivers = new JCheckBox("Driver names", true), teams = new JCheckBox("Team names", true),
+                  engines = new JCheckBox("Engine names", true);
+        drivers.setName("load drivers");
+        teams.setName("load teams");
+        engines.setName("load engines");
+        JPanel ask = new JPanel();
+        ask.setLayout(new BoxLayout(ask, BoxLayout.Y_AXIS));
+        ask.add(new JLabel("Which names should come from " + f.getName() + "?"));
+        ask.add(Box.createVerticalStrut(6));
+        ask.add(drivers);
+        ask.add(teams);
+        ask.add(engines);
+        ask.add(Box.createVerticalStrut(6));
+        ask.add(new JLabel("<html><font color='#6A7380'>They replace the names here. Save GP.EXE to keep them.</font></html>"));
+        if (JOptionPane.showOptionDialog(this, ask, "Load Names", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
+                null, new String[] { "Load", "Cancel" }, "Load") != 0)
+            return;
+        if (!drivers.isSelected() && !teams.isSelected() && !engines.isSelected())
+            return;
+        GameDrivers gameDrivers = currentExecutable.getGameDrivers();
+        GameTeams gameTeams = currentExecutable.getGameTeams();
+        if (drivers.isSelected())
+            for (int i = 0; i < cfevolution.data.gamefiles.NameFile.DRIVERS; i++)
+                gameDrivers.setDriverName(i, names.getDriver(i));
+        for (int i = 0; i < cfevolution.data.gamefiles.NameFile.TEAMS; i++)
+        {
+            if (teams.isSelected())
+                gameTeams.setTeamName(i, names.getTeam(i));
+            if (engines.isSelected())
+                gameTeams.setEngineName(i, names.getEngine(i));
+        }
+        for (AbstractTableModel m : nameModels)
+            m.fireTableDataChanged();       // also marks the tab as changed
+        repaint();                          // the Liveries page names its rows by team and driver
+    }
+
+    /** Writes the names shown here (saved or not) to a name file. */
+    private void saveNamesToFile()
+    {
+        JFileChooser chooser = new JFileChooser(nameFileFolder());
+        chooser.setDialogTitle("Save Names as a Name File");
+        chooser.setFileFilter(NAME_FILES);
+        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), "NAMES.NAM"));
+        if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        File f = chooser.getSelectedFile();
+        String base = f.getName().replaceAll("(?i)\\.nam$", "");
+        if (!base.matches("[A-Za-z0-9_-]{1,8}"))
+        {
+            JOptionPane.showMessageDialog(this, "The game only lists files whose names are 1 to 8 letters, digits, - or _. "
+                + "Choose a shorter name.", "Name File Not Saved", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        f = new File(f.getParentFile(), base.toUpperCase() + ".NAM");
+        if (f.exists() && JOptionPane.showOptionDialog(this, f.getName() + " already exists. Replace it?",
+                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
+                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
+            return;
+        cfevolution.data.gamefiles.NameFile names = new cfevolution.data.gamefiles.NameFile();
+        for (int i = 0; i < cfevolution.data.gamefiles.NameFile.DRIVERS; i++)
+            names.setDriver(i, currentExecutable.getGameDrivers().getDriverName(i));
+        for (int i = 0; i < cfevolution.data.gamefiles.NameFile.TEAMS; i++)
+        {
+            names.setTeam(i, currentExecutable.getGameTeams().getTeamName(i));
+            names.setEngine(i, currentExecutable.getGameTeams().getEngineName(i));
+        }
+        try
+        {
+            names.save(f);
+        }
+        catch (java.io.IOException ex)
+        {
+            JOptionPane.showMessageDialog(this, f.getName() + " could not be saved.", "Name File Not Saved",
+                JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     /** The car number at the start of a line-up label, 0 for "None", -1 if unreadable. */
@@ -974,6 +1119,15 @@ public class ExecutableWindow extends JPanel implements EditorTab
         final LiveryPicture picture = new LiveryPicture(pictures.scale, colours);
         picture.setName("liveryPicture");
         shown.add(picture);
+        // Room for the largest picture, so the buttons below stay put whichever is shown (Hrvoje, 2026-11-05:
+        // on the pit crew tab they jumped up and down with each picture's height)
+        int boxW = 0, boxH = 0;
+        for (int i : pictures.group)
+        {
+            GameSprites.Sprite s = sprites.get(i);
+            if (s != null) { boxW = Math.max(boxW, s.width); boxH = Math.max(boxH, s.height); }
+        }
+        picture.setBox(boxW, boxH);
         final int[] index = { pictures.start };
         final JLabel count = new JLabel("", SwingConstants.CENTER);
         count.setName("liveryPictureNumber");
