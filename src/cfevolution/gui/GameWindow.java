@@ -147,7 +147,7 @@ public class GameWindow extends JPanel implements EditorTab
         });
         JButton importData = new JButton("Import Dataset...");
         importData.setName("import-dataset");
-        importData.setToolTipText("Brings a dataset, or an F1ED or ArgEditor car set, into this game");
+        importData.setToolTipText("Brings a dataset, or an F1ED or ArgEditor carset, into this game");
         importData.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 DatasetDialog.importDataset(GameWindow.this.mainWindow, game, new Runnable() { public void run() { fillRows(); } });

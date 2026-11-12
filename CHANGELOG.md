@@ -1,5 +1,22 @@
 # Changelog
 
+0.4.0
+
+- A new interface design, with a tab for each open file, a start page, a toolbar and menus that follow the open file.
+- File > Open Game Folder replaces Open Executable. It lists the game program and the 16 circuits, and now offers to unpack a packed GP.EXE.
+- The executable editor now covers team line-ups, the colours of every car, helmet and pit crew (shown as the game draws them, with copy and paste), many more game settings, the pit lane order, setups, lap records, car physics and opposition levels.
+- Some of the other files can now be edited: game options, saved setups, name files, championship saves, pictures and sound effects.
+- Game datasets can be exported from one game folder and imported into another, and F1ED and ArgEditor carsets can be imported and exported.
+- The first time a game folder is opened, its game files are copied to CFE-BACKUP\original, so they can always be put back.
+- Tracks gain Car and AI Settings, Race Strategy and Horizon editing as well as a check track function.
+- Editing the computer cars' cornering (aggression) for all 16 circuits is now possible on one page.
+- Game options now support frame rate editing, up to 50 fps, with a warning above the game's own 25 fps.
+- Setup values are limited to what the game's own setup screen allows.
+- Driver, team and engine names can be loaded into GP.EXE from a name file, or saved from it into one.
+- Generated tracks: fixed a best line running off the road, pit lane entrances hidden by walls and pits on the wrong side; fewer suggested-gear changes; no more scenery standing on the road; smoother best lines where the road is crossed quickly.
+- Fixed the AI line at the start of tracks that cross the edge of the game's map.
+- Saving now warns when a track is longer than the game allows.
+
 0.3.1
 
 - Fixed generation failure issues, particularly with the Germany and Belgium tracks.

@@ -1368,7 +1368,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel starting = group("Starting the game");
         starting.add(fade, wide());
         starting.add(language, wide());
-        note(starting, "These two change the game program only. They are not part of a car set.");
+        note(starting, "These two change the game program only. They are not part of a carset.");
         box.add(starting);
 
         JPanel holder = new JPanel(new BorderLayout());

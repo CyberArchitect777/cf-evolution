@@ -46,7 +46,7 @@ public class DatasetDialog extends JDialog
     private boolean accepted;
 
     /** What Export Dataset can save as. */
-    private static final String[] FORMATS = { "CF Evolution dataset (.cfe)", "ArgEditor car set (.arged)", "F1ED car set (.1ED)" };
+    private static final String[] FORMATS = { "CF Evolution dataset (.cfe)", "ArgEditor carset (.arged)", "F1ED carset (.1ED)" };
     private static final int CFE = 0, ARGEDITOR = 1, F1ED = 2;
     private int format = CFE;
     private Set<DatasetGroup> possible = java.util.EnumSet.noneOf(DatasetGroup.class);
@@ -86,7 +86,7 @@ public class DatasetDialog extends JDialog
         return format == ARGEDITOR ? OtherEditorFiles.ARGEDITOR_GROUPS : format == F1ED ? OtherEditorFiles.F1ED_GROUPS : null;
     }
 
-    /** Ticks and greys the boxes for the format chosen: another editor's car set holds what it holds. */
+    /** Ticks and greys the boxes for the format chosen: another editor's carset holds what it holds. */
     private void showFormat()
     {
         Set<DatasetGroup> fixed = fixedGroups();
@@ -300,7 +300,7 @@ public class DatasetDialog extends JDialog
             JOptionPane.showMessageDialog(main, written.getName() + " could not be saved.", "Export Dataset", JOptionPane.ERROR_MESSAGE);
             return;
         }
-        StringBuilder msg = new StringBuilder("The car set was saved as " + written.getName() + ".");
+        StringBuilder msg = new StringBuilder("The carset was saved as " + written.getName() + ".");
         for (String n : notes)
             msg.append("\n").append(n);
         JOptionPane.showMessageDialog(main, msg.toString(), "Export Dataset", JOptionPane.INFORMATION_MESSAGE);
@@ -319,7 +319,7 @@ public class DatasetDialog extends JDialog
     {
         JFileChooser chooser = new JFileChooser(game.getFolder().getParentFile());
         chooser.setDialogTitle("Import Dataset");
-        chooser.setFileFilter(new FileNameExtensionFilter("Datasets and car sets (*.cfe, *.zip, F1ED *.1ed, ArgEditor *.arged)",
+        chooser.setFileFilter(new FileNameExtensionFilter("Datasets and carsets (*.cfe, *.zip, F1ED *.1ed, ArgEditor *.arged)",
                                                           "cfe", "zip", "1ed", "arged"));
         if (chooser.showOpenDialog(main) != JFileChooser.APPROVE_OPTION)
             return;
@@ -348,7 +348,7 @@ public class DatasetDialog extends JDialog
         }
         catch (IOException | RuntimeException e)
         {
-            JOptionPane.showMessageDialog(main, file.getName() + " could not be read as a dataset or car set.", "Import Dataset",
+            JOptionPane.showMessageDialog(main, file.getName() + " could not be read as a dataset or carset.", "Import Dataset",
                                           JOptionPane.ERROR_MESSAGE);
             return;
         }

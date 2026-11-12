@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Reads the car sets of other editors into a {@link Dataset}, in the same
+ * Reads the carsets of other editors into a {@link Dataset}, in the same
  * terms a .cfe uses, so they import the same way: F1ED's .1ED (an ini file)
  * and ArgEditor's .arged (JSON), on their own or in the zips they are shared
  * in, which may also hold a whole HELMETS.DAT. Layouts in
@@ -88,7 +88,7 @@ public class OtherEditorFiles
                 helmets = e.getValue();
         }
         if (out == null)
-            throw new IOException("no car set in the zip");
+            throw new IOException("no carset in the zip");
         if (helmets != null)
             addHelmetsFile(out, helmets, helmetPalette);
         return out;
@@ -290,21 +290,21 @@ public class OtherEditorFiles
             d.put(section, key, (String) v);
     }
 
-    // --- writing F1ED and ArgEditor car sets ---------------------------------------
+    // --- writing F1ED and ArgEditor carsets ---------------------------------------
 
-    /** What an F1ED car set holds; all of it is always written. */
+    /** What an F1ED carset holds; all of it is always written. */
     public static final Set<DatasetGroup> F1ED_GROUPS =
         EnumSet.of(DatasetGroup.TEAMS, DatasetGroup.DRIVERS, DatasetGroup.COLOURS, DatasetGroup.RULES);
-    /** What an ArgEditor car set always holds; menu helmet pictures may be added. */
+    /** What an ArgEditor carset always holds; menu helmet pictures may be added. */
     public static final Set<DatasetGroup> ARGEDITOR_GROUPS =
         EnumSet.of(DatasetGroup.TEAMS, DatasetGroup.DRIVERS, DatasetGroup.COLOURS, DatasetGroup.POINTS);
-    /** The player power an F1ED car set holds (ArgEditor clamps to this when writing one). */
+    /** The player power an F1ED carset holds (ArgEditor clamps to this when writing one). */
     public static final int F1ED_MIN_BHP = 450, F1ED_MAX_BHP = 999;
     /** ArgEditor's teams; two drivers each. */
     public static final int ARGEDITOR_TEAMS = 18;
 
     /**
-     * A dataset as an F1ED car set (.1ED). The colours a dataset does not
+     * A dataset as an F1ED carset (.1ED). The colours a dataset does not
      * name (bytes 0, 9 and 10 of a car's) are taken from base, the game's own
      * colour sets, so F1ED writes them back unchanged; base may be null.
      * Notes on anything left out are added to notes.
@@ -347,7 +347,7 @@ public class OtherEditorFiles
             if (v < F1ED_MIN_BHP || v > F1ED_MAX_BHP)
             {
                 int kept = Math.max(F1ED_MIN_BHP, Math.min(F1ED_MAX_BHP, v));
-                notes.add("An F1ED car set holds a player power of " + F1ED_MIN_BHP + " to " + F1ED_MAX_BHP
+                notes.add("An F1ED carset holds a player power of " + F1ED_MIN_BHP + " to " + F1ED_MAX_BHP
                           + " BHP, so " + v + " was saved as " + kept + ".");
                 v = kept;
             }
@@ -372,12 +372,12 @@ public class OtherEditorFiles
         v = d.getInt("rules", "chance of rain");
         if (v != null) line(sb, "WetRace=" + v);
         if (d.hasSection("points"))
-            notes.add("An F1ED car set has no points table, so the points were left out.");
+            notes.add("An F1ED carset has no points table, so the points were left out.");
         return sb.toString().getBytes(StandardCharsets.ISO_8859_1);
     }
 
     /**
-     * A dataset as an ArgEditor car set (.arged, FileVersion 3). ArgEditor
+     * A dataset as an ArgEditor carset (.arged, FileVersion 3). ArgEditor
      * keeps 18 teams and only the drivers in them, so anything else is left
      * out with a note. helmetPalette (may be null) turns the menu helmet
      * pictures back into the game's colours.
@@ -601,13 +601,13 @@ public class OtherEditorFiles
         return file != null && file.length == 20 && new String(file, 0, 4, StandardCharsets.ISO_8859_1).equals(m);
     }
 
-    // --- a whole HELMETS.DAT, as shared with some car sets ----------------------
+    // --- a whole HELMETS.DAT, as shared with some carsets ----------------------
 
     private static void addHelmetsFile(Dataset d, byte[] file, int[] palette) throws IOException
     {
         if (palette == null)
         {
-            d.addNote("The car set's menu helmets were left out.");
+            d.addNote("The carset's menu helmets were left out.");
             return;
         }
         MediaContainer c;
@@ -617,7 +617,7 @@ public class OtherEditorFiles
         }
         catch (IOException e)
         {
-            d.addNote("The car set's HELMETS.DAT could not be read, so its menu helmets were left out.");
+            d.addNote("The carset's HELMETS.DAT could not be read, so its menu helmets were left out.");
             return;
         }
         int n = 0;
@@ -626,7 +626,7 @@ public class OtherEditorFiles
             {
                 n++;
                 String path = String.format("helmets/car%02d.png", n);
-                if (d.getFile(path) == null)      // a picture in the car set file itself comes first
+                if (d.getFile(path) == null)      // a picture in the carset file itself comes first
                     d.putFile(path, GameDataset.png(c.getSmallPicture(i), 48, 48, palette));
             }
     }

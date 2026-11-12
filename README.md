@@ -5,35 +5,48 @@
 
 CF-Evolution is a Java-based open source editor for Geoff Crammond's Formula One Grand Prix / World Circuit. It is built on the efforts undertaken in [Chequered Flag](https://github.com/CyberArchitect777/chequeredflag) which last saw an update in 2008. The original starting code for this successor project is the 0.1.1 tagged codebase from Chequered Flag.
 
+## Notes
+
+* File > Open Game Folder lists all editable elements in the game including the game program and the 16 circuits, each opening in their own tab. A packed GP.EXE is offered for unpacking, keeping the original as GPPACKED.EXE.
+* The first time a game folder is opened, a copy of every file the editor can change is kept in CFE-BACKUP\original inside it.
+
 ## Features
 
-CF-Evolution supports editing two types of F1GP/WC data:
+CF-Evolution edits a whole F1GP/WC game folder: the circuits, the game program and the game's other files. Game datasets are also supported, CF-Evolution's own CFE format supports all appropriate edits for the actual game and a more limited import/export for F1ED and ArgEditor based on the capabilities of those tools.
 
-- Track files
-    - Full editing capability is provided up to our knowledge and understanding of the game data. It is possible to create playable tracks with full computer car lines.
-    - Computer car lines can be generated automatically for any track by simulating laps and keeping the fastest line. An incomplete line can also be completed, leaving hand-edited sectors untouched. After editing a sector by hand, the rest of the line can be repaired so the lap keeps its shape.
-    - Complete random circuits can be generated, including elevation, kerbs, pit lane, starting grid, countdown boards and scenery taken from the base track.
-    - Track shaping tools are provided: reducing a track to a short straight canvas to build on, and squaring up a track whose start and end headings do not match.
-    - Direct clicking on the track map is supported for element selection.
-    - The track map can also be exported as a PNG image.
-- Game executable
-    - A limited editing capability is provided to date. There are existing game editors available that offer more features at the moment.
-    - The settings that can be edited include the following
-        - Driver names, qualifying grip, and race grip values
-        - Team names, engine names, and BHP settings
-        - Points system configuration
-        - Game settings (e.g. unlimited qualifying tyres)
+### Track files
+
+* Full editing capability is provided up to our knowledge and understanding of the game data. It is possible to create playable tracks with full computer car lines.
+* Computer car lines can be generated automatically for any track by simulating laps and keeping the fastest line. An incomplete line can also be completed, leaving hand-edited sectors untouched. After editing a sector by hand, the rest of the line can be repaired so the lap keeps its shape.
+* Complete random circuits can be generated, including elevation, kerbs, pit lane, starting grid, countdown boards and scenery taken from the base track.
+* Tools > Check Track gives one verdict on whether a track is ready to race, with buttons to fix what it finds.
+* Each circuit's car and computer car settings, race strategy (laps, first pit stop) and horizon picture can be edited.
+* Track shaping tools are provided: reducing a track to a short straight canvas to build on, squaring up a track whose start and end headings do not match, and moving a track away from the edge of the game's map.
+* Direct clicking on the track map is supported for element selection.
+* The track map can also be exported as a PNG image.
+* Computer cars at every circuit: how hard the computer cars corner (their aggression, or late braking) at all 16 circuits on one page, with buttons to set or raise them everywhere at once.
+
+### Game executable
+
+* Drivers (names, skill), teams (names, engines, power, line-ups), with names loaded from or saved to a name file, points, and the colours of every car, helmet and pit crew, shown as the game draws them.
+* Game settings, including player and computer car power and grip, pit stops, the shortest race, cars out in practice and qualifying, best results that count, rain, damage and timers.
+* The pit lane order, the human drivers' setups (each circuit's, and each car's for a first quick race), lap records, car physics and opposition levels.
+
+### The game's other files
+
+* Game options (F1PREFS.DAT), including the frame rate, saved setups, name files (from any folder) and championship saves, saved with the game's checksums.
+* The game's pictures (export and import as PNG) and its sound effects.
 
 ## Getting Started
 
 ### Requirements
 
-- Java 8 or later
-- A copy of Formula One Grand Prix or World Circuit patched to version 1.05 (unpacked executable required for executable editing)
+* Java 8 or later
+* A copy of Formula One Grand Prix or World Circuit patched to version 1.05 (a packed executable is unpacked for you when the game folder is opened)
 
 ### Before you start
 
-Keep a copy of your original track files and game executable before editing them.
+Opening a game folder keeps a copy of its files as they were the first time (see Notes). Keep your own copies of any track files you edit outside a game folder, and of work in progress you may want to go back to.
 
 ### Running
 
@@ -57,13 +70,13 @@ run.bat
 ./run.sh
 ```
 
-Before opening the executable editor for the first time, go to **File > Options** and set the path to your F1GP/WC executable.
+To edit the game program and the circuits, use **File > Open Game Folder** and choose your F1GP/WC folder.
 
 To build the editor from source code, see [DEVELOPMENT.md](https://github.com/CyberArchitect777/cf-evolution/blob/main/DEVELOPMENT.md).
 
 ## Repository
 
-The CF-Evolution project is hosted on Github at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
+The CF-Evolution project is hosted on GitHub at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
 
 ## Credits
 
@@ -76,7 +89,7 @@ As noted earlier, this project is based on the research and development undertak
 Thanks also to the following people: 
 
 * Fredrik Meyer for his excellent work on the ArgTools project which is aiding further development here.
-* Hrvoje Stimac for his testing efforts and F1GP community leadership.
+* Hrvoje Stimac for his excellent testing and suggestions as well as his F1GP community leadership.
 
 ## License
 

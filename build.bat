@@ -7,6 +7,12 @@ rem here rather than on a user's Java 8 install. A Java 8 compiler lacks the fla
 javac --release 8 -version >nul 2>&1
 if errorlevel 1 (set RELEASE=-source 8 -target 8) else (set RELEASE=--release 8)
 javac %RELEASE% -d build @.sources.txt
+set RESULT=%ERRORLEVEL%
 del .sources.txt
+rem Stop here if compiling failed, rather than packaging the previous build's classes.
+if not "%RESULT%"=="0" (
+    echo Build failed: dist\cf-evolution.jar was not updated
+    exit /b 1
+)
 jar cfm dist\cf-evolution.jar META-INF\MANIFEST.MF -C build .
 echo Build complete: dist\cf-evolution.jar
