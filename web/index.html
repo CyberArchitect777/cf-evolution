@@ -13,17 +13,20 @@
     <div class="kick">F1GP &middot; World Circuit</div>
     <h1>CF Evolution</h1>
     <p>A Java-based open-source editor for Geoff Crammond&rsquo;s Formula One Grand Prix / World Circuit racing classic.</p>
-    <a class="btn" href="https://github.com/CyberArchitect777/cf-evolution/releases">Download latest</a>
+    <a class="btn" href="https://github.com/CyberArchitect777/cf-evolution/releases/latest">Download <span class="latest-version">latest</span></a>
     <a class="btn ghost" href="https://github.com/CyberArchitect777/cf-evolution">View source</a>
+    <div class="ver"><span id="version-line" hidden>Latest version <span class="latest-version"></span> &middot; </span><a href="https://github.com/CyberArchitect777/cf-evolution/blob/main/CHANGELOG.md">What&rsquo;s new</a> &middot; Requires Java 8 or later</div>
   </div>
 </section>
 
 <div class="wrap">
   <div class="grid">
+    <div class="card"><h3><span>&#9679;</span>Whole game folder</h3><p>Open your game folder to edit the game program, all 16 circuits and the other game files, each in its own tab. A copy of the originals is kept the first time.</p></div>
     <div class="card"><h3><span>&#9679;</span>Track editing</h3><p>Edit game tracks while viewing a live map.</p></div>
     <div class="card"><h3><span>&#9679;</span>Best line tools</h3><p>Edit the AI racing line manually, or generate a new one by fastest-lap simulation.</p></div>
     <div class="card"><h3><span>&#9679;</span>Random tracks</h3><p>Generate complete new circuit layouts with a best line in one click.</p></div>
-    <div class="card"><h3><span>&#9679;</span>Executable editor</h3><p>Edit some game settings directly via GP.EXE (currently has limited scope).</p></div>
+    <div class="card"><h3><span>&#9679;</span>Executable editor</h3><p>Edit drivers, teams, points, setups, game settings and the colours of every car, helmet and pit crew in GP.EXE.</p></div>
+    <div class="card"><h3><span>&#9679;</span>Game files and carsets</h3><p>Edit game options, saved setups, name files, pictures and sound effects. Move your changes to another game folder as a dataset, or import and export F1ED and ArgEditor carsets.</p></div>
     <div class="card"><h3><span>&#9679;</span>Cross-platform</h3><p>Supported on Windows, macOS and Linux.</p></div>
     <div class="card"><h3><span>&#9679;</span>Under development</h3><p>CF Evolution is still in active development.</p></div>
   </div>
@@ -45,5 +48,18 @@
     <a href="https://github.com/CyberArchitect777/cf-evolution/issues">Issues</a> &nbsp;
   </span>
 </footer>
+<script>
+// Shows the newest published release's version. If GitHub cannot be reached the page keeps
+// "Download latest" and leaves the version out.
+fetch("https://api.github.com/repos/CyberArchitect777/cf-evolution/releases/latest")
+  .then(function (r) { return r.ok ? r.json() : null; })
+  .then(function (rel) {
+    if (!rel || !rel.tag_name) return;
+    var v = rel.tag_name.replace(/^v/, "");
+    document.querySelectorAll(".latest-version").forEach(function (e) { e.textContent = v; });
+    document.getElementById("version-line").hidden = false;
+  })
+  .catch(function () {});
+</script>
 </body>
 </html>
