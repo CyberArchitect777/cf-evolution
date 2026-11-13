@@ -74,9 +74,24 @@ To edit the game program and the circuits, use **File > Open Game Folder** and c
 
 To build the editor from source code, see [DEVELOPMENT.md](https://github.com/CyberArchitect777/cf-evolution/blob/main/DEVELOPMENT.md).
 
+## Potential Future Roadmap
+
+These are ideas being considered for future versions. None of these are promised, and the order is not sorted by priority.
+
+* Import gp2 tracks for conversion into this game
+* More of the game program to edit, such as driving aids at any difficulty level, and more control over how cars and helmets are drawn.
+* A look at the game's fuel load in races longer than full distance.
+* Generated tracks: pit lanes that follow the shape of the new road, roads that vary in width, and lining a track with a chosen object.
+* Best lines closer to those of the original tracks, including on tracks that do not loop back to the start.
+* A tool for mapping lap times to driver skill or BHP
+
 ## Repository
 
-The CF-Evolution project is hosted on GitHub at this location: [CF-Evolution](https://github.com/CyberArchitect777/cf-evolution)
+The CF-Evolution project is hosted on GitHub at this location: [CF-Evolution Project](https://github.com/CyberArchitect777/cf-evolution)
+
+The project website can be found here:
+
+[CF-Evolution Website](https://cyberarchitect777.github.io/cf-evolution/)
 
 ## Credits
 
