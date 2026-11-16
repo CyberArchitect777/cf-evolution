@@ -88,7 +88,7 @@ public class AboutGUI extends javax.swing.JDialog {
 
         versionText.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         versionText.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
-        versionText.setText("Version 0.4.0");
+        versionText.setText("Version 0.4.1");
 
         okButton.setText("OK");
         okButton.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);

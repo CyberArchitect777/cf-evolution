@@ -1,5 +1,11 @@
 # Changelog
 
+0.4.1
+
+- The Pit Lane page shows the game's 18 pit boxes from the pit lane entrance, with Move Up, Move Down and Reset to 1991 Order. It warns when a team is missing or listed twice, and will not save such an order.
+- Game datasets now carry the pit lane order correctly. Datasets made by 0.4.0 are still read.
+- Generate Random Track: the same seed now always makes the same track, and a track whose best line runs off the road is no longer handed over; another seed is tried instead.
+
 0.4.0
 
 - A new interface design, with a tab for each open file, a start page, a toolbar and menus that follow the open file.

@@ -18,7 +18,7 @@ CF-Evolution edits a whole F1GP/WC game folder: the circuits, the game program a
 
 * Full editing capability is provided up to our knowledge and understanding of the game data. It is possible to create playable tracks with full computer car lines.
 * Computer car lines can be generated automatically for any track by simulating laps and keeping the fastest line. An incomplete line can also be completed, leaving hand-edited sectors untouched. After editing a sector by hand, the rest of the line can be repaired so the lap keeps its shape.
-* Complete random circuits can be generated, including elevation, kerbs, pit lane, starting grid, countdown boards and scenery taken from the base track.
+* Complete random circuits can be generated, including elevation, kerbs, pit lane, starting grid, countdown boards and scenery taken from the base track. The same seed always makes the same circuit.
 * Tools > Check Track gives one verdict on whether a track is ready to race, with buttons to fix what it finds.
 * Each circuit's car and computer car settings, race strategy (laps, first pit stop) and horizon picture can be edited.
 * Track shaping tools are provided: reducing a track to a short straight canvas to build on, squaring up a track whose start and end headings do not match, and moving a track away from the edge of the game's map.
@@ -30,7 +30,7 @@ CF-Evolution edits a whole F1GP/WC game folder: the circuits, the game program a
 
 * Drivers (names, skill), teams (names, engines, power, line-ups), with names loaded from or saved to a name file, points, and the colours of every car, helmet and pit crew, shown as the game draws them.
 * Game settings, including player and computer car power and grip, pit stops, the shortest race, cars out in practice and qualifying, best results that count, rain, damage and timers.
-* The pit lane order, the human drivers' setups (each circuit's, and each car's for a first quick race), lap records, car physics and opposition levels.
+* The pit lane order (which team uses which pit box), the human drivers' setups (each circuit's, and each car's for a first quick race), lap records, car physics and opposition levels.
 
 ### The game's other files
 
