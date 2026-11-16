@@ -56,13 +56,46 @@ public class GenerateTrackDialog extends JDialog {
     private final java.util.Random seedRoller = new java.util.Random();
 
     /** Whole generations to try before reporting a failure. A seed whose
-        layout cannot be closed, or whose line cannot be built, is simply
-        replaced by a fresh one; the status line shows the seed used. */
+        layout cannot be closed, whose line cannot be built, or whose line
+        runs off the road is simply replaced by another; the status line
+        shows the seed used. */
     private static final int MAX_GENERATIONS = 10;
 
     /** A fresh seed, short enough to note down and type back in. */
     private long nextSeed() {
-        return 1 + seedRoller.nextInt(999999);
+        return nextSeed(seedRoller);
+    }
+
+    private static long nextSeed(java.util.Random r) {
+        return 1 + r.nextInt(999999);
+    }
+
+    /** The seeds tried for one request: the requested seed, then replacements
+        drawn from a generator seeded with it. So a typed seed always leads to
+        the same track (until 2026-11-16 the replacements came from the clock,
+        and an unworkable seed gave a different track every time). */
+    static long[] seedsToTry(long lSeed) {
+        java.util.Random r = new java.util.Random(lSeed);
+        long[] seeds = new long[MAX_GENERATIONS];
+        seeds[0] = lSeed;
+        for (int i = 1; i < seeds.length; i++)
+            seeds[i] = nextSeed(r);
+        return seeds;
+    }
+
+    /** True when the best line, laid on the track it was made for, would make
+        Check Track say it runs well off the road. Generation gives that up and
+        tries the next seed rather than hand the user a track that needs
+        attention (about 1 workable seed in 15 did, 2026-11-16). */
+    static boolean lineRunsOffRoad(Track lineTrack, CCLineGenerationResult line) {
+        if (line == null || line.ccLine == null)
+            return false;
+        cfevolution.data.track.CCLine cur = lineTrack.getCCLine();
+        cur.clear();
+        for (int i = 1; i <= line.ccLine.size(); i++)
+            cur.add(line.ccLine.getAt(i));
+        lineTrack.calculateCCLine();
+        return TrackCheck.lineRunsOffRoad(lineTrack);
     }
 
     /** 1 TLU = 16 feet. */
@@ -216,8 +249,9 @@ public class GenerateTrackDialog extends JDialog {
                 RandomTrackGenerator.Result layout = null;
                 CCLineGenerationResult line = null;
                 String error = null;
-                for (int nTry = 0; nTry < MAX_GENERATIONS && !fCancelled; nTry++) {
-                    long lTrySeed = nTry == 0 ? lSeed : nextSeed();
+                long[] seeds = seedsToTry(lSeed);
+                for (int nTry = 0; nTry < seeds.length && !fCancelled; nTry++) {
+                    long lTrySeed = seeds[nTry];
                     error = null;
                     try {
                         // Scratch 1: closure iterations
@@ -238,6 +272,8 @@ public class GenerateTrackDialog extends JDialog {
                             CCLineGeneratorContext ctx = new CCLineGeneratorContext(lineTrack);
                             ctx.seamOvershoot = 8;
                             line = new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator().generate(ctx, null);
+                            if (!fCancelled && lineRunsOffRoad(lineTrack, line))
+                                throw new Exception("the best line could not be kept on the road. Try another seed, length or number of corners.");
                         }
                         break; // success, or cancelled (layout null)
                     }
