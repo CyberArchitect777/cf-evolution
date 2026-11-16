@@ -74,8 +74,17 @@ public class GameTables
     private static Table ss(int ssOffset, int length) { return new Table(SS_BASE + ssOffset, length); }
     private static Table ida(int address, int words) { return new Table(address + IDA_TO_FILE, words * 2); }
 
-    // Pit lane: team number (1-20) for each position along the pit lane
+    // Pit lane (abPitPosTeamNrTable): 20 BYTES, entry n is the team number (1-based) whose cars use
+    // pit box n, box 0 at the pit lane entrance. The game places wNumTeams = 18 teams, so only entries
+    // 0-17 are boxes; 18 and 19 (19, 20 as shipped) are kept as they are. Read by the garage set-up
+    // (sub_47E9) and by a car joining practice or qualifying (InitCarPitPos); a team missing from the
+    // table gets no box and a team listed twice is handled inconsistently, so the editor keeps 0-17 to
+    // each of 1-18 once. A team with no cars leaves its box empty. Specification and in-game test from
+    // F1GP-SDL, 2026-11-15; offsets checked in all twelve executables in EXE versions/.
     public final Table pitOrder = ss(0x28D8, 20);
+    public static final int PIT_BOXES = 18;
+    /** The shipped order, the same in all three builds. */
+    public static final int[] PIT_ORDER_1991 = { 1, 14, 10, 3, 2, 15, 8, 6, 4, 5, 7, 9, 11, 12, 13, 16, 17, 18 };
 
     // Setups: front wing, rear wing, six gears, tyre compound (0 = A), brake balance
     public static final int SETUP_SIZE = 10;
@@ -123,6 +132,80 @@ public class GameTables
     public GameTables()
     {
     }
+
+    // --- Pit lane order ----------------------------------------------------
+
+    /** The team number using a pit box (0 = the box at the pit lane entrance). */
+    public int getPitBoxTeam(int box) { return pitOrder.getByte(box); }
+
+    /** True if the boxes hold each team 1-18 exactly once. */
+    public static boolean isValidPitOrder(int[] teams)
+    {
+        if (teams == null || teams.length != PIT_BOXES)
+            return false;
+        boolean[] seen = new boolean[PIT_BOXES + 1];
+        for (int t : teams)
+        {
+            if (t < 1 || t > PIT_BOXES || seen[t])
+                return false;
+            seen[t] = true;
+        }
+        return true;
+    }
+
+    public int[] getPitOrder()
+    {
+        int[] teams = new int[PIT_BOXES];
+        for (int i = 0; i < PIT_BOXES; i++) teams[i] = pitOrder.getByte(i);
+        return teams;
+    }
+
+    public boolean isPitOrderValid() { return isValidPitOrder(getPitOrder()); }
+
+    /** True if the boxes differ from what was loaded. */
+    public boolean isPitOrderChanged()
+    {
+        for (int i = 0; i < PIT_BOXES; i++)
+            if (pitOrder.getByte(i) != pitOrder.originalByte(i)) return true;
+        return false;
+    }
+
+    /** Sets the boxes (entries 18 and 19 are left alone). Returns false, changing nothing, unless the
+        order holds each team 1-18 exactly once. */
+    public boolean setPitOrder(int[] teams)
+    {
+        if (!isValidPitOrder(teams))
+            return false;
+        for (int i = 0; i < PIT_BOXES; i++) pitOrder.setByte(i, teams[i]);
+        return true;
+    }
+
+    /** Puts a team in a box. If the team already has another box, the two swap, so a valid order
+        stays valid; otherwise (only in an order that was invalid when loaded) the box is just set. */
+    public void setPitBoxTeam(int box, int team)
+    {
+        int was = pitOrder.getByte(box);
+        if (team == was)
+            return;
+        for (int i = 0; i < PIT_BOXES; i++)
+        {
+            if (i != box && pitOrder.getByte(i) == team)
+            {
+                pitOrder.setByte(i, was);
+                break;
+            }
+        }
+        pitOrder.setByte(box, team);
+    }
+
+    public void swapPitBoxes(int a, int b)
+    {
+        int t = pitOrder.getByte(a);
+        pitOrder.setByte(a, pitOrder.getByte(b));
+        pitOrder.setByte(b, t);
+    }
+
+    public void resetPitOrder() { setPitOrder(PIT_ORDER_1991); }
 
     // --- Lap records --------------------------------------------------------
 

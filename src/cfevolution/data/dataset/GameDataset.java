@@ -345,10 +345,9 @@ public class GameDataset
     private void exportTables(Dataset d)
     {
         GameTables t = exe.getGameTables();
-        int[] order = new int[t.pitOrder.words()];
-        for (int i = 0; i < order.length; i++)
-            order[i] = t.pitOrder.word(i);
-        d.put("pit lane", "team order", Dataset.join(order));
+        // One team number per pit box, from the pit lane entrance (before 2026-11-15 this wrote the
+        // 20-byte table as 10 words, which import then always refused; import still reads that form)
+        d.put("pit lane", "team order", Dataset.join(t.getPitOrder()));
         for (int c = 0; c < CARS; c++)
             d.put("car setups", "car " + (c + 1), Dataset.join(bytes(t.carSetups, c * GameTables.SETUP_SIZE, GameTables.SETUP_SIZE)));
         for (int c = 0; c < 32; c++)
@@ -903,18 +902,34 @@ public class GameDataset
         exeChanged = true;
     }
 
+    /** The 18 pit boxes' teams from a dataset's "team order": 18 numbers (written since 2026-11-15),
+        20 (the two spare entries are ignored) or the 10 words that earlier versions wrote. */
+    private static int[] pitBoxes(int[] order)
+    {
+        if (order.length == 10)
+        {
+            int[] bytes = new int[20];
+            for (int i = 0; i < 10; i++)
+            {
+                if (order[i] < 0 || order[i] > 0xFFFF) return null;
+                bytes[i * 2] = order[i] & 0xFF;
+                bytes[i * 2 + 1] = order[i] >> 8;
+            }
+            order = bytes;
+        }
+        if (order.length != GameTables.PIT_BOXES && order.length != 20)
+            return null;
+        return java.util.Arrays.copyOf(order, GameTables.PIT_BOXES);
+    }
+
     private void importTables(Dataset d)
     {
         GameTables t = exe.getGameTables();
         int[] order = d.getInts("pit lane", "team order");
         if (order != null)
         {
-            boolean ok = order.length == t.pitOrder.words();
-            for (int v : order) ok &= v >= 1 && v <= TEAMS;
-            if (ok)
-                for (int i = 0; i < order.length; i++) t.pitOrder.setWord(i, order[i]);
-            else
-                report.add("The pit lane order was left as it is: it needs 20 team numbers from 1 to 20.");
+            if (!t.setPitOrder(pitBoxes(order)))
+                report.add("The pit lane order was left as it is: it must name each of the 18 teams once.");
         }
         for (int c = 0; c < CARS; c++)
             setBytes(t.carSetups, c * GameTables.SETUP_SIZE, d.getInts("car setups", "car " + (c + 1)), "The setup of car " + (c + 1));

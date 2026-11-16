@@ -1544,37 +1544,124 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     private JComponent pitLanePage()
     {
-        final GameTables.Table order = currentExecutable.getGameTables().pitOrder;
+        // The game's 18 pit boxes (GameTables.pitOrder); the table's two spare entries are not shown
+        // and are saved as they were. Every change here swaps two boxes, so an order that holds each
+        // team once keeps doing so (F1GP-SDL specification, 2026-11-15).
+        final GameTables tables = currentExecutable.getGameTables();
         final GameTeams teams = currentExecutable.getGameTeams();
+        final int boxes = GameTables.PIT_BOXES;
         final AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return 20; }
+            public int getRowCount() { return boxes; }
             public int getColumnCount() { return 2; }
-            public String getColumnName(int c) { return c == 0 ? "Position along the pit lane" : "Team"; }
+            public String getColumnName(int c) { return c == 0 ? "Pit box" : "Team"; }
             public boolean isCellEditable(int r, int c) { return c == 1; }
             public Object getValueAt(int r, int c) {
-                if (c == 0) return (r + 1) + (r >= 18 ? "  (not used: 18 pit boxes)" : "");
-                return teamLabel(teams, order.getByte(r));
+                if (c == 0) return "Pit box " + (r + 1) + (r == 0 ? "  (pit lane entrance)" : "");
+                return teamLabel(teams, tables.getPitBoxTeam(r));
             }
             public void setValueAt(Object v, int r, int c) {
-                int team = Integer.parseInt(String.valueOf(v).trim().split(" ")[0]);
-                int was = order.getByte(r);
-                if (team == was) return;
-                // Keep every team exactly once: the team chosen swaps places with this one
-                for (int i = 0; i < 20; i++)
-                    if (order.getByte(i) == team) order.setByte(i, was);
-                order.setByte(r, team);
+                int team;
+                try { team = Integer.parseInt(String.valueOf(v).trim().split(" ")[0]); }
+                catch (NumberFormatException e) { return; }
+                if (team < 1 || team > boxes || team == tables.getPitBoxTeam(r)) return;
+                tables.setPitBoxTeam(r, team);
                 fireTableDataChanged();
             }
         };
-        JTable table = table(model, new int[] { 260, 260 });
-        String[] choices = new String[20];
-        for (int i = 0; i < 20; i++) choices[i] = teamLabel(teams, i + 1);
-        table.getColumnModel().getColumn(1).setCellEditor(new DefaultCellEditor(new JComboBox<String>(choices)));
+        final JTable table = table(model, new int[] { 230, 260 });
+        table.setName("pit lane order");
+        // The choices are rebuilt each time, so a team renamed on the Teams page shows its new name
+        final JComboBox<String> chooser = new JComboBox<String>();
+        table.getColumnModel().getColumn(1).setCellEditor(new DefaultCellEditor(chooser) {
+            public Component getTableCellEditorComponent(JTable t, Object value, boolean selected, int row, int column) {
+                chooser.removeAllItems();
+                for (int i = 1; i <= boxes; i++) chooser.addItem(teamLabel(teams, i));
+                return super.getTableCellEditorComponent(t, value, selected, row, column);
+            }
+        });
         JScrollPane scroll = new JScrollPane(table);
-        scroll.setPreferredSize(new Dimension(540, 520));
+        scroll.setPreferredSize(new Dimension(500, 24 * boxes + 30));
+
+        final JLabel warning = new JLabel();
+        warning.setName("pit lane warning");
+        warning.setForeground(new Color(0xB03A2E));
+        warning.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        final Runnable showWarning = new Runnable() {
+            public void run() {
+                boolean ok = tables.isPitOrderValid();
+                warning.setText(ok ? "" : "<html>This order has a team missing or listed twice, so the game would not give every team "
+                                          + "its own box.<br>Choose a team for each box, or use Reset to 1991 Order.</html>");
+                warning.setVisible(!ok);
+            }
+        };
+        showWarning.run();
+        model.addTableModelListener(new javax.swing.event.TableModelListener() {
+            public void tableChanged(javax.swing.event.TableModelEvent e) { showWarning.run(); }
+        });
+
+        final JButton up = new JButton("Move Up");
+        up.setName("pit box up");
+        up.setToolTipText("Move the selected team one box nearer the pit lane entrance");
+        final JButton down = new JButton("Move Down");
+        down.setName("pit box down");
+        down.setToolTipText("Move the selected team one box further along the pit lane");
+        JButton reset = new JButton("Reset to 1991 Order");
+        reset.setName("pit order reset");
+        reset.setToolTipText("Put the teams back in the boxes the game came with");
+        final Runnable enableMoves = new Runnable() {
+            public void run() {
+                int r = table.getSelectedRow();
+                up.setEnabled(r > 0);
+                down.setEnabled(r >= 0 && r < boxes - 1);
+            }
+        };
+        enableMoves.run();
+        table.getSelectionModel().addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent e) { enableMoves.run(); }
+        });
+        java.awt.event.ActionListener move = new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int r = table.getSelectedRow();
+                int to = r + (e.getSource() == up ? -1 : 1);
+                if (r < 0 || to < 0 || to >= boxes) return;
+                if (table.isEditing()) table.getCellEditor().stopCellEditing();
+                tables.swapPitBoxes(r, to);
+                model.fireTableDataChanged();
+                table.setRowSelectionInterval(to, to);
+            }
+        };
+        up.addActionListener(move);
+        down.addActionListener(move);
+        reset.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (table.isEditing()) table.getCellEditor().stopCellEditing();
+                int r = table.getSelectedRow();
+                tables.resetPitOrder();
+                model.fireTableDataChanged();
+                if (r >= 0) table.setRowSelectionInterval(r, r);
+            }
+        });
+
+        JPanel buttons = new JPanel(new GridLayout(0, 1, 0, 6));
+        buttons.add(up);
+        buttons.add(down);
+        buttons.add(reset);
+        JPanel side = new JPanel(new BorderLayout());
+        side.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
+        side.add(buttons, BorderLayout.NORTH);
+        JPanel row = new JPanel(new BorderLayout());
+        row.add(scroll, BorderLayout.WEST);
+        row.add(side, BorderLayout.CENTER);
+        JPanel content = new JPanel(new BorderLayout());
+        content.add(warning, BorderLayout.NORTH);
         JPanel narrow = new JPanel(new BorderLayout());
-        narrow.add(scroll, BorderLayout.WEST);
-        return page("Pit Lane", "The order of the teams' pit boxes, from the start of the pit lane. Choosing a team swaps it with the one it replaces.", narrow);
+        narrow.add(row, BorderLayout.WEST);
+        content.add(narrow, BorderLayout.CENTER);
+        JPanel top = new JPanel(new BorderLayout());
+        top.add(content, BorderLayout.NORTH);
+        return page("Pit Lane", "<html>Which team uses each pit box, starting at the pit lane entrance. Choosing a team for a box swaps "
+                    + "it with the team already there.<br>Used at every circuit. A team with no cars in a session leaves its box "
+                    + "empty; the other teams do not move up.</html>", top);
     }
 
     private static String teamLabel(GameTeams teams, int team)
@@ -2183,6 +2270,17 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     public boolean save()
     {
+        // Never write a changed pit lane order that leaves a team without its own box. An invalid
+        // order that came in the file and was not touched is written back as it was.
+        GameTables tables = currentExecutable.getGameTables();
+        if (tables.isPitOrderChanged() && !tables.isPitOrderValid())
+        {
+            JOptionPane.showMessageDialog(this,
+                "The executable was not saved: the pit lane order has a team missing or listed twice.\n"
+              + "On the Pit Lane page, choose a team for each box or use Reset to 1991 Order.",
+                "Not Saved", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
         if (!currentExecutable.saveData())
         {
             JOptionPane.showMessageDialog(this, "The executable could not be saved.", "Save Failed",
