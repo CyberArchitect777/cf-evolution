@@ -1,4 +1,6 @@
 #!/bin/bash
+# Start from an empty build folder, so classes from deleted or renamed source never reach the jar.
+rm -rf build
 mkdir -p build dist
 find src -name "*.java" > .sources.txt
 # --release 8 compiles against the real Java 8 library, so a call to anything newer fails

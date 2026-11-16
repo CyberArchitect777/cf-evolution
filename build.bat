@@ -1,5 +1,7 @@
 @echo off
-if not exist build mkdir build
+rem Start from an empty build folder, so classes from deleted or renamed source never reach the jar.
+if exist build rmdir /s /q build
+mkdir build
 if not exist dist mkdir dist
 dir /s /b src\*.java > .sources.txt
 rem --release 8 compiles against the real Java 8 library, so a call to anything newer fails
