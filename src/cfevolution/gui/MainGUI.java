@@ -28,7 +28,6 @@ import cfevolution.gui.executable.ExecutableWindow;
 import cfevolution.gui.track.TrackWindow;
 import cfevolution.data.GameFolder;
 import cfevolution.data.track.*;
-import cfevolution.data.gui.*;
 import cfevolution.data.executable.*;
 import java.awt.*;
 import java.awt.event.*;

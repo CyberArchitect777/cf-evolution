@@ -749,7 +749,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public Component getTableCellRendererComponent(JTable t, Object value, boolean selected,
                                                            boolean focus, int row, int column) {
                 super.getTableCellRendererComponent(t, "", selected, focus, row, column);
-                setBackground(liveries.getPaletteColour((Integer) value));
+                setBackground(new java.awt.Color(liveries.getPaletteRgb((Integer) value)));
                 setBorder(focus ? BorderFactory.createLineBorder(Color.BLACK, 2)
                                 : BorderFactory.createMatteBorder(2, 2, 2, 2, row % 2 == 0 ? Color.WHITE : new Color(0xF6F7F9)));
                 setToolTipText(parts[column - 1] + ": click to change");
@@ -998,7 +998,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
         final LiveryPicture.Colours colours = new LiveryPicture.Colours() {
             int row() { return Math.max(0, table.getSelectedRow()); }
-            public Color colour(int slot) { return liveries.getPaletteColour(source.setColour(row(), slot)); }
+            public Color colour(int slot) { return new java.awt.Color(liveries.getPaletteRgb(source.setColour(row(), slot))); }
             public String part(int slot) {
                 for (int p = 0; p < slots.length; p++)
                     if (slots[p] == slot)

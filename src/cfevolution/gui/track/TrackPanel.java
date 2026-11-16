@@ -25,6 +25,7 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.TrackCheck;
 import cfevolution.data.track.*;
 
 import javax.swing.*;
@@ -141,7 +142,7 @@ public class TrackPanel extends javax.swing.JPanel {
 
                 // set zooming and panning values so that track
                 // appears in the middle of the window.
-                Rectangle r = m_track.getBoundingRectangle();
+                cfevolution.data.track.TrackBounds r = m_track.getBoundingRectangle();
 
                 // Choose zoom factor so that a border of at least 10 percent
                 // remains on each side of the track.
@@ -402,7 +403,7 @@ public class TrackPanel extends javax.swing.JPanel {
 
             // set zooming and panning values so that track
             // appears in the middle of the window.
-            Rectangle r = m_track.getF1GPBoundingRectangle();
+            cfevolution.data.track.TrackBounds r = m_track.getF1GPBoundingRectangle();
 
             // Choose zoom factor so that a border of at least 10 percent
             // remains on each side of the track.
@@ -589,7 +590,7 @@ public class TrackPanel extends javax.swing.JPanel {
 
             if ( fWholeTrack )
             {
-                Rectangle r = m_track.getF1GPBoundingRectangle();
+                cfevolution.data.track.TrackBounds r = m_track.getF1GPBoundingRectangle();
                 double dScaleX = nWidth / (r.getWidth() * 1.2);
                 double dScaleY = nHeight / (r.getHeight() * 1.2);
                 m_scale = Math.min( dScaleX, dScaleY );

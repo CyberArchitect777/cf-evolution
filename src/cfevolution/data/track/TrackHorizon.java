@@ -16,8 +16,8 @@ package cfevolution.data.track;
 
 import cfevolution.data.executable.ExePackUnpacker;
 import cfevolution.data.executable.Executable;
-import java.awt.image.BufferedImage;
-import java.awt.image.IndexColorModel;
+import cfevolution.data.image.Picture;
+import cfevolution.data.image.Pictures;
 import java.io.File;
 import java.io.IOException;
 
@@ -123,21 +123,10 @@ public final class TrackHorizon
             || (i >= 160 && i <= 167) || (i >= 232 && i <= 239);
     }
 
-    /** The horizon as an 8-bit indexed image in the race palette. */
-    public static BufferedImage toImage(byte[] horizon, byte[] palette)
+    /** The horizon as an 8-bit indexed PNG in the race palette, so it comes back exactly. */
+    public static byte[] toPng(byte[] horizon, byte[] palette) throws java.io.IOException
     {
-        byte[] r = new byte[256], g = new byte[256], b = new byte[256];
-        int[] c = rgb(palette);
-        for (int i = 0; i < 256; i++)
-        {
-            r[i] = (byte) (c[i] >> 16);
-            g[i] = (byte) (c[i] >> 8);
-            b[i] = (byte) c[i];
-        }
-        BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_BYTE_INDEXED,
-                                              new IndexColorModel(8, 256, r, g, b));
-        img.getRaster().setDataElements(0, 0, WIDTH, HEIGHT, java.util.Arrays.copyOf(horizon, BYTES));
-        return img;
+        return Pictures.codec().writeIndexedPng(java.util.Arrays.copyOf(horizon, BYTES), WIDTH, HEIGHT, rgb(palette));
     }
 
     /**
@@ -148,25 +137,25 @@ public final class TrackHorizon
      * to the nearest palette entry that stays as painted in the race; the sky's
      * own colour goes to 239, so a sky painted in it still follows the weather.
      */
-    public static byte[] fromImage(BufferedImage img, byte[] palette)
+    public static byte[] fromPicture(Picture img, byte[] palette)
     {
-        int w = img.getWidth(), h = img.getHeight();
+        int w = img.width, h = img.height;
         if (w % WIDTH != 0 || h % HEIGHT != 0 || w / WIDTH != h / HEIGHT || w == 0)
             return null;
         int k = w / WIDTH;
         int[] pal = rgb(palette);
         byte[] out = new byte[BYTES];
 
-        if (img.getColorModel() instanceof IndexColorModel && img.getRaster().getNumBands() == 1)
+        if (img.isIndexed())
         {
-            IndexColorModel cm = (IndexColorModel) img.getColorModel();
-            boolean exact = cm.getMapSize() <= 256;
+            boolean exact = img.palette.length <= 256;
             for (int y = 0; y < HEIGHT && exact; y++)
                 for (int x = 0; x < WIDTH && exact; x++)
                 {
-                    int idx = img.getRaster().getSample(x * k, y * k, 0);
+                    int idx = img.getIndex(x * k, y * k);
                     out[y * WIDTH + x] = (byte) idx;
-                    exact = (cm.getRGB(idx) & 0xFCFCFC) == (pal[idx] & 0xFCFCFC);
+                    int own = idx < img.palette.length ? img.palette[idx] : 0;
+                    exact = (own & 0xFCFCFC) == (pal[idx] & 0xFCFCFC);
                 }
             if (exact)
                 return out;
@@ -176,7 +165,7 @@ public final class TrackHorizon
         for (int y = 0; y < HEIGHT; y++)
             for (int x = 0; x < WIDTH; x++)
             {
-                int c = img.getRGB(x * k, y * k) & 0xFFFFFF;
+                int c = img.getArgb(x * k, y * k) & 0xFFFFFF;
                 Integer hit = cache.get(c);
                 if (hit == null)
                 {

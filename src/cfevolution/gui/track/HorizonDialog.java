@@ -96,7 +96,7 @@ public class HorizonDialog extends JDialog
                 for (int y = 0; y < TrackHorizon.HEIGHT; y++)
                     for (int x = 0; x < TrackHorizon.WIDTH; x++)
                     {
-                        g.setColor(colours.getPaletteColour(work[y * TrackHorizon.WIDTH + x] & 0xFF));
+                        g.setColor(new java.awt.Color(colours.getPaletteRgb(work[y * TrackHorizon.WIDTH + x] & 0xFF)));
                         g.fillRect(x * SCALE_X, y * SCALE_Y, SCALE_X, SCALE_Y);
                     }
             }
@@ -200,10 +200,10 @@ public class HorizonDialog extends JDialog
 
     private void showColour()
     {
-        Color c = colours.getPaletteColour(current);
+        Color c = new java.awt.Color(colours.getPaletteRgb(current));
         colourButton.setIcon(new Icon() {
             public void paintIcon(Component cmp, Graphics g, int x, int y) {
-                g.setColor(colours.getPaletteColour(current));
+                g.setColor(new java.awt.Color(colours.getPaletteRgb(current)));
                 g.fillRect(x, y, 14, 14);
                 g.setColor(Color.DARK_GRAY);
                 g.drawRect(x, y, 13, 13);
@@ -250,7 +250,7 @@ public class HorizonDialog extends JDialog
             if (raw)
                 java.nio.file.Files.write(f.toPath(), work);
             else
-                javax.imageio.ImageIO.write(TrackHorizon.toImage(work, palette), "png", f);
+                java.nio.file.Files.write(f.toPath(), TrackHorizon.toPng(work, palette));
         }
         catch (java.io.IOException e)
         {
@@ -281,7 +281,7 @@ public class HorizonDialog extends JDialog
             {
                 java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
                 if (img != null)
-                    h = TrackHorizon.fromImage(img, palette);
+                    h = TrackHorizon.fromPicture(cfevolution.gui.ImageIOPictures.toPicture(img), palette);
             }
             else
                 h = TrackHorizon.fromHorizonFile(java.nio.file.Files.readAllBytes(f.toPath()));

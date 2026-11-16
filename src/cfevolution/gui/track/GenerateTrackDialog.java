@@ -19,6 +19,7 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.TrackCheck;
 import java.awt.*;
 import java.io.File;
 import javax.swing.*;

@@ -31,12 +31,9 @@ import cfevolution.data.gamefiles.NameFile;
 import cfevolution.data.gamefiles.PreferencesFile;
 import cfevolution.data.gamefiles.SoundEffectsFile;
 import cfevolution.data.track.Track;
-import cfevolution.gui.gamefiles.ColourReducer;
-import java.awt.image.BufferedImage;
-import java.awt.image.IndexColorModel;
-import java.awt.image.WritableRaster;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
+import cfevolution.data.gamefiles.ColourReducer;
+import cfevolution.data.image.Picture;
+import cfevolution.data.image.Pictures;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,7 +46,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.imageio.ImageIO;
 
 /**
  * Exports a game folder to a {@link Dataset} and imports one into it. Every
@@ -545,18 +541,7 @@ public class GameDataset
     /** An 8-bit indexed PNG carrying the palette, so the pixels come back exactly. */
     static byte[] png(byte[] pixels, int w, int h, int[] palette) throws IOException
     {
-        byte[] r = new byte[256], g = new byte[256], b = new byte[256];
-        for (int i = 0; i < 256; i++)
-        {
-            r[i] = (byte) (palette[i] >> 16);
-            g[i] = (byte) (palette[i] >> 8);
-            b[i] = (byte) palette[i];
-        }
-        BufferedImage im = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_INDEXED, new IndexColorModel(8, 256, r, g, b));
-        im.getRaster().setDataElements(0, 0, w, h, pixels);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(im, "png", out);
-        return out.toByteArray();
+        return Pictures.codec().writeIndexedPng(pixels, w, h, palette);
     }
 
     // ======================================================================
@@ -1058,14 +1043,14 @@ public class GameDataset
     }
 
     /** A picture from the dataset as an image, or null (with a note) if it cannot be read. */
-    private BufferedImage image(Dataset d, String path, String what)
+    private Picture image(Dataset d, String path, String what)
     {
         byte[] b = d.getFile(path);
         if (b == null)
             return null;
         try
         {
-            BufferedImage im = ImageIO.read(new ByteArrayInputStream(b));
+            Picture im = Pictures.codec().read(b);
             if (im != null)
                 return im;
         }
@@ -1075,18 +1060,16 @@ public class GameDataset
     }
 
     /** The picture's own palette indices, if it is indexed with these colours (to 6 bits) at every index it uses. */
-    private static byte[] exactIndices(BufferedImage im, int w, int h, int[] palette, int first)
+    private static byte[] exactIndices(Picture im, int w, int h, int[] palette, int first)
     {
-        if (!(im.getColorModel() instanceof IndexColorModel) || im.getWidth() != w || im.getHeight() != h)
+        if (!im.isIndexed() || im.width != w || im.height != h)
             return null;
-        IndexColorModel cm = (IndexColorModel) im.getColorModel();
-        WritableRaster r = im.getRaster();
         byte[] out = new byte[w * h];
         for (int y = 0; y < h; y++)
             for (int x = 0; x < w; x++)
             {
-                int i = r.getSample(x, y, 0);
-                if (i >= cm.getMapSize() || (palette != null && (i < first || !sameColour(cm.getRGB(i), palette[i]))))
+                int i = im.getIndex(x, y);
+                if (i >= im.palette.length || (palette != null && (i < first || !sameColour(im.palette[i], palette[i]))))
                     return null;
                 out[y * w + x] = (byte) i;
             }
@@ -1098,18 +1081,9 @@ public class GameDataset
         return ((a >> 18) & 0x3F) == ((b >> 18) & 0x3F) && ((a >> 10) & 0x3F) == ((b >> 10) & 0x3F) && ((a >> 2) & 0x3F) == ((b >> 2) & 0x3F);
     }
 
-    private static int[] rgb(BufferedImage in, int w, int h)
+    private static int[] rgb(Picture in, int w, int h)
     {
-        if (in.getWidth() != w || in.getHeight() != h)
-        {
-            BufferedImage scaled = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-            java.awt.Graphics2D g = scaled.createGraphics();
-            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g.drawImage(in, 0, 0, w, h, null);
-            g.dispose();
-            in = scaled;
-        }
-        return in.getRGB(0, 0, w, h, null, 0, w);
+        return Pictures.codec().argbAt(in, w, h);
     }
 
     /**
@@ -1118,10 +1092,10 @@ public class GameDataset
      */
     static byte[] pictureIndices(byte[] file, int w, int h, int[] pal)
     {
-        BufferedImage im;
+        Picture im;
         try
         {
-            im = ImageIO.read(new ByteArrayInputStream(file));
+            im = Pictures.codec().read(file);
         }
         catch (IOException e)
         {
@@ -1134,7 +1108,7 @@ public class GameDataset
     }
 
     /** Puts a small picture in place: its own indices if they are this palette's, else matched to the nearest colours. */
-    private void putSmall(MediaContainer c, int item, BufferedImage im, int[] pal)
+    private void putSmall(MediaContainer c, int item, Picture im, int[] pal)
     {
         MediaContainer.Item it = c.getItem(item);
         byte[] px = exactIndices(im, it.width, it.height, pal, 0);
@@ -1167,7 +1141,7 @@ public class GameDataset
             int to = carTo[car];
             if (to == 0 || to > items.size())
                 continue;
-            BufferedImage im = image(d, String.format("helmets/car%02d.png", car), "The menu helmet of car " + car);
+            Picture im = image(d, String.format("helmets/car%02d.png", car), "The menu helmet of car " + car);
             if (im == null)
                 continue;
             putSmall(c, items.get(to - 1), im, pal);
@@ -1187,7 +1161,7 @@ public class GameDataset
         List<Integer> items = smallItems(c);
         for (int n = 1; n <= items.size(); n++)
         {
-            BufferedImage im = image(d, prefix + n + ".png", what + " " + n);
+            Picture im = image(d, prefix + n + ".png", what + " " + n);
             if (im == null)
                 continue;
             putSmall(c, items.get(n - 1), im, pal);
@@ -1205,7 +1179,7 @@ public class GameDataset
                 continue;
             n++;
             String path = file.equals("TRACKPIX.DAT") && n == 17 ? "circuits/selection.png" : prefix + String.format("%02d", n) + ".png";
-            BufferedImage im = image(d, path, what + " " + n);
+            Picture im = image(d, path, what + " " + n);
             if (im == null)
                 continue;
             int[] was = c.getPalette(i - 1);
@@ -1225,13 +1199,12 @@ public class GameDataset
                 px = exactIndices(im, 320, 200, null, 0);
                 if (px != null)
                 {
-                    IndexColorModel cm = (IndexColorModel) im.getColorModel();
-                    boolean menuSame = cm.getMapSize() >= 256;
+                    boolean menuSame = im.palette.length >= 256;
                     for (int k = 0; menuSame && k < MENU_COLOURS; k++)
-                        menuSame = sameColour(cm.getRGB(k), was[k]);
+                        menuSame = sameColour(im.palette[k], was[k]);
                     if (menuSame)
                         for (int k = MENU_COLOURS; k < 256; k++)
-                            pal[k] = cm.getRGB(k) & 0xFFFFFF;
+                            pal[k] = im.palette[k] & 0xFFFFFF;
                     else
                         px = null;
                 }

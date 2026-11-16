@@ -19,7 +19,6 @@
 
 package cfevolution.data.executable;
 
-import java.awt.Color;
 import java.io.*;
 
 /**
@@ -75,13 +74,15 @@ public class GameLiveries
         return l;
     }
 
-    /** The game's colour for a palette index (stored as 6-bit values). */
-    public Color getPaletteColour(int index)
+    /** The game's colour for a palette index (stored as 6-bit values), as
+        0xRRGGBB. A plain int rather than java.awt.Color so the core runs
+        where java.awt does not, such as Android (2026-11-16). */
+    public int getPaletteRgb(int index)
     {
         int r = palette[index * 3] & 0x3F;
         int g = palette[index * 3 + 1] & 0x3F;
         int b = palette[index * 3 + 2] & 0x3F;
-        return new Color((r << 2) | (r >> 4), (g << 2) | (g >> 4), (b << 2) | (b >> 4));
+        return (((r << 2) | (r >> 4)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 2) | (b >> 4));
     }
 
     public int getCarColour(int team, int part)

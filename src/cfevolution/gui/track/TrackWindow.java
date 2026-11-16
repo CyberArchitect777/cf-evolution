@@ -25,6 +25,7 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.TrackCheck;
 import cfevolution.gui.*;
 import java.io.*;
 import cfevolution.data.track.*;

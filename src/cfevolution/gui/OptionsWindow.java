@@ -29,7 +29,6 @@ import java.util.prefs.Preferences;
 import cfevolution.data.GameFolder;
 import java.io.*;
 import javax.swing.*;
-import cfevolution.data.gui.RecentFiles;
 
 /**
  *

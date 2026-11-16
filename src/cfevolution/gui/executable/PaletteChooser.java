@@ -77,7 +77,7 @@ public class PaletteChooser extends JDialog
                 super.paintComponent(g);
                 for (int i = 0; i < 256; i++) {
                     int x = (i % 16) * CELL, y = (i / 16) * CELL;
-                    g.setColor(liveries.getPaletteColour(i));
+                    g.setColor(new java.awt.Color(liveries.getPaletteRgb(i)));
                     g.fillRect(x + 1, y + 1, CELL - 2, CELL - 2);
                 }
                 for (int i = 0; i < 256; i++)

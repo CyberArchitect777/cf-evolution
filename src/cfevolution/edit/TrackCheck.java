@@ -17,7 +17,7 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-package cfevolution.gui.track;
+package cfevolution.edit;
 
 import cfevolution.data.track.*;
 import cfevolution.generator.track.TrackCoordinateEdge;
@@ -43,7 +43,7 @@ public class TrackCheck
 
     /** Same thresholds as GenerateCCLineDialog.lineQualityWarning, which
         were calibrated so that no original trips them. */
-    static final double WORST_EXCURSION_WARNING = 2.0;
+    public static final double WORST_EXCURSION_WARNING = 2.0;
     private static final int MAX_KICK_WARNING = 3000;
 
     public static class Item
@@ -195,7 +195,7 @@ public class TrackCheck
 
     /** True when the stored line strays as far as GenerateCCLineDialog's
         quality warning allows. Reads the line as the editor compiled it. */
-    static boolean lineRunsOffRoad(Track track)
+    public static boolean lineRunsOffRoad(Track track)
     {
         cfevolution.generator.ccline.CCLineTrackGeometry geo =
             new cfevolution.generator.ccline.CCLineTrackGeometry(track);

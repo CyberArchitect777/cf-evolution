@@ -16,7 +16,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
-package cfevolution.gui.gamefiles;
+package cfevolution.data.gamefiles;
 
 /**
  * Turns an imported picture into palette indices: a palette of its own by

@@ -18,6 +18,7 @@
 */
 package cfevolution.gui.gamefiles;
 
+import cfevolution.data.gamefiles.ColourReducer;
 import cfevolution.data.GameFolder;
 import cfevolution.data.gamefiles.MediaContainer;
 import cfevolution.gui.EditorTab;

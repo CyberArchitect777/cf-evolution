@@ -28,7 +28,6 @@ package cfevolution.data.track;
 import java.io.*;
 import java.nio.channels.*;
 import java.util.*;
-import java.awt.*;
 
 
 import cfevolution.data.f1gp.CosLookupTable;
@@ -1143,7 +1142,7 @@ public class Track {
         based on F1GP in-game calculations (Seg objects).
     */
 
-    public Rectangle getF1GPBoundingRectangle()
+    public TrackBounds getF1GPBoundingRectangle()
     {
         double dMinX, dMinY, dMaxX, dMaxY, dX, dY;
         TrackSegments trackSegments = getTrackSegments();
@@ -1170,7 +1169,7 @@ public class Track {
                 dMinY = dY;
         } // for
         // Put data into rectangle
-        Rectangle r = new Rectangle( (int) dMinX,
+        TrackBounds r = new TrackBounds( (int) dMinX,
                                      (int) dMinY,
                                      (int) (dMaxX - dMinX),
                                      (int) (dMaxY - dMinY) );
@@ -1180,7 +1179,7 @@ public class Track {
     // Returns a rectangle that contains the whole track graphics.
     // x/y coordinates represent the minimum coordinates and heigth/width
     // give the size of the rectangle needed to contain the track.
-    public Rectangle getBoundingRectangle()
+    public TrackBounds getBoundingRectangle()
     {
         double dMinX, dMinY, dMaxX, dMaxY, dX, dY;
         TrackSegments trackSegments = getTrackSegments();
@@ -1217,7 +1216,7 @@ public class Track {
                 dMinY = dY;
         } // for
         // Put data into rectangle
-        Rectangle r = new Rectangle( (int) dMinX,
+        TrackBounds r = new TrackBounds( (int) dMinX,
                                      (int) dMinY,
                                      (int) (dMaxX - dMinX),
                                      (int) (dMaxY - dMinY) );

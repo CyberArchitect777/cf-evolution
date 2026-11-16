@@ -23,7 +23,7 @@
  * Created on 10 December 2006, 15:04
  */
 
-package cfevolution.data.gui;
+package cfevolution.gui;
 
 //import java.util.ArrayList;
 import java.io.*;
