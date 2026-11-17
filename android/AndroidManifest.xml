@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- CF Evolution for Android (first version, 2026-11-17). Built without Gradle by
-     build-android.sh; no resources, the screens are made in code. -->
+     build-android.sh; the screens are made in code, and the only resources are the icon (res/). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cfevolution.android">
 
@@ -12,6 +12,8 @@
          dialogs stay): the screens are made in code and lay themselves out again. -->
     <application
         android:label="CF Evolution"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar"
         android:allowBackup="false">
 

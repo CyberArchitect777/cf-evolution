@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CF Evolution's app icon (2026-11-17): a red circuit with a chequered start/finish line,
+     in the website's colours. 108 x 108 adaptive icon layer; the launcher shows the middle 72. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#16161C" android:pathData="M0,0 h108 v108 h-108 Z" />
+</vector>
