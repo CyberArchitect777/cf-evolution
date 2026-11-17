@@ -25,7 +25,11 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.Message;
+import cfevolution.edit.RandomTrackGeneration;
 import cfevolution.edit.TrackCheck;
+import cfevolution.edit.TrackTools;
+import cfevolution.gui.MessageBoxes;
 import cfevolution.gui.*;
 import java.io.*;
 import cfevolution.data.track.*;
@@ -63,6 +67,7 @@ public class TrackWindow extends JPanel implements EditorTab
         super(new java.awt.BorderLayout());
         fileName = trackFileName;
         currentTrack = selectedTrack;
+        bestLineRepair = new cfevolution.edit.BestLineRepair(currentTrack);
         appFrame = origContainer;
         initComponents();
 
@@ -298,20 +303,26 @@ public class TrackWindow extends JPanel implements EditorTab
         applyPendingEdits();
         new TrackCheckDialog(this, currentTrack, new TrackCheckDialog.Fixer() {
             public void fix(int action) {
-                switch (action)
-                {
-                    case TrackCheck.ACTION_MOVE_TRACK: moveTrackFromEdge(); break;
-                    case TrackCheck.ACTION_MATCH_HEADING: addEndHeadingSegment(); break;
-                    case TrackCheck.ACTION_PIT_MOUTHS: setUpPitMouths(); break;
-                    case TrackCheck.ACTION_GENERATE_LINE:
-                        openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
-                        break;
-                }
+                fixAction(action);
             }
         }).setVisible(true);
         // The checks recompile the layout (which changes nothing in the file);
         // redraw without marking the track unsaved. Fixes mark it themselves.
         mapWindow.redrawTrackMap();
+    }
+
+    /** Runs the fix for a Check Track item or a banner warning (a TrackCheck.ACTION_ code). */
+    private void fixAction(int action)
+    {
+        switch (action)
+        {
+            case TrackCheck.ACTION_MOVE_TRACK: moveTrackFromEdge(); break;
+            case TrackCheck.ACTION_MATCH_HEADING: addEndHeadingSegment(); break;
+            case TrackCheck.ACTION_PIT_MOUTHS: setUpPitMouths(); break;
+            case TrackCheck.ACTION_GENERATE_LINE:
+                openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator());
+                break;
+        }
     }
 
     /** The picture of distant scenery along the horizon (the file's first 4096 bytes). */
@@ -558,25 +569,11 @@ public class TrackWindow extends JPanel implements EditorTab
         // normal — 14 of the 16 original tracks deliberately overrun so the
         // line wraps smoothly across the start/finish seam (see BESTLINE.md).
         // Shown in a banner above the map rather than in the title.
-        int ccTlu    = currentTrack.getCCLineTlu();
-        int trackTlu = currentTrack.getTrackTlu();
         warningBanner.removeAll();
         boolean any = false;
-        // The game builds a wrong best line on a track that runs over the
-        // edge of its coordinate space (see TrackCoordinateEdge).
-        if ( cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack) )
+        for (final TrackTools.Banner b : TrackTools.banners(currentTrack))
         {
-            addWarning(cfevolution.generator.track.TrackCoordinateEdge.isOpen(currentTrack)
-                       ? "This track crosses the edge of the game's map area near a corner, so the game's AI line will be wrong there."
-                       : "This track runs over the edge of the game's map area, so the game's AI line will be wrong.",
-                       "Move Track", new Runnable() { public void run() { moveTrackFromEdge(); } });
-            any = true;
-        }
-        if ( ccTlu > 0 && ccTlu < trackTlu )
-        {
-            addWarning("The best line stops " + (trackTlu - ccTlu) + " TLU short of the end of the track, so the AI has no line there.",
-                       "Generate Best Line", new Runnable() { public void run() {
-                           openGenerateDialog(new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator()); } });
+            addWarning(b.text, b.fixLabel, new Runnable() { public void run() { fixAction(b.action); } });
             any = true;
         }
         warningBanner.setVisible(any);
@@ -623,74 +620,29 @@ public class TrackWindow extends JPanel implements EditorTab
     private void openGenerateDialog(cfevolution.generator.ccline.CCLineGenerator generator)
     {
         // Opens the shared best line generation dialog preset to a method
-        String blocked = bestLineBlocker();
+        Message blocked = TrackTools.bestLineBlocker(currentTrack);
         if (blocked != null)
         {
-            JOptionPane.showMessageDialog(this, blocked, "Cannot Generate Best Line",
-                                          JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(this, blocked);
             return;
         }
         // A line generated on a track that crosses the map edge would be
         // built wrongly by the game, so move the track clear first.
-        if (cfevolution.generator.track.TrackCoordinateEdge.shouldMove(currentTrack))
+        TrackTools.Outcome moved = TrackTools.moveBeforeBestLine(currentTrack);
+        if (moved != null)
         {
-            cfevolution.generator.track.TrackCoordinateEdge.Result moved =
-                cfevolution.generator.track.TrackCoordinateEdge.moveToMiddle(currentTrack);
-            if (moved.failure != null)
+            if (!moved.changed)
             {
-                JOptionPane.showMessageDialog(this, moved.failure, "Cannot Generate Best Line",
-                                              JOptionPane.ERROR_MESSAGE);
+                MessageBoxes.show(this, moved.message);
                 return;
             }
             updateTrackMap();
-            JOptionPane.showMessageDialog(this, moved.open
-              ? "This track crossed the edge of the game's map area at a corner, which\n"
-              + "makes the game build its best line wrongly there. It has been moved so\n"
-              + "that it crosses on a straight first. Nothing else about the track has\n"
-              + "changed."
-              : "This track ran over the edge of the game's map area, which makes\n"
-              + "the game build its best line wrongly. It has been moved to the\n"
-              + "middle of the map area first. Nothing else about the track has\n"
-              + "changed.", "Generate Best Line", JOptionPane.INFORMATION_MESSAGE);
+            MessageBoxes.show(this, moved.message);
         }
         GenerateCCLineDialog dialog = new GenerateCCLineDialog(this, currentTrack, generator);
         dialog.setVisible(true);
     }
 
-    /** Why a best line cannot sensibly be generated for this track, or null
-        when it can. Checked before the dialog opens, so it covers every
-        generation method.
-
-        Two cases, both of which produced a meaningless line rather than an
-        error before: a track with no corners at all, where every line is
-        equally fast and the generator returns an almost empty one; and a
-        track whose ends do not face the same way, which the game cannot
-        wrap from the last segment back to the first — the line is walked
-        in world coordinates, so it needs the end to line up with the
-        start. */
-    private String bestLineBlocker()
-    {
-        TrackSegments segs = currentTrack.getTrackSegments();
-        if (cfevolution.generator.track.TrackHeadingClosure.allStraight(segs))
-            return "This track has no corners — every segment runs straight.\n\n"
-                 + "A best line only earns anything through corners, so there is\n"
-                 + "nothing here for it to work with. Build some corners first,\n"
-                 + "then generate the line.";
-        if (!cfevolution.generator.track.TrackHeadingClosure.headingMatches(segs))
-        {
-            int nWinding = cfevolution.generator.track.TrackHeadingClosure.netWinding(segs);
-            int nTurns = cfevolution.generator.track.TrackHeadingClosure.nearestWholeTurn(nWinding);
-            int nOut = nTurns * cfevolution.generator.track.TrackHeadingClosure.FULL_TURN - nWinding;
-            double dDegrees = nOut * 360.0
-                            / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN;
-            return "The last segment does not face the way the first one does —\n"
-                 + "they are " + (Math.round(Math.abs(dDegrees) * 10) / 10.0)
-                 + " degrees apart.\n\n"
-                 + "A best line needs the two ends to line up. Run Tools > \"Add Segment\n"
-                 + "to Match Start/End Heading\" first, then generate the line.";
-        }
-        return null;
-    }
 
     private void openGenerateTrackDialog()
     {
@@ -712,18 +664,11 @@ public class TrackWindow extends JPanel implements EditorTab
     public int applyGeneratedTrack(cfevolution.generator.track.RandomTrackGenerator.Result layout,
                                    CCLine newLine)
     {
-        GenerateTrackDialog.applySegments(currentTrack, layout);
-        cfevolution.generator.track.TrackCameraSection.emptyCameraAdjustments(currentTrack.getFooter());
-        currentTrack.setLayoutMode(false);
-        currentTrack.calculateTrackLayout();
+        int nTrimmed = RandomTrackGeneration.apply(currentTrack, layout, newLine);
         treeWindow.rebuildTrackNodes();
         highlightSection(1, -1); // no track segment selected any more
         highlightSection(2, -1); // pit selection also stale
-        replaceBestLine(newLine); // recalculates, rebuilds line nodes, map + title
-        // Last, because the size depends on the best line as well as the layout.
-        int nTrimmed = cfevolution.generator.track.TrackFileSize.trimSceneryToFit(currentTrack);
-        if (nTrimmed != 0)
-            treeWindow.rebuildTrackNodes();
+        bestLineReplaced(); // rebuilds line nodes, map + title
         return nTrimmed;
     }
 
@@ -732,54 +677,23 @@ public class TrackWindow extends JPanel implements EditorTab
         track can be built up from it. */
     private void reduceToMinimalTrack()
     {
-        cfevolution.generator.track.MinimalTrackReducer reducer =
-            new cfevolution.generator.track.MinimalTrackReducer(currentTrack);
-        cfevolution.generator.track.MinimalTrackReducer.Result plan = reducer.analyse();
-        if (!plan.ok)
+        TrackTools.Plan plan = TrackTools.planMinimal(currentTrack);
+        if (plan.failure != null)
         {
-            JOptionPane.showMessageDialog(this, plan.failure, "Reduce to Minimal Track",
-                                          JOptionPane.WARNING_MESSAGE);
+            MessageBoxes.show(this, plan.failure);
             return;
         }
-
-        StringBuffer ask = new StringBuffer();
-        ask.append("Cut this track down to a straight that keeps only the pit lane,\n")
-           .append("the starting grid and the start/finish line?\n\n")
-           .append("The rest of the lap is removed and any remaining corners are\n")
-           .append("straightened. The best line is cleared too: build the track back\n")
-           .append("up, then generate a new one.\n\n")
-           .append("This cannot be undone. Continue?");
-        if (JOptionPane.showConfirmDialog(this, ask.toString(), "Reduce to Minimal Track",
-                                          JOptionPane.YES_NO_OPTION,
-                                          JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION)
+        if (!MessageBoxes.ask(this, plan.question))
             return;
-
-        cfevolution.generator.track.MinimalTrackReducer.Result result = reducer.reduce();
-        if (!result.ok)
+        TrackTools.Outcome done = plan.apply();
+        if (done.changed)
         {
-            JOptionPane.showMessageDialog(this, result.failure, "Reduce to Minimal Track",
-                                          JOptionPane.WARNING_MESSAGE);
-            return;
+            treeWindow.rebuildTrackNodes();
+            highlightSection(1, -1); // no track segment selected any more
+            highlightSection(2, -1); // pit selection also stale
+            bestLineReplaced();      // the best line was cleared
         }
-
-        cfevolution.generator.track.TrackCameraSection.emptyCameraAdjustments(currentTrack.getFooter());
-        currentTrack.setLayoutMode(false);
-        currentTrack.calculateTrackLayout();
-        treeWindow.rebuildTrackNodes();
-        highlightSection(1, -1); // no track segment selected any more
-        highlightSection(2, -1); // pit selection also stale
-        treeWindow.deleteAllSegments(2); // clears the best line and its nodes
-        updateTrackMap();
-
-        StringBuffer msg = new StringBuffer();
-        // Plain language only (owner, 2026-10-11): the cut, padding and
-        // drawn-length figures are in MinimalTrackReducer.Result for harnesses.
-        msg.append("The track is now a straight carrying the pit lane, the starting\n")
-           .append("grid and the start/finish line.\n\n")
-           .append("The best line was cleared. Once the track is the shape you want,\n")
-           .append("use Tools > Generate Best Line.");
-        JOptionPane.showMessageDialog(this, msg.toString(), "Reduce to Minimal Track",
-                                      JOptionPane.INFORMATION_MESSAGE);
+        MessageBoxes.show(this, done.message);
     }
 
     /** Tools > adds one segment at the end so the last segment faces the
@@ -787,56 +701,19 @@ public class TrackWindow extends JPanel implements EditorTab
         to close back onto its own start position. */
     private void addEndHeadingSegment()
     {
-        cfevolution.generator.track.TrackHeadingClosure.Result plan =
-            cfevolution.generator.track.TrackHeadingClosure.analyse(currentTrack);
-        if (!plan.ok)
+        TrackTools.Plan plan = TrackTools.planHeading(currentTrack);
+        if (!plan.canApply())
         {
-            JOptionPane.showMessageDialog(this, plan.failure, "Match Start/End Heading",
-                                          JOptionPane.WARNING_MESSAGE);
+            MessageBoxes.show(this, plan.failure != null ? plan.failure : plan.nothingToDo);
             return;
         }
-        if (plan.alreadyMatching)
-        {
-            StringBuffer msg = new StringBuffer();
-            msg.append("The end of the track already lines up with the start.\n")
-               .append("Nothing needs adding.\n");
-            appendGapReport(msg);
-            JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
-                                          JOptionPane.INFORMATION_MESSAGE);
+        if (!MessageBoxes.ask(this, plan.question))
             return;
-        }
-
-        double dDegrees = plan.headingNeeded * 360.0
-                        / cfevolution.generator.track.TrackHeadingClosure.FULL_TURN;
-        StringBuffer ask = new StringBuffer();
-        ask.append("The end of the track faces ")
-           .append(Math.round(Math.abs(dDegrees) * 10) / 10.0)
-           .append(" degrees away from the start.\n\n")
-           .append("Add one curved segment, ").append(plan.addedTlu)
-           .append(" TLU long, at the end of the track to line them up?");
-        if (JOptionPane.showConfirmDialog(this, ask.toString(), "Match Start/End Heading",
-                                          JOptionPane.YES_NO_OPTION,
-                                          JOptionPane.QUESTION_MESSAGE) != JOptionPane.YES_OPTION)
-            return;
-
-        cfevolution.generator.track.TrackHeadingClosure.Result result =
-            cfevolution.generator.track.TrackHeadingClosure.addClosingSegment(currentTrack);
-        currentTrack.setLayoutMode(false);
-        currentTrack.calculateTrackLayout();
+        TrackTools.Outcome done = plan.apply();
         treeWindow.rebuildTrackNodes();
         highlightSection(1, -1);
         updateTrackMap();
-
-        StringBuffer msg = new StringBuffer();
-        msg.append("Added a ").append(result.addedTlu).append(" TLU segment at the end.\n")
-           .append("The end of the track now lines up with the start.\n");
-        appendGapReport(msg);
-        int nCcTlu = currentTrack.getCCLineTlu();
-        if (nCcTlu > 0 && nCcTlu < currentTrack.getTrackTlu())
-            msg.append("\nThe best line no longer reaches the end of the track. Use\n")
-               .append("Tools > Generate Best Line with \"Complete existing line\" selected.");
-        JOptionPane.showMessageDialog(this, msg.toString(), "Match Start/End Heading",
-                                      JOptionPane.INFORMATION_MESSAGE);
+        MessageBoxes.show(this, done.message);
     }
 
     /** Tools > moves a track that runs over the edge of the game's
@@ -845,84 +722,23 @@ public class TrackWindow extends JPanel implements EditorTab
         lane leaves and rejoins the road (PitMouth). */
     private void setUpPitMouths()
     {
-        if (!cfevolution.generator.pitlane.PitMouth.place(currentTrack))
+        TrackTools.Outcome done = TrackTools.setUpPitMouths(currentTrack);
+        if (done.changed)
         {
-            JOptionPane.showMessageDialog(this,
-                "The editor could not find where the pit lane leaves and rejoins the track,\n"
-              + "so nothing was changed.", "Pit Lane Entrance and Exit", JOptionPane.WARNING_MESSAGE);
-            return;
+            treeWindow.rebuildTrackNodes();
+            updateTrackMap();
         }
-        treeWindow.rebuildTrackNodes();
-        currentTrack.calculateCCLine();
-        updateTrackMap();
-        JOptionPane.showMessageDialog(this,
-            "The pit lane's entrance and exit have been set up where the pit lane\n"
-          + "leaves and rejoins the track, the way the original circuits do it.\n"
-          + "The shape of the track and the pit lane is unchanged.\n\n"
-          + "Save the track to keep the change.", "Pit Lane Entrance and Exit",
-            JOptionPane.INFORMATION_MESSAGE);
+        MessageBoxes.show(this, done.message);
     }
 
     private void moveTrackFromEdge()
     {
-        if (!currentTrack.crossesCoordinateEdge())
-        {
-            JOptionPane.showMessageDialog(this,
-                "This track is already clear of the edge of the game's map area.\n"
-              + "Nothing needs to change.", "Move Track Away From Map Edge",
-                JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        cfevolution.generator.track.TrackCoordinateEdge.Result result =
-            cfevolution.generator.track.TrackCoordinateEdge.moveToMiddle(currentTrack);
-        if (result.failure != null)
-        {
-            JOptionPane.showMessageDialog(this, result.failure, "Move Track Away From Map Edge",
-                                          JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        updateTrackMap();
-        if (result.open)
-        {
-            JOptionPane.showMessageDialog(this,
-                "This track is longer than the game's map area, so it always crosses\n"
-              + "the edge somewhere. It has been moved so that it crosses on a straight,\n"
-              + "away from the corners, where the game builds the best line correctly.\n\n"
-              + "Generate the best line again: the old one was made for the old position.\n"
-              + "Save the track to keep the change.", "Move Track Away From Map Edge",
-                JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        JOptionPane.showMessageDialog(this,
-            "The track has been moved to the middle of the game's map area.\n"
-          + "It ran over the edge, which makes the game build a wrong best line.\n"
-          + "Its shape, pit lane and scenery are unchanged, and the game will\n"
-          + "now build the best line correctly.\n\n"
-          + "Save the track to keep the change.", "Move Track Away From Map Edge",
-            JOptionPane.INFORMATION_MESSAGE);
+        TrackTools.Outcome done = TrackTools.moveFromEdge(currentTrack);
+        if (done.changed)
+            updateTrackMap();
+        MessageBoxes.show(this, done.message);
     }
 
-    /** Adds the start-to-end gap and what it means to a report. The game
-        closes the gap itself by sliding every Seg, so the figure that
-        matters is the gap relative to the lap length. */
-    private void appendGapReport(StringBuffer msg)
-    {
-        double dGap = cfevolution.generator.track.TrackHeadingClosure.gapTlu(currentTrack);
-        double dRatio = currentTrack.getTrackTlu() > 0 ? dGap / currentTrack.getTrackTlu() : 0;
-        // Plain-language bands of TrackHeadingClosure.describeGap (owner, 2026-10-11).
-        if (dRatio <= 0.02)
-            return;
-        if (dRatio <= cfevolution.generator.track.TrackHeadingClosure.MONZA_GAP_RATIO * 1.2)
-            msg.append("\nThe end of the track does not quite meet the start. The game\n")
-               .append("joins them by stretching the road slightly, which works fine.\n");
-        else if (dRatio <= 0.5)
-            msg.append("\nThe end of the track is some way from the start. The game joins\n")
-               .append("them by stretching the road, which may look odd: worth checking\n")
-               .append("in the game.\n");
-        else
-            msg.append("\nThe end of the track is far from the start. The game will stretch\n")
-               .append("the road a lot to join them, so expect visible distortion.\n");
-    }
 
     public void showBestLinePreview(double[] adOffsets)
     {
@@ -938,18 +754,19 @@ public class TrackWindow extends JPanel implements EditorTab
         every view that shows it. */
     public void replaceBestLine(CCLine newLine)
     {
-        CCLine current = currentTrack.getCCLine();
-        current.clear();
-        for (int i = 1; i <= newLine.size(); i++)
-            current.add(newLine.getAt(i));
-        currentTrack.calculateCCLine();
+        TrackTools.replaceBestLine(currentTrack, newLine);
+        bestLineReplaced();
+    }
+
+    /** Refreshes every view of the best line after the whole of it changed. */
+    private void bestLineReplaced()
+    {
         treeWindow.rebuildBestLineNodes();
         highlightSection(3, -1); // nothing selected any more
         updateTrackMap();
         updateCCLineCoverageStatus();
         // The old line (and any edited-segment reference) is gone
-        m_adLineSnapshot = null;
-        m_EditedLineSegment = null;
+        bestLineRepair.clear();
         repairLineItem.setEnabled(false);
     }
 
@@ -959,21 +776,13 @@ public class TrackWindow extends JPanel implements EditorTab
     // Tools > Repair refit a bounded window of following sectors back
     // onto the old line via CCLineWindowRepair.
 
-    private double[] m_adLineSnapshot = null;
-    private double[] m_adPendingSnapshot = null;
-    private cfevolution.data.track.CCLineSegment m_EditedLineSegment = null;
-    private cfevolution.data.track.CCLineSegment m_PendingLineSegment = null;
+    private cfevolution.edit.BestLineRepair bestLineRepair;
 
     /** Called by the segment editor just BEFORE a best line edit is
         applied: captures the current (pre-edit) per-Seg line stamps. */
     public void prepareBestLineRepair(cfevolution.data.track.CCLineSegment lineSegment)
     {
-        cfevolution.data.track.TrackSegments segs = currentTrack.getTrackSegments();
-        int n = segs.getMaxTrackSegIndex() + 1;
-        m_adPendingSnapshot = new double[n];
-        for (int i = 0; i < n; i++)
-            m_adPendingSnapshot[i] = segs.getSegAt(i).getCCLine();
-        m_PendingLineSegment = lineSegment;
+        bestLineRepair.prepare(lineSegment);
     }
 
     /** Called just after the edit is applied. Promotes the snapshot only
@@ -981,69 +790,20 @@ public class TrackWindow extends JPanel implements EditorTab
         keeps the original pre-edit target. */
     public void confirmBestLineRepair(boolean fChanged)
     {
-        if (fChanged && m_adPendingSnapshot != null)
-        {
-            m_adLineSnapshot = m_adPendingSnapshot;
-            m_EditedLineSegment = m_PendingLineSegment;
+        if (bestLineRepair.confirm(fChanged))
             repairLineItem.setEnabled(true);
-        }
-        m_adPendingSnapshot = null;
-        m_PendingLineSegment = null;
     }
 
     private void repairBestLine()
     {
-        if (m_adLineSnapshot == null || m_EditedLineSegment == null)
+        cfevolution.edit.BestLineRepair.Result r = bestLineRepair.repair();
+        if (r == null)
             return;
-        CCLine line = currentTrack.getCCLine();
-        int nIndex = -1;
-        for (int i = 1; i <= line.size(); i++)
-            if (line.getAt(i) == m_EditedLineSegment)
-            {
-                nIndex = i;
-                break;
-            }
-        if (nIndex < 0)
-        {
-            JOptionPane.showMessageDialog(this,
-                "The edited best line segment no longer exists.",
-                "Repair Best Line", JOptionPane.WARNING_MESSAGE);
-            m_adLineSnapshot = null;
-            m_EditedLineSegment = null;
+        if (r.repaired != null)
+            replaceBestLine(r.repaired); // also clears the snapshot
+        else if (!bestLineRepair.available())
             repairLineItem.setEnabled(false);
-            return;
-        }
-
-        cfevolution.generator.ccline.CCLineTrackGeometry geo =
-            new cfevolution.generator.ccline.CCLineTrackGeometry(currentTrack);
-        double[] adTarget = new double[geo.segCount];
-        for (int i = 0; i < geo.segCount; i++)
-            adTarget[i] = (i < m_adLineSnapshot.length) ? m_adLineSnapshot[i] : 0.0;
-
-        cfevolution.data.track.CCLineSegment replacement =
-            new cfevolution.data.track.CCLineSegment(m_EditedLineSegment.getType());
-        replacement.setTlu(m_EditedLineSegment.getTlu());
-        for (int p = 0; p < 4; p++)
-            replacement.setParam(p, m_EditedLineSegment.getParam(p));
-
-        CCLine repaired = cfevolution.generator.ccline.CCLineWindowRepair.replaceAndRepair(
-            geo, line, nIndex,
-            new cfevolution.data.track.CCLineSegment[] { replacement },
-            cfevolution.generator.ccline.CCLineWindowRepair.DEFAULT_WINDOW_TLU,
-            adTarget);
-        if (repaired == null)
-        {
-            JOptionPane.showMessageDialog(this,
-                "There is nothing to repair: the edited segment is the last one\n"
-                + "in the best line.",
-                "Repair Best Line", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        replaceBestLine(repaired); // also clears the snapshot
-        JOptionPane.showMessageDialog(this,
-            "The best line after your edit has been adjusted to follow its\n"
-            + "previous path, so the rest of the lap is unaffected.",
-            "Repair Best Line", JOptionPane.INFORMATION_MESSAGE);
+        MessageBoxes.show(this, r.message);
     }
     
     /** Warns, after every save, about the two ways a track can load as a
@@ -1061,57 +821,7 @@ public class TrackWindow extends JPanel implements EditorTab
         means taking something out of the user's track, which should not happen
         without asking. The save goes ahead either way. */
     private void warnIfGameWillHang(File savedFile) {
-        if (currentTrack == null)
-            return;
-        StringBuffer msg = new StringBuffer();
-
-        if (currentTrack.getCCLine() != null) {
-            int nEntries = currentTrack.getCCLine().getCoachingEntryCount();
-            int nBudget = currentTrack.getCoachingEntryBudget();
-            if (nEntries > nBudget) {
-                int nPit = currentTrack.getPitCoachingEntryCount();
-                msg.append("The best line uses ").append(nEntries)
-                   .append(" entries of the game's coaching table, and the pit lane\n")
-                   .append("uses ").append(nPit).append(". The table has 64 slots, so this track can have\n")
-                   .append("at most ").append(nBudget).append(" in its best line.\n\n")
-                   .append("The table holds one entry per corner of the racing line and\n")
-                   .append("drives the suggested-gear display. Remove or straighten ")
-                   .append(nEntries - nBudget).append(" curve(s)\n")
-                   .append("in the best line, or regenerate it.\n\n");
-            }
-        }
-
-        int nTrackSegs = currentTrack.getTrackSegCount();
-        if (nTrackSegs > Track.MAX_TRACK_SEGS) {
-            msg.append("The track is ").append(nTrackSegs).append(" TLU long. The game allows at most ")
-               .append(Track.MAX_TRACK_SEGS).append(",\n")
-               .append("so it needs to lose ").append(nTrackSegs - Track.MAX_TRACK_SEGS)
-               .append(" TLU. Shorten some straights or remove a corner.\n\n");
-        }
-
-        int nPitSegs = currentTrack.getPitSegCount();
-        if (nPitSegs > Track.MAX_PIT_SEGS) {
-            msg.append("The pit lane is ").append(nPitSegs).append(" TLU long. The game allows at most ")
-               .append(Track.MAX_PIT_SEGS).append(",\n")
-               .append("so it needs to lose ").append(nPitSegs - Track.MAX_PIT_SEGS)
-               .append(" TLU. Shorten its straight sections.\n\n");
-        }
-
-        long lSize = savedFile != null ? savedFile.length() : 0;
-        if (lSize > Track.MAX_FILE_BYTES) {
-            msg.append("The file is ").append(lSize).append(" bytes. The game loads at most ")
-               .append(Track.MAX_FILE_BYTES).append(",\n")
-               .append("so it needs to shrink by ").append(lSize - Track.MAX_FILE_BYTES)
-               .append(" bytes. Removing scenery objects or\n")
-               .append("best line sectors is the easiest way.\n\n");
-        }
-
-        if (msg.length() == 0)
-            return;
-        msg.append("The track has been saved, but the game will freeze on the circuit\n")
-           .append("preview screen if it is loaded as it is.");
-        JOptionPane.showMessageDialog(this, msg.toString(),
-            "This Track Will Not Load in the Game", JOptionPane.WARNING_MESSAGE);
+        MessageBoxes.show(this, TrackTools.saveWarning(currentTrack, savedFile != null ? savedFile.length() : 0));
     }
 
     /** Applies typing in the property or command panel that has not been

@@ -19,7 +19,7 @@
 
 package cfevolution.gui.track;
 
-import cfevolution.edit.TrackCheck;
+import cfevolution.edit.RandomTrackGeneration;
 import java.awt.*;
 import java.io.File;
 import javax.swing.*;
@@ -54,53 +54,6 @@ public class GenerateTrackDialog extends JDialog {
 
     private volatile boolean fCancelled;
     private boolean fConfirmed;
-    private final java.util.Random seedRoller = new java.util.Random();
-
-    /** Whole generations to try before reporting a failure. A seed whose
-        layout cannot be closed, whose line cannot be built, or whose line
-        runs off the road is simply replaced by another; the status line
-        shows the seed used. */
-    private static final int MAX_GENERATIONS = 10;
-
-    /** A fresh seed, short enough to note down and type back in. */
-    private long nextSeed() {
-        return nextSeed(seedRoller);
-    }
-
-    private static long nextSeed(java.util.Random r) {
-        return 1 + r.nextInt(999999);
-    }
-
-    /** The seeds tried for one request: the requested seed, then replacements
-        drawn from a generator seeded with it. So a typed seed always leads to
-        the same track (until 2026-11-16 the replacements came from the clock,
-        and an unworkable seed gave a different track every time). */
-    static long[] seedsToTry(long lSeed) {
-        java.util.Random r = new java.util.Random(lSeed);
-        long[] seeds = new long[MAX_GENERATIONS];
-        seeds[0] = lSeed;
-        for (int i = 1; i < seeds.length; i++)
-            seeds[i] = nextSeed(r);
-        return seeds;
-    }
-
-    /** True when the best line, laid on the track it was made for, would make
-        Check Track say it runs well off the road. Generation gives that up and
-        tries the next seed rather than hand the user a track that needs
-        attention (about 1 workable seed in 15 did, 2026-11-16). */
-    static boolean lineRunsOffRoad(Track lineTrack, CCLineGenerationResult line) {
-        if (line == null || line.ccLine == null)
-            return false;
-        cfevolution.data.track.CCLine cur = lineTrack.getCCLine();
-        cur.clear();
-        for (int i = 1; i <= line.ccLine.size(); i++)
-            cur.add(line.ccLine.getAt(i));
-        lineTrack.calculateCCLine();
-        return TrackCheck.lineRunsOffRoad(lineTrack);
-    }
-
-    /** 1 TLU = 16 feet. */
-    private static final double METRES_PER_TLU = 4.8768;
 
     public GenerateTrackDialog(TrackWindow parentWindow, String trackFileName) {
         super((Frame) null, "Generate Random Track", false);
@@ -205,12 +158,11 @@ public class GenerateTrackDialog extends JDialog {
         final double dMaxElevation;
         try {
             String sSeed = seedField.getText().trim();
-            lSeed = sSeed.length() == 0 ? nextSeed() : Long.parseLong(sSeed);
+            lSeed = sSeed.length() == 0 ? RandomTrackGeneration.freshSeed() : Long.parseLong(sSeed);
             nTargetTlu = Integer.parseInt(lengthField.getText().trim());
             nCorners = Integer.parseInt(cornersField.getText().trim());
             dMaxElevation = Double.parseDouble(elevationField.getText().trim());
-            if (dMaxElevation < 0)
-                throw new NumberFormatException("elevation change must be 0 or more");
+            RandomTrackGeneration.checkSettings(dMaxElevation);
         }
         catch (NumberFormatException e) {
             statusLabel.setText("Invalid parameter: " + e.getMessage());
@@ -218,11 +170,7 @@ public class GenerateTrackDialog extends JDialog {
         }
 
         if (!fConfirmed) {
-            int nOption = JOptionPane.showConfirmDialog(this,
-                "This replaces ALL track segments and the best line of the open track.\n"
-                + "To revert, close the track without saving. Continue?",
-                "Generate Random Track", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (nOption != JOptionPane.YES_OPTION)
+            if (!cfevolution.gui.MessageBoxes.ask(this, RandomTrackGeneration.CONFIRM))
                 return;
             fConfirmed = true;
         }
@@ -247,48 +195,11 @@ public class GenerateTrackDialog extends JDialog {
 
         new Thread(new Runnable() {
             public void run() {
-                RandomTrackGenerator.Result layout = null;
-                CCLineGenerationResult line = null;
-                String error = null;
-                long[] seeds = seedsToTry(lSeed);
-                for (int nTry = 0; nTry < seeds.length && !fCancelled; nTry++) {
-                    long lTrySeed = seeds[nTry];
-                    error = null;
-                    try {
-                        // Scratch 1: closure iterations
-                        Track scratch = new Track();
-                        if (!scratch.load(new File(fileName)))
-                            throw new Exception("Could not reload " + fileName + " as scratch track");
-                        layout = new RandomTrackGenerator(scratch)
-                            .generate(lTrySeed, nTargetTlu, nCorners, dMaxElevation, listener);
-
-                        if (layout != null) {
-                            // Scratch 2: carry the final layout, generate the best line on it
-                            listener.progress(85, "Working out the best line...");
-                            Track lineTrack = new Track();
-                            lineTrack.load(new File(fileName));
-                            applySegments(lineTrack, layout);
-                            lineTrack.setLayoutMode(false);
-                            lineTrack.calculateTrackLayout();
-                            CCLineGeneratorContext ctx = new CCLineGeneratorContext(lineTrack);
-                            ctx.seamOvershoot = 8;
-                            line = new cfevolution.generator.ccline.geometric.FastestLapCCLineGenerator().generate(ctx, null);
-                            if (!fCancelled && lineRunsOffRoad(lineTrack, line))
-                                throw new Exception("the best line could not be kept on the road. Try another seed, length or number of corners.");
-                        }
-                        break; // success, or cancelled (layout null)
-                    }
-                    catch (Exception e) {
-                        // Retry silently with a fresh seed; only the last failure is reported.
-                        error = e.getMessage();
-                        layout = null;
-                        line = null;
-                    }
-                }
-                if (fCancelled) {
-                    layout = null; // reported as "Cancelled.", not as a failure
-                    error = null;
-                }
+                RandomTrackGeneration.Result done = RandomTrackGeneration.generate(
+                    fileName, lSeed, nTargetTlu, nCorners, dMaxElevation, listener);
+                RandomTrackGenerator.Result layout = done.layout;
+                CCLineGenerationResult line = done.line;
+                String error = done.error;
                 final RandomTrackGenerator.Result finalLayout = layout;
                 final CCLineGenerationResult finalLine = line;
                 final String finalError = error;
@@ -301,56 +212,10 @@ public class GenerateTrackDialog extends JDialog {
         }, "track-generator").start();
     }
 
-    /** Replaces a track's segment list with the generated one, keeping the
-        dummy terminator (stripped of donor commands), and fits the donor
-        pit lane's length to the new connect distance. */
+    /** Kept for the harnesses and tools that call it here: see
+        RandomTrackGeneration.applySegments (moved 2026-11-16). */
     static void applySegments(Track track, RandomTrackGenerator.Result layout) {
-        cfevolution.data.track.TrackSegments segs = track.getTrackSegments();
-
-        cfevolution.data.track.TrackSegment dummy = segs.get(segs.size() - 1);
-        dummy.setCommands(new java.util.Vector<cfevolution.data.track.Command>());
-        segs.clear();
-        // Copies: this runs twice on one layout (the best line is worked out on
-        // a scratch track first), and PitMouth.place below splits and edits
-        // sections in place. Sharing them cut the applied track short of the
-        // one the line was made for, and wrecked the line (2026-10-25).
-        for (int i = 0; i < layout.segments.size(); i++)
-            segs.add(layout.segments.get(i).copy());
-        segs.add(dummy);
-        if (layout.moveStart) {
-            track.getTrackDataHeader().setStartPos(0, layout.startPos[0]);
-            track.getTrackDataHeader().setStartPos(1, layout.startPos[1]);
-        }
-        cfevolution.generator.pitlane.PitLaneFitter.adjustPitLength(
-            track.getPitlaneSegments(), layout.pitDelta);
-        // Generated laps wind right (interior on the right), so the pit
-        // bulges left; donor pit curves mirror their own track's final
-        // corner and would walk the pit off into the void here
-        // The offset was measured before generation began: generation uses
-        // this very track as its scratch pad, so measuring it here would read
-        // a layout the donor never had.
-        cfevolution.generator.pitlane.PitLaneFitter.neutralizeCurvature(
-            track.getPitlaneSegments(), -1, layout.donorPitOffset);
-
-        // The generated layout has its own hills; the pit lane still carries
-        // the donor's. Height is a per-TLU pitch rate the game double-
-        // integrates, so mismatched profiles leave the lane metres above or
-        // below the road. Must run AFTER the new segments are installed.
-        cfevolution.generator.pitlane.PitLaneFitter.followTrackHeights(
-            track.getPitlaneSegments(), segs);
-
-        // Now the lane's shape is final: put the pit lane objects, the pit
-        // joins and the wall gaps where it leaves and rejoins the road, and the
-        // header's pit side where the lane really goes (always the left here;
-        // twelve donors said right, so the game opened the wrong wall).
-        track.setLayoutMode(false);
-        cfevolution.generator.pitlane.PitMouth.place(track);
-
-        // The donor's scenery keeps its distance from the road, which can put
-        // it on another part of the new layout (a tree over a generated
-        // Adelaide's road, 2026-10-26).
-        track.calculateTrackLayout();
-        cfevolution.generator.track.SceneryClearance.removeObjectsOverRoad(track);
+        RandomTrackGeneration.applySegments(track, layout);
     }
 
     private void generationFinished(RandomTrackGenerator.Result layout,
@@ -368,25 +233,10 @@ public class GenerateTrackDialog extends JDialog {
         }
 
         int nTrimmed = trackWindow.applyGeneratedTrack(layout, line.ccLine);
-
-        // Plain language only (owner, 2026-10-11): the closure gap, clearance
-        // and donor-command notes meant nothing to users. The seed stays, so
-        // a track can be made again.
-        StringBuffer status = new StringBuffer();
-        status.append("Track generated from seed ").append(layout.seed).append(": a ")
-              .append(Math.round(layout.totalTlu * METRES_PER_TLU / 100.0) / 10.0)
-              .append(" km lap.");
-        if (nTrimmed > 0)
-            status.append(" Some scenery was left out so the game can load it.");
-        else if (nTrimmed < 0)
-            status.append(" Warning: this track is too large for the game to load.");
-        // The fitter only ever shortens the donor's pit lane, so this needs a
-        // donor already over the limit; no original is (Mexico 205).
-        if (trackWindow.getPitSegCount() > cfevolution.data.track.Track.MAX_PIT_SEGS)
-            status.append(" Warning: the pit lane is too long for the game to load.");
-        statusLabel.setText(status.toString());
+        statusLabel.setText(RandomTrackGeneration.status(layout, nTrimmed, trackWindow.getPitSegCount()));
         progressBar.setValue(100);
         // Leave the dialog open: "Generate & Apply" again rerolls the seed
         // (when the seed field is blank) for quick exploration.
     }
+
 }

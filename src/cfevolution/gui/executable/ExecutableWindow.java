@@ -308,17 +308,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 }
             }
             public void setValueAt(Object v, int r, int c) {
-                if (c == 1) {
-                    String text = name(v, 23, "A driver's name");
-                    if (text == null || text.equals(drivers.getDriverName(r))) return;
-                    drivers.setDriverName(r, text);
-                } else {
-                    // The game uses skill - 1 as a signed rank (GetDriverRank, IDA 0x4C4E), so 0 is one step
-                    // better than 1. Other editors write 0, so it is accepted (owner, 2026-10-25).
-                    Integer n = number(v, 0, 255, "Skill");
-                    if (n == null || n.intValue() == (Integer) getValueAt(r, c)) return;
-                    if (c == 2) drivers.setQualifyingGrip(r, n); else drivers.setRaceGrip(r, n);
-                }
+                cfevolution.edit.Message problem = c == 1
+                    ? cfevolution.edit.ExecutableEdits.setDriverName(drivers, r, String.valueOf(v))
+                    : cfevolution.edit.ExecutableEdits.setSkill(drivers, r, c == 3, String.valueOf(v));
+                if (problem != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, problem); return; }
                 fireTableCellUpdated(r, c);
             }
         };
@@ -331,10 +324,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     // --- Teams ------------------------------------------------------------
 
-    /** The game races the first 18 teams only; 19 and 20 are spare slots. */
-    private static final int RACED_TEAMS = 18;
-    /** The field: fewer entered cars than this and a race cannot be filled. */
-    private static final int MIN_ENTERED_CARS = 26;
+    // The line-up rules (18 raced teams, at least 26 cars) are in cfevolution.edit.ExecutableEdits.
 
     private String carLabel(int carNumber)
     {
@@ -363,20 +353,16 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 }
             }
             public void setValueAt(Object v, int r, int c) {
-                if (c == 1 || c == 2) {
-                    String text = name(v, 12, c == 1 ? "A team name" : "An engine name");
-                    if (text == null || text.equals(getValueAt(r, c))) return;
-                    if (c == 1) teams.setTeamName(r, text); else teams.setEngineName(r, text);
-                } else if (c == 3) {
-                    Integer n = number(v, 0, 1300, "Engine power");
-                    if (n == null || n.intValue() == teams.getBHPSetting(r)) return;
-                    teams.setBHPSetting(r, n);
-                } else {
-                    int car = carNumberOf(v);
-                    if (car < 0 || car == teams.getTeamCar(r, c - 4)) return;
-                    if (!lineUpAllowed(teams, r, c - 4, car)) return;
-                    teams.setTeamCar(r, c - 4, car);
-                }
+                cfevolution.edit.Message problem;
+                if (c == 1)
+                    problem = cfevolution.edit.ExecutableEdits.setTeamName(teams, r, String.valueOf(v));
+                else if (c == 2)
+                    problem = cfevolution.edit.ExecutableEdits.setEngineName(teams, r, String.valueOf(v));
+                else if (c == 3)
+                    problem = cfevolution.edit.ExecutableEdits.setPower(teams, r, String.valueOf(v));
+                else
+                    problem = cfevolution.edit.ExecutableEdits.setTeamCar(teams, r, c - 4, carNumberOf(v));
+                if (problem != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, problem); return; }
                 fireTableCellUpdated(r, c);
             }
         };
@@ -547,49 +533,11 @@ public class ExecutableWindow extends JPanel implements EditorTab
     /** The car number at the start of a line-up label, 0 for "None", -1 if unreadable. */
     private static int carNumberOf(Object value)
     {
-        String text = String.valueOf(value).trim();
-        if (text.equals("None") || text.length() == 0)
-            return 0;
-        int end = 0;
-        while (end < text.length() && Character.isDigit(text.charAt(end)))
-            end++;
-        if (end == 0)
-            return -1;
-        int n = Integer.parseInt(text.substring(0, end));
-        return n <= 40 ? n : -1;
+        return cfevolution.edit.ExecutableEdits.carNumber(String.valueOf(value));
     }
 
     /** Refuses a line-up change that puts a car in two seats or leaves too
         few cars to fill a race, saying why. */
-    private boolean lineUpAllowed(GameTeams teams, int team, int slot, int car)
-    {
-        int entered = 0;
-        for (int t = 0; t < 20; t++)
-        {
-            for (int s = 0; s < 2; s++)
-            {
-                int existing = (t == team && s == slot) ? car : teams.getTeamCar(t, s);
-                if (car != 0 && existing == car && !(t == team && s == slot))
-                {
-                    JOptionPane.showMessageDialog(this, "Car " + car + " already drives for "
-                        + teams.getTeamName(t) + ". Take it out of that team first.",
-                        "Line-up Not Changed", JOptionPane.WARNING_MESSAGE);
-                    return false;
-                }
-                if (t < RACED_TEAMS && existing != 0)
-                    entered++;
-            }
-        }
-        if (entered < MIN_ENTERED_CARS)
-        {
-            JOptionPane.showMessageDialog(this, "The game needs at least " + MIN_ENTERED_CARS
-                + " cars in the first " + RACED_TEAMS + " teams to fill a race.",
-                "Line-up Not Changed", JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-        return true;
-    }
-
     // --- Liveries ---------------------------------------------------------
 
     /** One table of colours: a row per team or driver, a column per part. */
@@ -1224,9 +1172,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 return c == 0 ? ordinal(r + 1) : (Object) (points.getPointValue(r) & 0xFF);
             }
             public void setValueAt(Object v, int r, int c) {
-                Integer n = number(v, 0, 127, "Points");
-                if (n == null || n.intValue() == (points.getPointValue(r) & 0xFF)) return;
-                points.setPointValue(r, n);
+                cfevolution.edit.Message problem = cfevolution.edit.ExecutableEdits.setPoints(points, r, String.valueOf(v));
+                if (problem != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, problem); return; }
                 fireTableCellUpdated(r, c);
             }
         };
@@ -2270,21 +2217,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     public boolean save()
     {
-        // Never write a changed pit lane order that leaves a team without its own box. An invalid
-        // order that came in the file and was not touched is written back as it was.
-        GameTables tables = currentExecutable.getGameTables();
-        if (tables.isPitOrderChanged() && !tables.isPitOrderValid())
+        cfevolution.edit.Message notSaved = cfevolution.edit.ExecutableSaving.save(currentExecutable);
+        if (notSaved != null)
         {
-            JOptionPane.showMessageDialog(this,
-                "The executable was not saved: the pit lane order has a team missing or listed twice.\n"
-              + "On the Pit Lane page, choose a team for each box or use Reset to 1991 Order.",
-                "Not Saved", JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-        if (!currentExecutable.saveData())
-        {
-            JOptionPane.showMessageDialog(this, "The executable could not be saved.", "Save Failed",
-                                          JOptionPane.ERROR_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, notSaved);
             return false;
         }
         setModified(false);
@@ -2293,10 +2229,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     public boolean saveAs()
     {
-        JOptionPane.showMessageDialog(this,
-            "An executable is always saved back to the file it was opened from.\n"
-          + "To keep the original, copy the file before opening it here.",
-            "Save Executable", JOptionPane.INFORMATION_MESSAGE);
+        cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.ExecutableSaving.SAVE_AS);
         return false;
     }
 

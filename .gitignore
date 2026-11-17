@@ -39,8 +39,14 @@ GP.EXE
 *.exe
 *.EXE
 
-# Build script temp file
+# Signing keys (kept outside the repository; never commit one)
+*.keystore
+*.jks
+
+# Build script temp files
 .sources.txt
+.core-sources.txt
+.desktop-sources.txt
 
 # OS noise
 .DS_Store

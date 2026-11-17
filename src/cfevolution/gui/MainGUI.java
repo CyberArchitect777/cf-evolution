@@ -628,7 +628,7 @@ public class MainGUI extends JFrame
         }
         else
         {
-            JOptionPane.showMessageDialog(this, "There was a problem loading the track file specified. \nIt is likely that this is either not a track file, or that the track itself is corrupt.\nPlease try another valid track file", "Error", JOptionPane.ERROR_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFolderOpening.TRACK_NOT_LOADED);
         }
     }
 
@@ -666,29 +666,19 @@ public class MainGUI extends JFrame
         }
         // Before anything can change, the first time: a packed GP.EXE is kept
         // packed in the copy.
-        if (game.getProblem() == null || game.isPacked())
-        {
-            try
-            {
-                game.keepOriginals();
-            }
-            catch (java.io.IOException e)
-            {
-                JOptionPane.showMessageDialog(this, wrap("A copy of the game files could not be kept in "
-                    + GameFolder.BACKUP_FOLDER + File.separator + GameFolder.ORIGINALS_FOLDER
-                    + ". The folder is opened anyway. Nothing in it has been changed.", 70),
-                    "Copy Not Kept", JOptionPane.WARNING_MESSAGE);
-            }
-        }
+        cfevolution.edit.Message notKept = cfevolution.edit.GameFolderOpening.keepOriginals(game);
+        if (notKept != null)
+            JOptionPane.showMessageDialog(this, wrap(notKept.text, 70), notKept.title, JOptionPane.WARNING_MESSAGE);
         if (game.isPacked())
         {
             game = offerToUnpack(game);
             if (game == null)
                 return false;
         }
-        if (game.getProblem() != null)
+        cfevolution.edit.Message problem = cfevolution.edit.GameFolderOpening.problem(game);
+        if (problem != null)
         {
-            JOptionPane.showMessageDialog(this, wrap(game.getProblem(), 70), "Game Folder Not Opened", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, wrap(problem.text, 70), problem.title, JOptionPane.ERROR_MESSAGE);
             return false;
         }
         Preferences.userRoot().node("cfevolution").put(PREF_GAME_FOLDER, game.getFolder().getPath());
@@ -701,39 +691,35 @@ public class MainGUI extends JFrame
         cancelled or it failed (after saying so). */
     private GameFolder offerToUnpack(GameFolder game)
     {
-        String backupName = GameFolder.BACKUP_NAME;
-        int choice = JOptionPane.showOptionDialog(this, wrap(
-            "GP.EXE in this folder is the packed version, which the editor cannot change.\n\n"
-            + "Unpack it now? The original is kept as " + backupName + ". The game runs the unpacked GP.EXE "
-            + "in the same way.", 70),
-            "Unpack GP.EXE", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
-            new String[] { "Unpack", "Cancel" }, "Unpack");
-        if (choice != 0)
+        cfevolution.edit.Message ask = cfevolution.edit.GameFolderOpening.unpackQuestion();
+        int choice = JOptionPane.showOptionDialog(this, wrap(ask.text, 70), ask.title,
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, ask.options, ask.options[0]);
+        if (choice != cfevolution.edit.GameFolderOpening.UNPACK)
             return null;
         boolean replaceBackup = false;
         try
         {
-            if (game.getBackup() != null && !game.backupMatches())
+            if (cfevolution.edit.GameFolderOpening.needsBackupChoice(game))
             {
-                choice = JOptionPane.showOptionDialog(this, wrap(
-                    game.getBackup().getName() + " already exists in this folder. Overwrite it with the GP.EXE "
-                    + "that is there now?\n\nIf you do not, " + game.getBackup().getName() + " is kept as it is "
-                    + "and the current GP.EXE is not kept.", 70),
-                    "Backup Already Exists", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null,
-                    new String[] { "Overwrite", "Don't Overwrite", "Cancel" }, "Don't Overwrite");
-                if (choice != 0 && choice != 1)
+                ask = cfevolution.edit.GameFolderOpening.backupChoice(game);
+                choice = JOptionPane.showOptionDialog(this, wrap(ask.text, 70), ask.title,
+                    JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, ask.options,
+                    ask.options[cfevolution.edit.GameFolderOpening.DONT_OVERWRITE]);
+                if (choice != cfevolution.edit.GameFolderOpening.OVERWRITE
+                    && choice != cfevolution.edit.GameFolderOpening.DONT_OVERWRITE)
                     return null;
-                replaceBackup = choice == 0;
+                replaceBackup = choice == cfevolution.edit.GameFolderOpening.OVERWRITE;
             }
-            game.unpackExecutable(replaceBackup);
         }
         catch (java.io.IOException e)
         {
-            JOptionPane.showMessageDialog(this, "GP.EXE could not be unpacked, so nothing was changed.",
-                "Unpack GP.EXE", JOptionPane.ERROR_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFolderOpening.UNPACK_FAILED);
             return null;
         }
-        return GameFolder.open(game.getFolder());
+        GameFolder unpacked = cfevolution.edit.GameFolderOpening.unpack(game, replaceBackup);
+        if (unpacked == null)
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFolderOpening.UNPACK_FAILED);
+        return unpacked;
     }
 
     /** Opens one of the game folder's other files (a picture file, options,
@@ -866,9 +852,9 @@ public class MainGUI extends JFrame
             case 0:
                 addTab(new ExecutableWindow(currentExecutable, fileName, this));
                 return true;
-            case 1: JOptionPane.showMessageDialog(this, "The file specified is not a known F1GP/WC executable file. \nThis may be because you have selected the wrong file, or \nbecause this executable has not been updated to version \n1.05. In the latter case, upgrading your copy of F1GP/WC to \n1.05 will resolve the problem.", "Incompatible Executable Detected", JOptionPane.ERROR_MESSAGE); break;
-            case 2: JOptionPane.showMessageDialog(this, "An unknown error has occurred during the loading of this \nexecutable file. It is likely that this is either not a \nF1GP/WC executable file, or that the executable itself is \ncorrupt.Please try a valid executable file", "Unknown Error", JOptionPane.ERROR_MESSAGE); break;
-            case 3: JOptionPane.showMessageDialog(this, "The executable file specified is a 1.05 packed version \nof F1GP/WC. An unpacked version of this file is required for \nediting in CF Evolution. Please see the documentation \nfor more details", "Packed Executable Detected", JOptionPane.ERROR_MESSAGE); break;
+            default:
+                cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFolderOpening.executableProblem(loadSuccess));
+                break;
         }
         return false;
     }

@@ -25,7 +25,6 @@
 
 package cfevolution.gui.track;
 
-import cfevolution.edit.TrackCheck;
 import cfevolution.data.track.*;
 
 import javax.swing.*;
@@ -443,129 +442,56 @@ public class TrackPanel extends javax.swing.JPanel {
     */
     private void renderMapContent( Graphics2D g2d )
     {
-        // draw all track segments
-        TrackSegments trackSegments = m_track.getTrackSegments();
-        Seg seg, segNext;
-        m_fLeftFenceBridgedPrev = false;
-        m_fRightFenceBridgedPrev = false;
-        // Array for storing coordinates for display of "bridged" fence.
-        // index 0: starting point of left bridged fence
-        // index 1: end point of left bridged fence (up to current segment)
-        // index 2/3: similar for right bridged fence.
-        m_aXBridgePoints = new int[ 4 ];
-        m_aYBridgePoints = new int[ 4 ];
-        // Get initial fence distance from track header
-        m_nLeftFenceDistPrev = m_track.getTrackDataHeader().getFenceDistL();
-        m_nRightFenceDistPrev = m_track.getTrackDataHeader().getFenceDistL();
-
-        for ( int i = 0; i <= trackSegments.getMaxTrackSegIndex() - 1; i++ )
+        // The shapes come from the core (cfevolution.edit.TrackMap, 2026-11-16), so
+        // every interface draws the same map; drawn here in the same order as
+        // before: road piece i, then best line piece i, then the pit lane, then
+        // the preview.
+        cfevolution.edit.TrackMap map = cfevolution.edit.TrackMap.of( m_track, m_previewOffsets );
+        int aXPoints[] = new int[ 4 ];
+        int aYPoints[] = new int[ 4 ];
+        for ( int i = 0; i < map.road.length; i++ )
         {
-            seg = trackSegments.getSegAt( i );
-            segNext = trackSegments.getSegAt( i + 1 );
+            g2d.setColor( map.roadSector[ i ] == m_nSelectedTrackSegment ? Color.orange : Color.black );
+            drawQuad( g2d, map.road[ i ], aXPoints, aYPoints );
 
-            // Adjust settings for selected/unselected segments
-            if (  seg.m_nTrackSector == m_nSelectedTrackSegment )
+            if ( !map.layoutMode )
             {
-                // Paint selected segment in orange
-                g2d.setColor(Color.orange);
-            }
-            else
-            {
-                // Other segments are painted in black
-                g2d.setColor(Color.black);
-            }
-
-            // draw a polygon in any case.
-            // Each Seg is only one tlu.
-            int aXPoints[] = new int[ 4 ];
-            int aYPoints[] = new int[ 4 ];
-            double dXDiff = seg.getTrackWidthX() >> 3;
-            double dYDiff = seg.getTrackWidthY() >> 3;
-            double dXDiffNext = segNext.getTrackWidthX() >> 3;
-            double dYDiffNext = segNext.getTrackWidthY() >> 3;
-            aXPoints[ 0 ] = scale( seg.getDisplayX() + dXDiff );
-            aYPoints[ 0 ] = scale( seg.getDisplayY() - dYDiff );
-            aXPoints[ 1 ] = scale( segNext.getDisplayX() + dXDiffNext );
-            aYPoints[ 1 ] = scale( segNext.getDisplayY() - dYDiffNext );
-            aXPoints[ 2 ] = scale( segNext.getDisplayX() - dXDiffNext );
-            aYPoints[ 2 ] = scale( segNext.getDisplayY() + dYDiffNext );
-            aXPoints[ 3 ] = scale( seg.getDisplayX() - dXDiff );
-            aYPoints[ 3 ] = scale( seg.getDisplayY() + dYDiff );
-            g2d.drawPolygon( aXPoints, aYPoints, 4 );
-
-            if ( !m_track.getLayoutMode() )
-            {
-                // Draw CCLine using game-accurate lateral offset formula
-                double[] ccPos     = ccLineWorldPos(seg);
-                double[] ccPosNext = ccLineWorldPos(segNext);
-                aXPoints[ 0 ] = scale( ccPos[0] );
-                aYPoints[ 0 ] = scale( ccPos[1] );
-                aXPoints[ 1 ] = scale( ccPosNext[0] );
-                aYPoints[ 1 ] = scale( ccPosNext[1] );
-
-                if ( seg.m_nCCLineSector == m_nSelectedCCLineSegment )
-                {
+                // CCLine using the game-accurate lateral offset formula
+                double[] l = map.line[ i ];
+                if ( map.lineSector[ i ] == m_nSelectedCCLineSegment )
                     g2d.setColor(Color.GREEN);
-                }
-                else if ( isCCLineOutOfBounds(seg) )
-                {
+                else if ( map.lineOffRoad[ i ] )
                     g2d.setColor(Color.ORANGE);
-                }
                 else
-                {
                     g2d.setColor(Color.RED);
-                }
-                g2d.drawLine(aXPoints[ 0 ], aYPoints[ 0 ], aXPoints[ 1 ], aYPoints[ 1 ] );
+                g2d.drawLine( scale( l[ 0 ] ), scale( l[ 1 ] ), scale( l[ 2 ] ), scale( l[ 3 ] ) );
             }
         }
 
-        // Draw pit lane segments
-        TrackSegments pitlaneSegments = m_track.getPitlaneSegments();
-        if (pitlaneSegments.getMaxTrackSegIndex() > 0)
+        // Pit lane segments
+        for ( int i = 0; i < map.pit.length; i++ )
         {
-            for (int i = 0; i <= pitlaneSegments.getMaxTrackSegIndex() - 1; i++)
-            {
-                seg     = pitlaneSegments.getSegAt(i);
-                segNext = pitlaneSegments.getSegAt(i + 1);
-
-                if (seg.m_nTrackSector == m_nSelectedPitLaneSegment)
-                    g2d.setColor(Color.pink);
-                else
-                    g2d.setColor(Color.blue);
-
-                int[] aXPoints = new int[4];
-                int[] aYPoints = new int[4];
-                double dXDiff     = seg.getTrackWidthX()     >> 3;
-                double dYDiff     = seg.getTrackWidthY()     >> 3;
-                double dXDiffNext = segNext.getTrackWidthX() >> 3;
-                double dYDiffNext = segNext.getTrackWidthY() >> 3;
-                aXPoints[0] = scale(seg.getDisplayX()     + dXDiff);
-                aYPoints[0] = scale(seg.getDisplayY()     - dYDiff);
-                aXPoints[1] = scale(segNext.getDisplayX() + dXDiffNext);
-                aYPoints[1] = scale(segNext.getDisplayY() - dYDiffNext);
-                aXPoints[2] = scale(segNext.getDisplayX() - dXDiffNext);
-                aYPoints[2] = scale(segNext.getDisplayY() + dYDiffNext);
-                aXPoints[3] = scale(seg.getDisplayX()     - dXDiff);
-                aYPoints[3] = scale(seg.getDisplayY()     + dYDiff);
-                g2d.drawPolygon(aXPoints, aYPoints, 4);
-            }
+            g2d.setColor( map.pitSector[ i ] == m_nSelectedPitLaneSegment ? Color.pink : Color.blue );
+            drawQuad( g2d, map.pit[ i ], aXPoints, aYPoints );
         }
 
-        // Draw the generated best line preview, if one is being decided on
-        if ( m_previewOffsets != null )
+        // The generated best line preview, if one is being decided on
+        if ( map.preview.length > 0 )
         {
             g2d.setColor(Color.MAGENTA);
-            int nCount = Math.min(m_previewOffsets.length, trackSegments.getMaxTrackSegIndex());
-            for (int i = 0; i < nCount - 1; i++)
-            {
-                seg     = trackSegments.getSegAt(i);
-                segNext = trackSegments.getSegAt(i + 1);
-                double[] pos     = ccLineWorldPos(seg,     m_previewOffsets[i]);
-                double[] posNext = ccLineWorldPos(segNext, m_previewOffsets[i + 1]);
-                g2d.drawLine(scale(pos[0]), scale(pos[1]),
-                             scale(posNext[0]), scale(posNext[1]));
-            }
+            for ( double[] l : map.preview )
+                g2d.drawLine( scale( l[ 0 ] ), scale( l[ 1 ] ), scale( l[ 2 ] ), scale( l[ 3 ] ) );
         }
+    }
+
+    private void drawQuad( Graphics2D g2d, double[] q, int[] aXPoints, int[] aYPoints )
+    {
+        for ( int k = 0; k < 4; k++ )
+        {
+            aXPoints[ k ] = scale( q[ 2 * k ] );
+            aYPoints[ k ] = scale( q[ 2 * k + 1 ] );
+        }
+        g2d.drawPolygon( aXPoints, aYPoints, 4 );
     }
 
     /**
@@ -1323,17 +1249,7 @@ public class TrackPanel extends javax.swing.JPanel {
         Returns [x, y] in track coordinates.
     */
     private double[] ccLineWorldPos(Seg seg) {
-        return ccLineWorldPos(seg, seg.getCCLine());
-    }
-
-    private double[] ccLineWorldPos(Seg seg, double dOffset) {
-        double wSegPosY   = (double)((long)(dOffset * seg.getAngleZChangeMulHalfPI()) >> 15);
-        double cosA = Math.cos(seg.getAngleZ() * ANGLE_SCALE_RAD);
-        double sinA = Math.sin(seg.getAngleZ() * ANGLE_SCALE_RAD);
-        return new double[] {
-            seg.getDisplayX() + dOffset  * cosA + wSegPosY * sinA,
-            seg.getDisplayY() + wSegPosY * cosA - dOffset  * sinA
-        };
+        return cfevolution.edit.TrackMap.worldPos(seg, seg.getCCLine());
     }
 
     /** Candidate best line preview (lateral offset per Seg), drawn in
@@ -1349,20 +1265,6 @@ public class TrackPanel extends javax.swing.JPanel {
     public void clearPreview() {
         m_previewOffsets = null;
         repaint();
-    }
-
-    /**
-        Returns true if the CCLine point for a Seg is well off the road: more
-        than TrackCheck's limit (twice the road's half-width), so the orange
-        stretches are the ones Check Track's warning points to. Until
-        2026-10-25 this used an 8x-inflated reading of the game's width check
-        and only fired at about seven half-widths.
-    */
-    private boolean isCCLineOutOfBounds(Seg seg) {
-        double wx = seg.getTrackWidthX() + seg.getExtraSideX();
-        double wy = seg.getTrackWidthY() + seg.getExtraSideY();
-        double halfRoad = Math.sqrt(wx * wx / 64.0 + wy * wy / 64.0);
-        return Math.abs(seg.getCCLine()) > TrackCheck.WORST_EXCURSION_WARNING * halfRoad;
     }
 
     /**

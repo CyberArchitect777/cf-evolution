@@ -19,6 +19,8 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.BestLineGeneration;
+
 import java.awt.*;
 import java.io.File;
 import java.util.prefs.Preferences;
@@ -204,58 +206,6 @@ public class GenerateCCLineDialog extends JDialog {
         getContentPane().add(south, BorderLayout.SOUTH);
     }
 
-    /** Warning text when the generated line behaves far outside anything
-        the original tracks do, or null when it does not.
-
-        On a track whose end does not return to its start, the game slides
-        every Seg to close the gap, so the world path the generators
-        optimise is a distorted version of the road and the line can come
-        out badly. Nothing else catches it: `CCLineEvaluator` scores such
-        a line valid — measured on a line straying 7.9x off the road.
-
-        The test is on the line itself rather than on how open the track
-        is, because the two turned out to be unrelated (Session 25,
-        measured over all 16 reduced tracks: the worst line of the set
-        came from one of the more closed tracks, while the two most open
-        produced clean lines).
-
-        Thresholds are set from what the originals actually do: their
-        hand-tuned lines peak at 1.05x the physical road with kicks up to
-        683, and lines generated on them peak at 1.27x with kicks up to
-        922. Reduced tracks legitimately reach kicks of about 2,400, so
-        the bar sits above that. */
-    private String lineQualityWarning(CCLineGenerationResult generated) {
-        if (generated == null || generated.score == null || generated.score.simulation == null)
-            return null;
-        CCLineTrackGeometry geo = new CCLineTrackGeometry(track);
-        cfevolution.generator.ccline.CCLineSimulator.Result sim = generated.score.simulation;
-        if (sim.ccLine.length < geo.segCount)
-            return null;
-        double dWorst = 0;
-        int nMaxKick = 0;
-        for (int i = 0; i < geo.segCount; i++) {
-            if (geo.physicalBound[i] > 0)
-                dWorst = Math.max(dWorst, Math.abs(sim.ccLine[i]) / geo.physicalBound[i]);
-            int j = i + 1 >= geo.segCount ? 0 : i + 1;
-            nMaxKick = Math.max(nMaxKick, Math.abs(sim.ccLine[j] - sim.ccLine[i]));
-        }
-        if (dWorst <= WORST_EXCURSION_WARNING && nMaxKick <= MAX_KICK_WARNING)
-            return null;
-        return "WARNING: the line runs to "
-             + (Math.round(dWorst * 100) / 100.0) + "x the road half-width"
-             + " with a biggest sideways step of " + nMaxKick
-             + " (originals stay near 1.0x and under 1,000). The generator"
-             + " optimises the road as the game compiles it, and on a track"
-             + " whose end does not return to its start that shape is"
-             + " distorted. Check the preview before applying.";
-    }
-
-    /** Excursion, as a multiple of the physical road half-width, past which
-        a generated line is reported as suspect. */
-    private static final double WORST_EXCURSION_WARNING = 2.0;
-
-    /** Largest acceptable sideways step between adjacent Segs. */
-    private static final int MAX_KICK_WARNING = 3000;
 
     private void chooseFolder() {
         JFileChooser chooser = new JFileChooser(folderField.getText());
@@ -268,24 +218,22 @@ public class GenerateCCLineDialog extends JDialog {
     private void startGeneration() {
         final CCLineGeneratorContext context;
         try {
-            context = new CCLineGeneratorContext(track);
-            context.iterations = Integer.parseInt(iterationsField.getText().trim());
-            context.seamOvershoot = Integer.parseInt(overshootField.getText().trim());
-            if (context.seamOvershoot < 0 || context.seamOvershoot > 255)
-                throw new NumberFormatException("seam overshoot must be 0-255");
-            int nStandoff = Integer.parseInt(standoffField.getText().trim());
-            if (nStandoff < 5 || nStandoff > 60)
-                throw new NumberFormatException("edge standoff must be 5-60 (%)");
-            context.edgeStandoff = nStandoff / 100.0;
+            // checked in the same order as always, so the same problem is reported first
+            int nIterations = Integer.parseInt(iterationsField.getText().trim());
+            int nOvershoot = BestLineGeneration.checkOvershoot(Integer.parseInt(overshootField.getText().trim()));
+            int nStandoff = BestLineGeneration.checkStandoff(Integer.parseInt(standoffField.getText().trim()));
+            File training = null;
             if (fNeedsTrainingFolder) {
                 String path = folderField.getText().trim();
                 if (path.length() == 0) {
-                    statusLabel.setText("Please select the folder with original track files.");
+                    statusLabel.setText(BestLineGeneration.NEED_TRAINING_FOLDER);
                     return;
                 }
-                context.trainingFolder = new File(path);
-                Preferences.userRoot().node("cfevolution").put(PREF_TRAINING_FOLDER, path);
+                training = new File(path);
             }
+            context = BestLineGeneration.settings(track, nIterations, nOvershoot, nStandoff, training);
+            if (training != null)
+                Preferences.userRoot().node("cfevolution").put(PREF_TRAINING_FOLDER, training.getPath());
         }
         catch (NumberFormatException e) {
             statusLabel.setText("Invalid parameter: " + e.getMessage());
@@ -316,31 +264,9 @@ public class GenerateCCLineDialog extends JDialog {
         final boolean fComplete = completeModeButton.isSelected();
         workerThread = new Thread(new Runnable() {
             public void run() {
-                CCLineGenerationResult generated = null;
-                String error = null;
-                try {
-                    generated = generator.generate(context, listener);
-                    // Completion mode: keep the existing sectors, generate
-                    // only the remaining lap targeting the method's line,
-                    // rejoining the kept line's own stamps at the wrap
-                    if (fComplete && generated != null) {
-                        cfevolution.data.track.CCLine completed =
-                            CCLineCompletion.complete(context.geometry,
-                                track.getCCLine(),
-                                generated.score.simulation, context.seamOvershoot);
-                        if (completed == null)
-                            error = "Nothing to complete: the existing line is empty"
-                                  + " or already covers the whole lap.";
-                        else
-                            generated = new CCLineGenerationResult(completed,
-                                context.evaluator.score(completed));
-                    }
-                }
-                catch (Exception e) {
-                    error = e.getMessage();
-                }
-                final CCLineGenerationResult finalResult = generated;
-                final String finalError = error;
+                BestLineGeneration.Run done = BestLineGeneration.run(generator, context, track, fComplete, listener);
+                final CCLineGenerationResult finalResult = done.result;
+                final String finalError = done.error;
                 SwingUtilities.invokeLater(new Runnable() {
                     public void run() {
                         generationFinished(finalResult, finalError);
@@ -354,26 +280,19 @@ public class GenerateCCLineDialog extends JDialog {
     private void generationFinished(CCLineGenerationResult generated, String error) {
         generateButton.setEnabled(true);
         if (error != null) {
-            statusLabel.setText("Failed: " + error);
+            statusLabel.setText(BestLineGeneration.status(track, null, error));
             progressBar.setValue(0);
             return;
         }
         if (generated == null) {
-            statusLabel.setText("Cancelled.");
+            statusLabel.setText(BestLineGeneration.status(track, null, null));
             progressBar.setValue(0);
             return;
         }
         result = generated;
         progressBar.setValue(100);
 
-        // Plain language only (owner, 2026-10-11). The score, the out-of-bounds
-        // count and the generators' own diagnostics meant nothing to users;
-        // the one judgement that matters is whether the line stays on the road.
-        if (lineQualityWarning(result) != null)
-            statusLabel.setText("Done, but parts of this line run well off the road."
-                + " Check the preview on the map before applying.");
-        else
-            statusLabel.setText("Done. Check the preview on the map, then Apply or Discard.");
+        statusLabel.setText(BestLineGeneration.status(track, result, null));
 
         trackWindow.showBestLinePreview(result.previewOffsets);
         applyButton.setEnabled(true);
