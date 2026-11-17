@@ -25,14 +25,26 @@ import android.content.DialogInterface;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.Spinner;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import cfevolution.edit.CarSettingsForm;
 import cfevolution.edit.Message;
+import cfevolution.edit.PropertySheet;
+import cfevolution.edit.SegmentCommands;
+import cfevolution.edit.TrackOutline;
+import cfevolution.edit.RaceStrategyForm;
 import cfevolution.edit.RandomTrackGeneration;
 import cfevolution.edit.TrackCheck;
 import cfevolution.edit.TrackMap;
@@ -53,6 +65,9 @@ public class TrackActivity extends Activity
     private TrackMapView mapView;
     private LinearLayout banners;
     private TextView status;
+    private HorizontalScrollView pickedBar;
+    private Button commandsButton, aboveButton, belowButton, deleteButton, repairButton;
+    private static final String MAP_HINT = "Pinch to zoom, drag to move, double-tap to see the whole track. Tap a segment to pick it.";
     private volatile boolean cancelled;
 
     protected void onCreate(Bundle state)
@@ -75,25 +90,46 @@ public class TrackActivity extends Activity
         mapView.setScreen(screen, new TrackMapView.Picked() {
             public void picked(int section, int sector)
             {
-                status.setText((section == TrackMap.TRACK ? "Track segment " : section == TrackMap.PIT ? "Pit lane segment "
-                                : "Best line segment ") + sector);
+                screen.pick(section, sector);       // TrackMap and TrackOutline number the lists alike
+                showPicked();
             }
         });
         col.addView(mapView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
-        status = Ui.text(this, "Pinch to zoom, drag to move, double-tap to see the whole track.", 13);
+        status = Ui.text(this, MAP_HINT, 13);
         int p = Ui.dp(this, 8);
         status.setPadding(p, p / 2, p, p / 2);
         col.addView(status);
 
+        // what can be done with the picked part
+        LinearLayout pickedTools = new LinearLayout(this);
+        pickedTools.addView(Ui.button(this, "Properties", click(new Runnable() { public void run() { properties(); } })));
+        commandsButton = Ui.button(this, "Commands", click(new Runnable() { public void run() { commands(); } }));
+        pickedTools.addView(commandsButton);
+        aboveButton = Ui.button(this, "Add Above", click(new Runnable() { public void run() { flow(screen.addSegment(true)); } }));
+        pickedTools.addView(aboveButton);
+        belowButton = Ui.button(this, "Add Below", click(new Runnable() { public void run() { flow(screen.addSegment(false)); } }));
+        pickedTools.addView(belowButton);
+        deleteButton = Ui.button(this, "Delete", click(new Runnable() { public void run() { flow(screen.deleteSegment()); } }));
+        pickedTools.addView(deleteButton);
+        pickedBar = new HorizontalScrollView(this);
+        pickedBar.addView(pickedTools);
+        col.addView(pickedBar);
+
         LinearLayout tools = new LinearLayout(this);
         tools.addView(Ui.button(this, "Save", click(new Runnable() { public void run() { save(null); } })));
+        tools.addView(Ui.button(this, "Segments", click(new Runnable() { public void run() { segments(); } })));
         tools.addView(Ui.button(this, "Check Track", click(new Runnable() { public void run() { checkTrack(); } })));
         tools.addView(Ui.button(this, "Generate Best Line", click(new Runnable() { public void run() { bestLine(); } })));
+        repairButton = Ui.button(this, "Repair Best Line After Edit", click(new Runnable() { public void run() { flow(screen.repairLine()); } }));
+        tools.addView(repairButton);
         tools.addView(Ui.button(this, "Random Track", click(new Runnable() { public void run() { randomTrack(); } })));
         tools.addView(Ui.button(this, "Move Away From Map Edge", click(new Runnable() { public void run() { flow(screen.moveFromEdge()); } })));
         tools.addView(Ui.button(this, "Match Start/End Heading", click(new Runnable() { public void run() { flow(screen.matchHeading()); } })));
         tools.addView(Ui.button(this, "Reduce to Minimal Track", click(new Runnable() { public void run() { flow(screen.reduceToMinimal()); } })));
+        tools.addView(Ui.button(this, cfevolution.edit.HorizonPage.TITLE, click(new Runnable() { public void run() { horizon(); } })));
+        tools.addView(Ui.button(this, RaceStrategyForm.TITLE, click(new Runnable() { public void run() { raceStrategy(null); } })));
+        tools.addView(Ui.button(this, CarSettingsForm.TITLE, click(new Runnable() { public void run() { carSettings(null); } })));
         HorizontalScrollView bar = new HorizontalScrollView(this);
         bar.addView(tools);
         col.addView(bar);
@@ -113,6 +149,8 @@ public class TrackActivity extends Activity
         if (getActionBar() != null)
             getActionBar().setSubtitle(screen.circuit != null ? screen.file.getName() : null);
         mapView.refresh();
+        showPicked();
+        repairButton.setEnabled(screen.canRepairLine());
         banners.removeAllViews();
         for (final TrackTools.Banner b : screen.banners())
         {
@@ -126,6 +164,233 @@ public class TrackActivity extends Activity
             row.addView(Ui.button(this, b.fixLabel, click(new Runnable() { public void run() { fix(b.action); } })));
             banners.addView(row);
         }
+    }
+
+    // --- The picked part: properties, commands, adding and deleting ------------
+
+    /** The picked part under the map, and what can be done with it. */
+    private void showPicked()
+    {
+        int kind = screen.pickedKind();
+        boolean segment = screen.pickedNo() > 0;
+        status.setText(kind == TrackOutline.NOTHING ? MAP_HINT : screen.heading() + "  \u00b7  " + screen.hint());
+        pickedBar.setVisibility(kind == TrackOutline.NOTHING ? View.GONE : View.VISIBLE);
+        commandsButton.setVisibility(screen.pickedSegment() != null ? View.VISIBLE : View.GONE);
+        aboveButton.setVisibility(segment ? View.VISIBLE : View.GONE);
+        belowButton.setVisibility(segment ? View.VISIBLE : View.GONE);
+        deleteButton.setVisibility(segment ? View.VISIBLE : View.GONE);
+        mapView.select(kind, screen.pickedNo());
+    }
+
+    /** The track's lists, as the desktop's: the headers, the three kinds of segment, and Remove All. */
+    private void segments()
+    {
+        final int[] kinds = { TrackOutline.TRACK, TrackOutline.PIT, TrackOutline.LINE };
+        String[] items = new String[7];
+        items[0] = TrackOutline.HEADERS_BRANCH;
+        for (int i = 0; i < 3; i++)
+            items[1 + i] = TrackOutline.branch(kinds[i]) + " (" + TrackOutline.count(screen.track, kinds[i]) + ")";
+        items[4] = "Remove All Track Segments...";
+        items[5] = "Remove All Pit Segments...";
+        items[6] = "Remove All Best Line Segments...";
+        new AlertDialog.Builder(this).setTitle(TrackOutline.ROOT)
+            .setItems(items, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    if (which == 0)
+                    {
+                        screen.pick(TrackOutline.HEADERS, -1);
+                        refresh();
+                        properties();
+                    }
+                    else if (which <= 3)
+                        segmentList(kinds[which - 1]);
+                    else
+                        flow(screen.clearSegments(kinds[which - 4]));
+                }
+            })
+            .setNegativeButton("Close", null).show();
+    }
+
+    private void segmentList(final int kind)
+    {
+        new AlertDialog.Builder(this).setTitle(TrackOutline.branch(kind))
+            .setItems(screen.list(kind), new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    screen.pick(kind, which + 1);
+                    refresh();
+                }
+            })
+            .setNegativeButton("Close", null).show();
+    }
+
+    /** OK on a property sheet: the refusal or the notice, or null. */
+    private interface SheetOk
+    {
+        Message ok(PropertySheet sheet);
+    }
+
+    private void properties()
+    {
+        PropertySheet sheet = screen.properties();
+        if (sheet != null)
+            sheetDialog(screen.heading(), sheet, new SheetOk() {
+                public Message ok(PropertySheet s) { return screen.applyProperties(s); }
+            }, null, null, null);
+    }
+
+    /**
+     * A property sheet as a form: numbers to type, tick boxes, and a choice
+     * that rebuilds the form. What is typed goes into the sheet; OK writes it
+     * (a refusal reopens the form as typed), Cancel drops it.
+     */
+    private void sheetDialog(final String title, final PropertySheet sheet, final SheetOk ok,
+                             String extraLabel, final Runnable extra, final Runnable afterOk)
+    {
+        LinearLayout form = Ui.column(this);
+        final AlertDialog[] dialog = new AlertDialog[1];
+        final TextView note = sheet.note() != null ? hint(sheet.note()) : null;
+        for (int r = 0; r < sheet.rows(); r++)
+        {
+            final int row = r;
+            switch (sheet.kind(r))
+            {
+                case PropertySheet.FLAG:
+                {
+                    CheckBox box = new CheckBox(this);
+                    box.setText(sheet.label(r));
+                    box.setChecked(sheet.ticked(r));
+                    box.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                        public void onCheckedChanged(CompoundButton b, boolean on) { sheet.tick(row, on); }
+                    });
+                    form.addView(box);
+                    break;
+                }
+                case PropertySheet.CHOICE:
+                {
+                    form.addView(Ui.text(this, sheet.label(r), 14));
+                    Spinner choice = new Spinner(this);
+                    ArrayAdapter<String> items = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, sheet.options(r));
+                    items.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                    choice.setAdapter(items);
+                    choice.setSelection(sheet.chosen(r));
+                    choice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                        public void onItemSelected(AdapterView<?> parent, View v, int position, long id)
+                        {
+                            if (position == sheet.chosen(row))
+                                return;
+                            sheet.choose(row, position);         // the rows change with the choice
+                            dialog[0].dismiss();
+                            sheetDialog(title, sheet, ok, null, extra, afterOk);
+                        }
+                        public void onNothingSelected(AdapterView<?> parent) { }
+                    });
+                    form.addView(choice);
+                    break;
+                }
+                default:
+                {
+                    EditText box = Ui.field(form, sheet.label(r), sheet.text(r), true);
+                    box.addTextChangedListener(new TextWatcher() {
+                        public void beforeTextChanged(CharSequence c, int a, int b, int n) { }
+                        public void onTextChanged(CharSequence c, int a, int b, int n) { }
+                        public void afterTextChanged(Editable e)
+                        {
+                            sheet.type(row, e.toString());
+                            if (note != null)
+                                note.setText(sheet.note());
+                        }
+                    });
+                }
+            }
+        }
+        if (note != null)
+            form.addView(note);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(title).setView(scroll)
+            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    Message m = ok.ok(sheet);
+                    final boolean refused = sheet.problem() != null;
+                    refresh();
+                    Dialogs.show(TrackActivity.this, m, new Runnable() {
+                        public void run()
+                        {
+                            if (refused)
+                                sheetDialog(title, sheet, ok, null, extra, afterOk);
+                            else if (afterOk != null)
+                                afterOk.run();
+                        }
+                    });
+                }
+            })
+            .setNegativeButton("Cancel", null);
+        if (extra != null)
+            b.setNeutralButton(extraLabel != null ? extraLabel : "Remove", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { extra.run(); }
+            });
+        dialog[0] = b.show();
+    }
+
+    /** The picked segment's commands: tap one for its parameters, or add one. */
+    private void commands()
+    {
+        if (screen.pickedSegment() == null)
+            return;
+        new AlertDialog.Builder(this).setTitle(screen.heading() + ": " + screen.commandsText())
+            .setItems(screen.commands(), new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { command(which); }
+            })
+            .setPositiveButton(SegmentCommands.ADD + "...", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { addCommand(); }
+            })
+            .setNegativeButton("Close", null).show();
+    }
+
+    private void addCommand()
+    {
+        new AlertDialog.Builder(this).setTitle(SegmentCommands.ADD_TIP)
+            .setItems(SegmentCommands.available(), new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    int at = screen.addCommand(which);
+                    refresh();
+                    command(at);
+                }
+            })
+            .setNegativeButton("Cancel", null).show();
+    }
+
+    /** One command: its parameters to change, and Remove. */
+    private void command(final int index)
+    {
+        final Runnable remove = new Runnable() {
+            public void run()
+            {
+                screen.removeCommand(index);
+                refresh();
+                commands();
+            }
+        };
+        final Runnable back = new Runnable() { public void run() { commands(); } };
+        PropertySheet p = screen.commandProperties(index);
+        if (p == null)
+        {
+            new AlertDialog.Builder(this).setTitle(screen.commands()[index]).setMessage(screen.commandHeading(index))
+                .setNeutralButton(SegmentCommands.REMOVE, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) { remove.run(); }
+                })
+                .setNegativeButton("Close", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int which) { back.run(); }
+                }).show();
+            return;
+        }
+        sheetDialog(screen.commandHeading(index), p, new SheetOk() {
+            public Message ok(PropertySheet s) { return screen.applyCommand(s); }
+        }, SegmentCommands.REMOVE, remove, back);
     }
 
     private void flow(Flow f)
@@ -316,6 +581,124 @@ public class TrackActivity extends Activity
             if (dialog.isShowing())
                 dialog.dismiss();
         }
+    }
+
+    // --- Edit > Race Strategy, Edit > Car and AI Settings -----------------------
+
+    private TextView hint(String text)
+    {
+        TextView h = Ui.text(this, text, 12);
+        h.setTextColor(Color.GRAY);
+        return h;
+    }
+
+    /** A form dialog; OK hands over the typed values, Cancel drops them. */
+    private interface Typed
+    {
+        void ok(String[] values);
+    }
+
+    private void formDialog(String title, LinearLayout form, final EditText[] boxes, final Typed typed)
+    {
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+        new AlertDialog.Builder(this).setTitle(title).setView(scroll)
+            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    String[] v = new String[boxes.length];
+                    for (int i = 0; i < v.length; i++)
+                        v[i] = boxes[i].getText().toString();
+                    typed.ok(v);
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    /** Laps, first stop and stop chance; again shows what was typed after a refusal. */
+    private void raceStrategy(String[] again)
+    {
+        final RaceStrategyForm f = screen.raceStrategy();
+        if (f == null)
+        {
+            Dialogs.show(this, RaceStrategyForm.NOT_AVAILABLE, null);
+            return;
+        }
+        LinearLayout form = Ui.column(this);
+        final EditText[] boxes = new EditText[3];
+        for (int i = 0; i < 3; i++)
+        {
+            boxes[i] = Ui.field(form, RaceStrategyForm.LABELS[i], again != null ? again[i] : String.valueOf(f.shown(i)), true);
+            form.addView(hint(RaceStrategyForm.HINTS[i]));
+        }
+        formDialog(RaceStrategyForm.TITLE, form, boxes, new Typed() {
+            public void ok(final String[] v)
+            {
+                Message m = screen.applyRaceStrategy(f, v);
+                refresh();
+                Dialogs.show(TrackActivity.this, m, m == null ? null : new Runnable() {
+                    public void run() { raceStrategy(v); }
+                });
+            }
+        });
+    }
+
+    /** The circuit's car and computer car settings, in the desktop's groups. */
+    private void carSettings(String[] again)
+    {
+        final CarSettingsForm f = screen.carSettings();
+        LinearLayout form = Ui.column(this);
+        final EditText[] boxes = new EditText[f.fields().size()];
+        for (CarSettingsForm.Group g : f.groups())
+        {
+            form.addView(Ui.heading(this, g.title));
+            if (g.note != null)
+                form.addView(hint(g.note));
+            for (CarSettingsForm.Row r : g.rows)
+            {
+                for (int i = 0; i < r.fields.size(); i++)
+                {
+                    CarSettingsForm.Field x = r.fields.get(i);
+                    String label = r.fields.size() > 1 ? "Gear " + (i + 1) : r.label;
+                    if (x.kind == CarSettingsForm.TYRE)
+                        label += " (A, B, C or D)";
+                    boxes[x.at] = Ui.field(form, label, again != null ? again[x.at] : f.text(x, f.shown(x)), x.kind != CarSettingsForm.TYRE);
+                }
+                form.addView(hint(r.hint));
+            }
+        }
+        formDialog(CarSettingsForm.TITLE, form, boxes, new Typed() {
+            public void ok(final String[] v)
+            {
+                Message m = screen.applyCarSettings(f, v);
+                refresh();
+                Dialogs.show(TrackActivity.this, m, m == null ? null : new Runnable() {
+                    public void run() { carSettings(v); }
+                });
+            }
+        });
+    }
+
+    // --- Edit > Horizon --------------------------------------------------------
+
+    private void horizon()
+    {
+        cfevolution.edit.HorizonPage page = screen.horizon();
+        if (page == null)
+        {
+            Dialogs.show(this, cfevolution.edit.HorizonPage.NO_GAME_EXE, null);
+            return;
+        }
+        Session.horizon = page;
+        startActivity(new android.content.Intent(this, HorizonActivity.class));
+    }
+
+    protected void onResume()
+    {
+        super.onResume();
+        if (screen != null && mapView != null)
+            refresh();
     }
 
     // --- Saving ------------------------------------------------------------

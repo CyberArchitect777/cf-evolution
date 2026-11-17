@@ -19,58 +19,57 @@
 package cfevolution.gui.gamefiles;
 
 import cfevolution.data.gamefiles.NameFile;
+import cfevolution.edit.NameFilePage;
 import cfevolution.gui.MainGUI;
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
 
 /**
  * A name file (.NAM): the driver, team and engine names the game loads from
- * its Load/Save menu, or at start-up when the preferences say so.
+ * its Load/Save menu, or at start-up when the preferences say so. A view over
+ * the core's NameFilePage (2026-11-17).
  *
  * @author barrie
  */
 public class NameFileTab extends GameFileTab
 {
-    private final NameFile names;
+    private final NameFilePage names;
 
-    public NameFileTab(NameFile names, String fileName, MainGUI mainWindow)
+    public NameFileTab(NameFile file, String fileName, MainGUI mainWindow)
+    {
+        this(new NameFilePage(file), fileName, mainWindow);
+    }
+
+    public NameFileTab(NameFilePage names, String fileName, MainGUI mainWindow)
     {
         super(names, fileName, mainWindow);
         this.names = names;
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Drivers", new JScrollPane(nameTable(NameFile.DRIVERS, "Driver", NameFile.DRIVER_LENGTH - 1, 0)));
-        tabs.addTab("Teams", new JScrollPane(nameTable(NameFile.TEAMS, "Team", NameFile.TEAM_LENGTH - 1, 1)));
-        tabs.addTab("Engines", new JScrollPane(nameTable(NameFile.TEAMS, "Engine", NameFile.TEAM_LENGTH - 1, 2)));
-        add(page("Name File", "Driver names by car number, and team and engine names in the order the game lists them.",
-                 tabs));
+        for (int kind = 0; kind < NameFilePage.TAB_TITLES.length; kind++)
+            tabs.addTab(NameFilePage.TAB_TITLES[kind], new JScrollPane(nameTable(kind)));
+        add(page(tabs));
     }
 
-    private JTable nameTable(final int rows, final String what, final int maxLength, final int kind)
+    private JTable nameTable(final int kind)
     {
+        final String[] columns = NameFilePage.columns(kind);
         AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return rows; }
+            public int getRowCount() { return NameFilePage.rows(kind); }
             public int getColumnCount() { return 2; }
-            public String getColumnName(int c) { return c == 0 ? (kind == 0 ? "Car" : "No.") : what; }
+            public String getColumnName(int c) { return columns[c]; }
             public Class<?> getColumnClass(int c) { return c == 0 ? Integer.class : String.class; }
             public boolean isCellEditable(int r, int c) { return c == 1; }
             public Object getValueAt(int r, int c) {
                 if (c == 0) return r + 1;
-                return kind == 0 ? names.getDriver(r) : kind == 1 ? names.getTeam(r) : names.getEngine(r);
+                return names.get(kind, r);
             }
             public void setValueAt(Object v, int r, int c) {
-                String t = text(v, maxLength, "A name");
-                if (t == null || t.equals(getValueAt(r, c))) return;
-                if (kind == 0) names.setDriver(r, t); else if (kind == 1) names.setTeam(r, t); else names.setEngine(r, t);
+                if (refused(names.set(kind, r, v)) || !names.changed()) return;
                 fireTableCellUpdated(r, c);
             }
         };
         JTable table = table(model, new int[] { 50, 0 });
-        table.setName(what.toLowerCase() + "s");
+        table.setName(NameFilePage.tableName(kind));
         return table;
-    }
-
-    public String getStatusText()
-    {
-        return "Name file  ·  40 drivers  ·  20 teams and engines";
     }
 }

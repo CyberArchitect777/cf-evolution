@@ -20,6 +20,7 @@
 package cfevolution.gui.executable;
 
 import cfevolution.data.executable.GameLiveries;
+import cfevolution.edit.LiveriesPage;
 import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
@@ -34,32 +35,16 @@ public class PaletteChooser extends JDialog
 {
     private static final int CELL = 22;
 
-    /** What a race palette colour is used for, or null for an ordinary colour. From the F1GP-SDL
-        project's palette code, which reproduces the game's dry and wet palettes exactly (2026-10-25):
-        the game rebuilds the ground (16-31) for each circuit and textures 18 and 26, overwrites the sky
-        (128-135, 232-239) and the distant scenery shades (141-151, 158, 160-167), and draws 27 as the
-        crowd. A car painted in any of these looks wrong in the race. */
+    /** What a race palette colour is used for, or null for an ordinary colour (edit/LiveriesPage, since 2026-11-17). */
     static String specialUse(int index)
     {
-        if (index == 27)
-            return "The crowd in the grandstands: a car painted in it shows crowd speckles in a race and grey in practice.";
-        if (index >= 16 && index <= 23)
-            return "Grass. The game rebuilds it for each circuit and for its textures, so a car painted in it changes from track to track.";
-        if (index >= 24 && index <= 31)
-            return "Tarmac. The game rebuilds it for each circuit and for its textures, so a car painted in it changes from track to track.";
-        if ((index >= 128 && index <= 135) || (index >= 232 && index <= 239))
-            return "Sky. The game replaces it with the sky's colours in a race.";
-        if ((index >= 141 && index <= 151) || index == 158 || (index >= 160 && index <= 167))
-            return "Scenery in the distance. The game works it out from other colours in a race, so it does not look like this.";
-        return null;
+        return LiveriesPage.specialUse(index);
     }
 
     /** A note about a colour that is fine to use but behaves differently, or null. */
     static String note(int index)
     {
-        if (index >= 192 && index <= 199)
-            return "Stays bright in the distance in dry weather, where other colours fade.";
-        return null;
+        return LiveriesPage.note(index);
     }
 
     private final GameLiveries liveries;
@@ -90,8 +75,7 @@ public class PaletteChooser extends JDialog
             public Dimension getPreferredSize() { return new Dimension(16 * CELL, 16 * CELL); }
             public String getToolTipText(MouseEvent e) {
                 int i = indexAt(e.getPoint());
-                String about = i < 0 ? null : specialUse(i) != null ? specialUse(i) : note(i);
-                return i < 0 ? null : "Colour " + i + (about != null ? ": " + about : "");
+                return i < 0 ? null : LiveriesPage.about(i);
             }
         };
         grid.setName("palette");
@@ -126,9 +110,7 @@ public class PaletteChooser extends JDialog
             }
         });
 
-        JLabel hint = new JLabel("<html>Click a colour, or use the arrow keys and Enter. Esc cancels.<br>"
-            + "A filled corner mark: the game changes that colour in a race, so avoid it. An open mark: worth knowing.<br>"
-            + "Point at a colour to see why. In the rain, colours 0 to 207 all turn greyer.</html>");
+        JLabel hint = new JLabel(LiveriesPage.CHOOSER_HINT);
         hint.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
         JPanel content = new JPanel(new BorderLayout());
         content.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));

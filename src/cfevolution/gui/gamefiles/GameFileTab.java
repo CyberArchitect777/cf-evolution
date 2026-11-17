@@ -18,13 +18,11 @@
 */
 package cfevolution.gui.gamefiles;
 
-import cfevolution.data.gamefiles.GameFile;
 import cfevolution.gui.EditorTab;
 import cfevolution.gui.FileDialog;
 import cfevolution.gui.MainGUI;
 import java.awt.*;
 import java.io.File;
-import java.io.IOException;
 import javax.swing.*;
 import javax.swing.table.*;
 
@@ -37,15 +35,15 @@ import javax.swing.table.*;
  */
 public abstract class GameFileTab extends JPanel implements EditorTab
 {
-    protected final GameFile gameFile;
+    protected final cfevolution.edit.GameFilePage page;
     protected String fileName;
     protected final MainGUI mainWindow;
     private boolean modified;
 
-    protected GameFileTab(GameFile gameFile, String fileName, MainGUI mainWindow)
+    protected GameFileTab(cfevolution.edit.GameFilePage page, String fileName, MainGUI mainWindow)
     {
         super(new BorderLayout());
-        this.gameFile = gameFile;
+        this.page = page;
         this.fileName = fileName;
         this.mainWindow = mainWindow;
     }
@@ -113,38 +111,22 @@ public abstract class GameFileTab extends JPanel implements EditorTab
         return table;
     }
 
-    /** A typed whole number inside [min, max], or null after saying why not. */
-    protected Integer number(Object value, int min, int max, String what)
+    /** Shows a refusal from the page; true when there was one. */
+    protected boolean refused(cfevolution.edit.Message m)
     {
-        try
-        {
-            int n = Integer.parseInt(String.valueOf(value).trim());
-            if (n >= min && n <= max)
-                return n;
-        }
-        catch (NumberFormatException e)
-        {
-            // falls through to the message
-        }
-        JOptionPane.showMessageDialog(this, what + " must be a whole number from " + min + " to " + max + ".",
-            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-        return null;
+        cfevolution.gui.MessageBoxes.show(this, m);
+        return m != null;
     }
 
-    /** Typed text no longer than maxLength, or null after saying why not. */
-    protected String text(Object value, int maxLength, String what)
+    /** The page's title and explanation over the content. */
+    protected JPanel page(JComponent content)
     {
-        String text = String.valueOf(value);
-        boolean plain = true;
-        for (char c : text.toCharArray())
-            plain &= c >= 32 && c < 256;
-        if (text.length() > maxLength || !plain)
-        {
-            JOptionPane.showMessageDialog(this, what + " can be at most " + maxLength + " plain characters long.",
-                "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-            return null;
-        }
-        return text;
+        return page(page.title(), page.explanation(), content);
+    }
+
+    public String getStatusText()
+    {
+        return page.status();
     }
 
     // --- EditorTab ----------------------------------------------------------
@@ -159,16 +141,8 @@ public abstract class GameFileTab extends JPanel implements EditorTab
 
     public boolean save()
     {
-        try
-        {
-            gameFile.save(new File(fileName));
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(this, new File(fileName).getName() + " could not be saved.", "Save Failed",
-                                          JOptionPane.ERROR_MESSAGE);
+        if (refused(page.save(new File(fileName))))
             return false;
-        }
         setModified(false);
         return true;
     }

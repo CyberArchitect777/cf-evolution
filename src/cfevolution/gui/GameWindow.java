@@ -44,17 +44,17 @@ public class GameWindow extends JPanel implements EditorTab
         this.game = game;
         this.mainWindow = mainWindow;
 
-        JLabel heading = new JLabel("Game folder");
+        JLabel heading = new JLabel(cfevolution.edit.GameFolderList.TITLE);
         heading.setFont(heading.getFont().deriveFont(Font.BOLD, 18f));
         JLabel path = new JLabel(game.getFolder().getPath());
         path.setForeground(new Color(0x5A626C));
         JPanel top = new JPanel(new BorderLayout(0, 4));
         top.add(heading, BorderLayout.NORTH);
         top.add(path, BorderLayout.CENTER);
-        if (game.getOriginalsFolder().isDirectory())
+        String note = cfevolution.edit.GameFolderList.originalsNote(game);
+        if (note != null)
         {
-            JLabel originals = new JLabel("Your game files as they were when the editor first opened this folder are kept in "
-                + GameFolder.BACKUP_FOLDER + File.separator + GameFolder.ORIGINALS_FOLDER + ".");
+            JLabel originals = new JLabel(note);
             originals.setForeground(new Color(0x5A626C));
             top.add(originals, BorderLayout.SOUTH);
         }
@@ -71,144 +71,75 @@ public class GameWindow extends JPanel implements EditorTab
 
     private final JPanel rows = new JPanel(new GridBagLayout());
 
-    private static final String[] KIND_NAMES = { "Name file", "Setup", "Championship save" };
-
     /** Lists everything in the folder the editor can open; called again when files are added. */
     public void fillRows()
     {
         rows.removeAll();
         int y = 0;
-        addHeading(rows, y++, "Game");
-        addRow(rows, y++, "", "Game settings",
-               "GP.EXE, version 1.05 " + game.getBuildName() + ": drivers, teams, points, liveries and rules",
-               game.getExecutable(), "open-game", new Runnable() {
-                   public void run() { openGame(); } });
-        final File prefs = game.getPreferences();
-        addRow(rows, y++, "", "Game options",
-               prefs != null ? "F1PREFS.DAT: opposition, race distance, driving aids, files loaded at start-up"
-                             : "F1PREFS.DAT is not here yet: the game writes it with Save Options",
-               prefs, "open-options", new Runnable() {
-                   public void run() { GameWindow.this.mainWindow.openGameFile(prefs, game); } });
-
-        addHeading(rows, y++, "Circuits");
-        JButton allCircuits = new JButton("Computer Cars at Every Circuit...");
-        allCircuits.setName("all-circuits-cars");
-        allCircuits.setToolTipText("How hard the computer cars corner at each circuit, changed for all of them on one page");
-        allCircuits.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                new AllCircuitsCarsDialog(GameWindow.this.mainWindow, game).setVisible(true);
+        boolean anySaved = false;
+        for (final cfevolution.edit.GameFolderList.Row row : cfevolution.edit.GameFolderList.rows(game))
+        {
+            if (!row.heading)
+            {
+                anySaved |= row.what >= cfevolution.edit.GameFolderList.SAVED;
+                addRow(rows, y++, row.number, row.label, row.detail, row.file, row.key, new Runnable() {
+                    public void run() { open(row); } });
+                continue;
             }
-        });
-        GridBagConstraints ac = new GridBagConstraints();
-        ac.gridy = y++;
-        ac.gridx = 1;
-        ac.gridwidth = 3;
-        ac.anchor = GridBagConstraints.WEST;
-        ac.insets = new Insets(3, 0, 6, 0);
-        rows.add(allCircuits, ac);
-        for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
-        {
-            final File track = game.getTrack(slot);
-            addRow(rows, y++, String.valueOf(slot), GameFolder.CIRCUIT_NAMES[slot - 1],
-                   track != null ? track.getName() : GameFolder.trackFileName(slot) + " is not in this folder",
-                   track, "open-" + slot, new Runnable() {
-                       public void run() { GameWindow.this.mainWindow.openTrackFile(track.getPath()); } });
-        }
-
-        addHeading(rows, y++, "Pictures");
-        String[] pictureNames = { "Menu helmets", "Language flags", "Menu backgrounds", "Circuit pictures" };
-        String[] pictureDetails = { "the helmet beside each driver on the driver menus", "the flags on the language screen",
-                                    "the full-screen pictures behind the menus", "each circuit's picture on the circuit menu" };
-        for (int i = 0; i < GameFolder.PICTURE_FILES.length; i++)
-        {
-            final File f = game.getPictureFile(GameFolder.PICTURE_FILES[i]);
-            addRow(rows, y++, "", pictureNames[i],
-                   f != null ? GameFolder.PICTURE_FILES[i] + ": " + pictureDetails[i]
-                             : GameFolder.PICTURE_FILES[i] + " is not in this folder",
-                   f, "open-" + GameFolder.PICTURE_FILES[i], new Runnable() {
-                       public void run() { GameWindow.this.mainWindow.openGameFile(f, game); } });
-        }
-
-        addHeading(rows, y++, "Sounds");
-        final File sounds = game.getSoundEffects();
-        addRow(rows, y++, "", "Sound effects",
-               sounds != null ? "XSOUND.BIN: the engine, tyres, passing cars, crashes and pit stops (AdLib and Sound Blaster)"
-                              : game.hasSoundEffects() ? "The game is set up for another sound card: only the AdLib and Sound Blaster effects can be edited"
-                                                       : "XSOUND.BIN is not here: the game's installer puts it there",
-               sounds, "open-sounds", new Runnable() {
-                   public void run() { GameWindow.this.mainWindow.openGameFile(sounds, game); } });
-
-        addHeading(rows, y++, "Datasets");
-        JButton exportData = new JButton("Export Dataset...");
-        exportData.setName("export-dataset");
-        exportData.setToolTipText("Saves teams, drivers, colours, rules, pictures and more from this game as a dataset to share");
-        exportData.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) { DatasetDialog.exportDataset(GameWindow.this.mainWindow, game); }
-        });
-        JButton importData = new JButton("Import Dataset...");
-        importData.setName("import-dataset");
-        importData.setToolTipText("Brings a dataset, or an F1ED or ArgEditor carset, into this game");
-        importData.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                DatasetDialog.importDataset(GameWindow.this.mainWindow, game, new Runnable() { public void run() { fillRows(); } });
+            addHeading(rows, y++, row.label);
+            if (row.label.equals(cfevolution.edit.GameFolderList.CIRCUITS))
+            {
+                JButton allCircuits = new JButton(cfevolution.edit.AllCircuitsCars.TITLE + "...");
+                allCircuits.setName("all-circuits-cars");
+                allCircuits.setToolTipText(cfevolution.edit.AllCircuitsCars.BUTTON_TIP);
+                allCircuits.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        new AllCircuitsCarsDialog(GameWindow.this.mainWindow, game).setVisible(true);
+                    }
+                });
+                addWide(y++, allCircuits, 6);
             }
-        });
-        JPanel dataButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        dataButtons.add(exportData);
-        dataButtons.add(Box.createHorizontalStrut(8));
-        dataButtons.add(importData);
-        GridBagConstraints db = new GridBagConstraints();
-        db.gridy = y++;
-        db.gridx = 1;
-        db.gridwidth = 3;
-        db.anchor = GridBagConstraints.WEST;
-        db.insets = new Insets(3, 0, 6, 0);
-        rows.add(dataButtons, db);
-
-        addHeading(rows, y++, "Saved files (GPSAVES)");
-        JButton saveNames = new JButton("Save the Game's Names as a Name File...");
-        saveNames.setName("save-names");
-        saveNames.setToolTipText("Writes the driver, team and engine names in GP.EXE to a name file the game can load");
-        saveNames.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) { saveNamesFile(); }
-        });
-        // Any name file, wherever it is, not only those in GPSAVES (Hrvoje, 2026-11-05)
-        JButton openNames = new JButton("Open a Name File...");
-        openNames.setName("open-names");
-        openNames.setToolTipText("Opens a name file (.NAM) from any folder to view or change its names");
-        openNames.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) { openNamesFile(); }
-        });
-        JPanel nameButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        nameButtons.add(saveNames);
-        nameButtons.add(Box.createHorizontalStrut(8));
-        nameButtons.add(openNames);
-        GridBagConstraints b = new GridBagConstraints();
-        b.gridy = y++;
-        b.gridx = 1;
-        b.gridwidth = 3;
-        b.anchor = GridBagConstraints.WEST;
-        b.insets = new Insets(3, 0, 6, 0);
-        rows.add(nameButtons, b);
-        java.util.List<GameFolder.SavedFile> saved = game.getSavedFiles();
-        if (saved.isEmpty())
-        {
-            JLabel none = new JLabel("No name files, setups or championship saves yet.");
-            none.setForeground(new Color(0xA0A6AE));
-            GridBagConstraints c = new GridBagConstraints();
-            c.gridy = y++;
-            c.gridx = 1;
-            c.gridwidth = 3;
-            c.anchor = GridBagConstraints.WEST;
-            rows.add(none, c);
-        }
-        for (final GameFolder.SavedFile f : saved)
-        {
-            String kind = KIND_NAMES[f.kind.ordinal()];
-            if (f.kind == GameFolder.SavedKind.SETUP && f.file.length() == cfevolution.data.gamefiles.SetupFile.SEASON_SIZE)
-                kind = "Season setups";
-            addRow(rows, y++, "", kind, f.name, f.file, "open-saved-" + f.name, new Runnable() {
-                public void run() { GameWindow.this.mainWindow.openGameFile(f.file, game); } });
+            else if (row.label.equals(cfevolution.edit.GameFolderList.DATASETS))
+            {
+                JButton exportData = new JButton("Export Dataset...");
+                exportData.setName("export-dataset");
+                exportData.setToolTipText("Saves teams, drivers, colours, rules, pictures and more from this game as a dataset to share");
+                exportData.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) { DatasetDialog.exportDataset(GameWindow.this.mainWindow, game); }
+                });
+                JButton importData = new JButton("Import Dataset...");
+                importData.setName("import-dataset");
+                importData.setToolTipText("Brings a dataset, or an F1ED or ArgEditor carset, into this game");
+                importData.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        DatasetDialog.importDataset(GameWindow.this.mainWindow, game, new Runnable() { public void run() { fillRows(); } });
+                    }
+                });
+                addWide(y++, buttons(exportData, importData), 6);
+            }
+            else if (row.label.equals(cfevolution.edit.GameFolderList.SAVED_HEADING))
+            {
+                JButton saveNames = new JButton(cfevolution.edit.GameFolderList.SAVE_NAMES);
+                saveNames.setName("save-names");
+                saveNames.setToolTipText(cfevolution.edit.GameFolderList.SAVE_NAMES_TIP);
+                saveNames.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) { saveNamesFile(); }
+                });
+                // Any name file, wherever it is, not only those in GPSAVES (Hrvoje, 2026-11-05)
+                JButton openNames = new JButton(cfevolution.edit.GameFolderList.OPEN_NAMES);
+                openNames.setName("open-names");
+                openNames.setToolTipText(cfevolution.edit.GameFolderList.OPEN_NAMES_TIP);
+                openNames.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) { openNamesFile(); }
+                });
+                addWide(y++, buttons(saveNames, openNames), 6);
+                if (game.getSavedFiles().isEmpty())
+                {
+                    JLabel none = new JLabel(cfevolution.edit.GameFolderList.NO_SAVED_FILES);
+                    none.setForeground(new Color(0xA0A6AE));
+                    addWide(y++, none, 0);
+                }
+            }
         }
 
         GridBagConstraints filler = new GridBagConstraints();
@@ -217,6 +148,38 @@ public class GameWindow extends JPanel implements EditorTab
         rows.add(Box.createGlue(), filler);
         rows.revalidate();
         rows.repaint();
+    }
+
+    private void open(cfevolution.edit.GameFolderList.Row row)
+    {
+        if (row.what == cfevolution.edit.GameFolderList.GAME)
+            openGame();
+        else if (row.what >= 1 && row.what <= GameFolder.CIRCUITS)
+            mainWindow.openTrackFile(row.file.getPath());
+        else
+            mainWindow.openGameFile(row.file, game);
+    }
+
+    private static JPanel buttons(JButton a, JButton b)
+    {
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        p.add(a);
+        p.add(Box.createHorizontalStrut(8));
+        p.add(b);
+        return p;
+    }
+
+    /** Something across the name and detail columns, under a heading. */
+    private void addWide(int y, JComponent c, int bottom)
+    {
+        GridBagConstraints g = new GridBagConstraints();
+        g.gridy = y;
+        g.gridx = 1;
+        g.gridwidth = 3;
+        g.anchor = GridBagConstraints.WEST;
+        if (bottom > 0)
+            g.insets = new Insets(3, 0, bottom, 0);
+        rows.add(c, g);
     }
 
     /** Asks for a name file anywhere and opens it in a tab. */
@@ -229,19 +192,20 @@ public class GameWindow extends JPanel implements EditorTab
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         File f = chooser.getSelectedFile();
-        boolean ok = f.isFile() && f.length() == cfevolution.data.gamefiles.NameFile.SIZE;
+        byte[] bytes = null;
         try
         {
-            ok = ok && cfevolution.data.gamefiles.GameFile.checksumOk(java.nio.file.Files.readAllBytes(f.toPath()));
+            if (f.isFile() && f.length() == cfevolution.data.gamefiles.NameFile.SIZE)
+                bytes = java.nio.file.Files.readAllBytes(f.toPath());
         }
         catch (java.io.IOException ex)
         {
-            ok = false;
+            bytes = null;
         }
-        if (!ok)
+        cfevolution.edit.Message problem = cfevolution.edit.GameFolderList.nameFileProblem(f.getName(), bytes);
+        if (problem != null)
         {
-            JOptionPane.showMessageDialog(this, f.getName() + " is not a name file the game can read, or it is damaged.",
-                                          "Name File Not Opened", JOptionPane.WARNING_MESSAGE);
+            MessageBoxes.show(this, problem);
             return;
         }
         mainWindow.openGameFile(f, game);
@@ -250,26 +214,20 @@ public class GameWindow extends JPanel implements EditorTab
     /** Asks for a short name and writes GP.EXE's names to GPSAVES as a .NAM file. */
     private void saveNamesFile()
     {
-        String name = JOptionPane.showInputDialog(this,
-            "Name for the file, up to 8 letters or digits (the game shows DOS names):", "NAMES");
-        if (name == null)
+        String typed = JOptionPane.showInputDialog(this, cfevolution.edit.GameFolderList.NAME_QUESTION,
+                                                   cfevolution.edit.GameFolderList.NAME_SUGGESTED);
+        if (typed == null)
             return;
-        name = name.trim().toUpperCase();
-        if (name.endsWith(".NAM"))
-            name = name.substring(0, name.length() - 4);
-        if (!name.matches("[A-Z0-9_-]{1,8}"))
+        String name = cfevolution.edit.GameFolderList.fileName(typed);
+        if (name == null)
         {
-            JOptionPane.showMessageDialog(this, "Use 1 to 8 letters, digits, - or _.", "Name File Not Saved",
-                                          JOptionPane.WARNING_MESSAGE);
+            MessageBoxes.show(this, cfevolution.edit.GameFolderList.BAD_NAME);
             return;
         }
-        File saves = game.getSavesFolder();
-        if (saves == null)
-            saves = new File(game.getFolder(), "GPSAVES");
-        File target = new File(saves, name + ".NAM");
-        if (target.exists() && JOptionPane.showOptionDialog(this, target.getName() + " already exists. Replace it?",
-                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
-                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
+        File target = cfevolution.edit.GameFolderList.nameFileTarget(game, name);
+        cfevolution.edit.Message replace = cfevolution.edit.GameFolderList.replaceQuestion(target);
+        if (target.exists() && JOptionPane.showOptionDialog(this, replace.text, replace.title, JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, replace.options, replace.options[1]) != 0)
             return;
         try
         {
@@ -277,8 +235,7 @@ public class GameWindow extends JPanel implements EditorTab
         }
         catch (java.io.IOException ex)
         {
-            JOptionPane.showMessageDialog(this, target.getName() + " could not be saved.", "Name File Not Saved",
-                                          JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(this, cfevolution.edit.GameFolderList.notSaved(target));
             return;
         }
         fillRows();
@@ -400,10 +357,6 @@ public class GameWindow extends JPanel implements EditorTab
 
     public String getStatusText()
     {
-        int found = 0;
-        for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
-            if (game.getTrack(slot) != null)
-                found++;
-        return "Game folder: the game settings and " + found + " of the 16 circuits. Each opens in its own tab.";
+        return cfevolution.edit.GameFolderList.status(game);
     }
 }

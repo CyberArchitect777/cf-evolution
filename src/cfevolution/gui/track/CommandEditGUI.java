@@ -26,6 +26,8 @@
 package cfevolution.gui.track;
 
 import cfevolution.data.track.*;
+import cfevolution.edit.PropertySheet;
+import cfevolution.edit.SegmentCommands;
 import java.awt.*;
 import java.util.Vector;
 import javax.swing.*;
@@ -40,7 +42,6 @@ import javax.swing.*;
  */
 public class CommandEditGUI extends JPanel
 {
-    private CommandDataStore availableDataset;
     private TrackSegment trackSegment;
     private Vector<Command> currentSegmentCommands;
     private DefaultListModel<String> currentListData;
@@ -52,7 +53,6 @@ public class CommandEditGUI extends JPanel
     {
         super(new BorderLayout());
         parentTrackWindow = currentTrackWindow;
-        availableDataset = new CommandDataStore();
         currentSegmentCommands = new Vector<Command>();
         currentListData = new DefaultListModel<String>();
         paramEditor = new SegmentEditGUI(currentTrackWindow, currentObjectWindow);
@@ -89,51 +89,37 @@ public class CommandEditGUI extends JPanel
         paramEditor.applyChanges();
     }
 
-    private String describe(int type)
-    {
-        CommandData data = availableDataset.getCommandByType(type);
-        if (data == null)
-            return convertIntToHex(type);
-        return data.getCommandDesc() + "  (" + convertIntToHex(type) + ")";
-    }
-
     private void refreshList()
     {
         int selected = currentList == null ? -1 : currentList.getSelectedIndex();
         currentListData.clear();
         for (int x = 0; x < currentSegmentCommands.size(); x++)
-            currentListData.addElement(describe(currentSegmentCommands.get(x).getType()));
+            currentListData.addElement(SegmentCommands.describe(currentSegmentCommands.get(x).getType()));
         if (selected >= 0 && selected < currentListData.size())
             currentList.setSelectedIndex(selected);
-        countLabel.setText(trackSegment == null ? "Select a track or pit segment to see its commands."
-            : currentSegmentCommands.size() == 0 ? "This segment has no commands."
-            : currentSegmentCommands.size() + (currentSegmentCommands.size() == 1 ? " command" : " commands"));
+        countLabel.setText(SegmentCommands.countText(trackSegment));
     }
 
     private void showParams()
     {
         int index = currentList.getSelectedIndex();
-        if (index < 0 || index >= currentSegmentCommands.size())
+        paramHeading.setText(SegmentCommands.paramHeading(trackSegment, index));
+        PropertySheet sheet = SegmentCommands.params(trackSegment, index);
+        if (sheet == null)
         {
-            paramHeading.setText("Parameters");
             paramEditor.showNothing();
             return;
         }
-        Command selectedCommand = currentSegmentCommands.get(index);
-        CommandData commandData = availableDataset.getCommandByType(selectedCommand.getType());
-        if (commandData == null || commandData.getNumberOfParams() == 0)
-        {
-            paramHeading.setText("Parameters: this command has none");
-            paramEditor.showNothing();
-            return;
-        }
-        paramHeading.setText("Parameters of " + commandData.getCommandDesc());
-        paramEditor.editCmdParams(selectedCommand, commandData.getParamArray());
+        String[] paramText = new String[sheet.rows()];
+        for (int x = 0; x < paramText.length; x++)
+            paramText[x] = sheet.label(x);
+        paramEditor.editCmdParams(currentSegmentCommands.get(index), paramText);
     }
 
+    /** After adding or removing: the list follows the segment, and the map is redrawn. */
     private void commitList()
     {
-        trackSegment.setCommands(new Vector<Command>(currentSegmentCommands));
+        currentSegmentCommands = new Vector<Command>(trackSegment.getCommands());
         parentTrackWindow.updateTrackMap();
     }
 
@@ -157,33 +143,29 @@ public class CommandEditGUI extends JPanel
         countLabel.setBorder(BorderFactory.createEmptyBorder(2, 2, 4, 2));
 
         availableCombo = new JComboBox<String>();
-        for (int x = 0; x < availableDataset.getCommandListSize(); x++)
-        {
-            CommandData data = availableDataset.getCommandByIndex(x);
-            availableCombo.addItem(data.getCommandDesc() + "  (" + convertIntToHex(data.getCommandType()) + ")");
-        }
-        addCommand = new JButton("Add");
-        addCommand.setToolTipText("Add the chosen command to this segment");
+        for (String item : SegmentCommands.available())
+            availableCombo.addItem(item);
+        addCommand = new JButton(SegmentCommands.ADD);
+        addCommand.setToolTipText(SegmentCommands.ADD_TIP);
         addCommand.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 int index = availableCombo.getSelectedIndex();
                 if (index < 0)
                     return;
-                CommandData data = availableDataset.getCommandByIndex(index);
-                currentSegmentCommands.add(new Command(data.getCommandType(), 0, 0, 0, 0, 0, 0));
+                int added = SegmentCommands.add(trackSegment, index);
                 commitList();
                 refreshList();
-                currentList.setSelectedIndex(currentSegmentCommands.size() - 1);
+                currentList.setSelectedIndex(added);
             }
         });
-        removeCommand = new JButton("Remove");
-        removeCommand.setToolTipText("Remove the selected command from this segment");
+        removeCommand = new JButton(SegmentCommands.REMOVE);
+        removeCommand.setToolTipText(SegmentCommands.REMOVE_TIP);
         removeCommand.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 int index = currentList.getSelectedIndex();
                 if (index < 0)
                     return;
-                currentSegmentCommands.remove(index);
+                SegmentCommands.remove(trackSegment, index);
                 commitList();
                 refreshList();
                 showParams();
@@ -204,7 +186,7 @@ public class CommandEditGUI extends JPanel
         top.add(addRow, BorderLayout.SOUTH);
         top.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
-        paramHeading = new JLabel("Parameters");
+        paramHeading = new JLabel(SegmentCommands.PARAMETERS);
         paramHeading.setFont(paramHeading.getFont().deriveFont(Font.BOLD));
         paramHeading.setBorder(BorderFactory.createEmptyBorder(6, 6, 4, 6));
         JPanel bottom = new JPanel(new BorderLayout());
@@ -219,8 +201,7 @@ public class CommandEditGUI extends JPanel
 
     public String convertIntToHex(int integerValue)
     {
-        String hexCode = new String(Integer.toHexString(integerValue)).toUpperCase();
-        return "0x" + hexCode;
+        return SegmentCommands.hex(integerValue);
     }
 
     // Variables declaration

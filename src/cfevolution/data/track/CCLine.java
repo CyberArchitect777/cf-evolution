@@ -50,6 +50,10 @@ public class CCLine extends Vector<CCLineSegment> {
             nType = fis.read();
             while ( nTlu != 0 )
             {
+                // The end of the file before the end of the list: not a track file.
+                // (Until 2026-11-17 this read on forever, adding segments until memory ran out.)
+                if ( nTlu < 0 || nType < 0 )
+                    throw new IllegalStateException( "the file ends inside the best line" );
                 // Create CCLine segment
                 CCLineSegment seg = new CCLineSegment( nType );
                 // transfer length

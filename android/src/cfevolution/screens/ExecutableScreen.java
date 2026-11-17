@@ -24,13 +24,23 @@ import cfevolution.data.executable.GameDrivers;
 import cfevolution.data.executable.GamePoints;
 import cfevolution.data.executable.GameTables;
 import cfevolution.data.executable.GameTeams;
+import java.util.List;
 import cfevolution.edit.ExecutableEdits;
 import cfevolution.edit.ExecutableSaving;
+import cfevolution.edit.GameSettingsPage;
+import cfevolution.edit.LapRecordsPage;
+import cfevolution.edit.LiveriesPage;
+import cfevolution.data.executable.GameSprites;
+import java.io.File;
+import cfevolution.edit.SetupsPage;
+import cfevolution.edit.TablePage;
 import cfevolution.edit.Message;
 
 /**
  * GP.EXE's screen (2026-11-17), with the pages of the first Android version:
- * drivers, teams, points and the pit lane. Every rule and message is the
+ * drivers, teams, points and the pit lane; then Liveries (LiveriesPage), Game Settings (GameSettingsPage),
+ * Setups (SetupsPage), Lap Records (LapRecordsPage), Car Physics and
+ * Opposition Levels (TablePage). Every rule and message is the
  * desktop's own (ExecutableEdits, GameTables, ExecutableSaving). Each setter
  * takes what the user typed and returns the message to show when it is not
  * allowed, or null. Plain Java: runs on Android and the desktop JVM.
@@ -40,18 +50,30 @@ public final class ExecutableScreen
     public final Executable exe;
     private boolean modified;
 
-    public static final String[] PAGES = { "Drivers", "Teams", "Points", "Pit Lane" };
+    /** The pages, in the desktop's order (those not here yet left out). */
+    public static final String[] PAGES = { "Drivers", "Teams", "Points", LiveriesPage.TITLE, GameSettingsPage.TITLE, "Pit Lane",
+        SetupsPage.TITLE, LapRecordsPage.TITLE, "Car Physics", "Opposition Levels" };
 
     /** The page descriptions the desktop shows (plain text). */
     public static final String[] PAGE_TEXT = {
         "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers: 1 is the game's best, and 0, which some editors use, is faster still.",
         "Team and engine names, each team's engine power, and which cars drive for it. Power differences only show with \"1991 Levels\" opposition. The game races the first 18 teams. A new line-up takes effect when a new championship is started.",
         "Championship points for each finishing position.",
-        "Which team uses each pit box, starting at the pit lane entrance. Choosing a team for a box swaps it with the team already there. Used at every circuit. A team with no cars in a session leaves its box empty; the other teams do not move up." };
+        LiveriesPage.DESCRIPTION.replace("Click", "Tap"),
+        GameSettingsPage.DESCRIPTION,
+        "Which team uses each pit box, starting at the pit lane entrance. Choosing a team for a box swaps it with the team already there. Used at every circuit. A team with no cars in a session leaves its box empty; the other teams do not move up.",
+        setupsText(),
+        LapRecordsPage.DESCRIPTION,
+        "The car's engine, tyres, weight and wings.",
+        "The computer cars at Rookie, Amateur, Semi-Pro, Pro and Ace." };
 
-    ExecutableScreen(Executable exe)
+    /** The folder GP.EXE is in, where the game's pictures are. */
+    private final File folder;
+
+    ExecutableScreen(Executable exe, File folder)
     {
         this.exe = exe;
+        this.folder = folder;
     }
 
     public String title()
@@ -177,6 +199,243 @@ public final class ExecutableScreen
         return tables().isPitOrderValid() ? null
             : "This order has a team missing or listed twice, so the game would not give every team its own box. "
             + "Choose a team for each box, or use Reset to 1991 Order.";
+    }
+
+    // --- Game Settings ------------------------------------------------------
+
+    private List<GameSettingsPage.Group> settings;
+
+    /** The Game Settings page's groups (the desktop's, from the core). */
+    public List<GameSettingsPage.Group> settings()
+    {
+        if (settings == null)
+            settings = GameSettingsPage.groups(exe);
+        return settings;
+    }
+
+    /** A number typed for a setting; the message when it is refused, else null. */
+    public Message setSetting(GameSettingsPage.Item item, String text)
+    {
+        int before = item.get();
+        Message m = item.set(text);
+        if (m == null && item.get() != before)
+            modified = true;
+        return m;
+    }
+
+    /** Turns a switch on or off. */
+    public void toggle(GameSettingsPage.Item item)
+    {
+        item.set(item.isOn() ? 0 : 1);
+        modified = true;
+    }
+
+    /** The Setups description as plain paragraphs, without the desktop's own line about selecting rows. */
+    private static String setupsText()
+    {
+        String[] d = SetupsPage.DESCRIPTION;
+        StringBuilder s = new StringBuilder(d[0] + " " + d[1]);
+        for (int i = 2; i < d.length - 1; i++)
+            s.append(" ").append(d[i]);
+        return s.toString().replace("&gt;", ">");
+    }
+
+    // --- Liveries ----------------------------------------------------------
+
+    private LiveriesPage liveries;
+    private GameSprites sprites;
+    private boolean spritesLooked;
+
+    public LiveriesPage liveries()
+    {
+        if (liveries == null)
+            liveries = new LiveriesPage(exe.getGameLiveries(), teams(), drivers());
+        return liveries;
+    }
+
+    /** The game's pictures (F1GPDATA.DAT and F1GPDATB.DAT beside GP.EXE), or null if the folder lacks them. */
+    public GameSprites sprites()
+    {
+        if (!spritesLooked)
+        {
+            sprites = folder == null ? null : GameSprites.find(folder);
+            spritesLooked = true;
+        }
+        return sprites;
+    }
+
+    /** A part's palette colour (0-255). */
+    public void setLiveryColour(int tab, int row, int part, int colour)
+    {
+        if (liveries().set(tab, row, part, colour))
+            modified = true;
+    }
+
+    /** The design last copied on each tab, shared by every GP.EXE opened, as on the desktop. */
+    private static final java.util.Map<String, int[]> copiedDesigns = new java.util.HashMap<String, int[]>();
+    private static final java.util.Map<String, String> copiedNames = new java.util.HashMap<String, String>();
+
+    public void copyDesign(int tab, int row)
+    {
+        copiedDesigns.put(LiveriesPage.kind(tab), liveries().design(tab, row));
+        copiedNames.put(LiveriesPage.kind(tab), liveries().copiedText(tab, row));
+    }
+
+    /** "Copied: ..." for the tab, or null if nothing has been copied there. */
+    public String copiedText(int tab)
+    {
+        return copiedNames.get(LiveriesPage.kind(tab));
+    }
+
+    public void pasteDesign(int tab, int[] rows)
+    {
+        int[] design = copiedDesigns.get(LiveriesPage.kind(tab));
+        if (design != null && liveries().paste(tab, rows, design))
+            modified = true;
+    }
+
+    /** Pastes the given design (for the screen check, which keeps its own). */
+    public void pasteDesign(int tab, int[] rows, int[] design)
+    {
+        if (liveries().paste(tab, rows, design))
+            modified = true;
+    }
+
+    /** One of ArgEditor's files for row r; the message when refused, else null. */
+    public Message importLivery(int tab, int row, String name, byte[] file)
+    {
+        Message m = liveries().importFile(tab, row, name, file);
+        if (m == null)
+            modified = true;
+        return m;
+    }
+
+    public byte[] exportLivery(int tab, int row)
+    {
+        return liveries().exportFile(tab, row);
+    }
+
+    // --- Setups -----------------------------------------------------------
+
+    private SetupsPage setups;
+
+    public SetupsPage setups()
+    {
+        if (setups == null)
+            setups = new SetupsPage(tables(), drivers());
+        return setups;
+    }
+
+    /** Typed text for one value of a setup (column 0-9); the message when refused, else null. */
+    public Message setSetup(int tab, int row, int col, String text)
+    {
+        boolean[] changed = new boolean[1];
+        Message m = setups().set(tab, row, col, text, changed);
+        if (changed[0])
+            modified = true;
+        return m;
+    }
+
+    /**
+     * A whole row typed at once (10 values). Gears must rise one to the next,
+     * so values are tried until none more can be taken; the first refusal
+     * left is returned, or null when every value was taken.
+     */
+    public Message setSetupRow(int tab, int row, String[] values)
+    {
+        boolean[] done = new boolean[values.length];
+        Message first = null;
+        for (int pass = 0; pass < values.length; pass++)
+        {
+            boolean progress = false;
+            first = null;
+            for (int c = 0; c < values.length; c++)
+            {
+                if (done[c])
+                    continue;
+                Message m = setSetup(tab, row, c, values[c]);
+                if (m == null)
+                {
+                    done[c] = true;
+                    progress = true;
+                }
+                else if (first == null)
+                    first = m;
+            }
+            if (first == null || !progress)
+                break;
+        }
+        return first;
+    }
+
+    public void toggleSeparate()
+    {
+        setups().setSeparate(!setups().isSeparate());
+        modified = true;
+    }
+
+    public void writeSetups(int tab, int[] rows, int[] setup)
+    {
+        setups().write(tab, rows, setup);
+        modified = true;
+    }
+
+    public void applySetupToAll(int tab, int row)
+    {
+        setups().applyToAll(tab, row);
+        modified = true;
+    }
+
+    public void copySetupsBetween(boolean toRace)
+    {
+        setups().copyBetween(toRace);
+        modified = true;
+    }
+
+    // --- Lap Records, Car Physics, Opposition Levels -------------------------
+
+    private LapRecordsPage records;
+    private TablePage physics, opposition;
+
+    public LapRecordsPage records()
+    {
+        if (records == null)
+            records = new LapRecordsPage(tables());
+        return records;
+    }
+
+    /** Typed text for a lap record (row a circuit, column as LapRecordsPage.COLUMNS); the message when refused, else null. */
+    public Message setRecord(int row, int col, String text)
+    {
+        boolean[] changed = new boolean[1];
+        Message m = records().set(row, col, text, changed);
+        if (changed[0])
+            modified = true;
+        return m;
+    }
+
+    public TablePage physics()
+    {
+        if (physics == null)
+            physics = TablePage.physics(exe);
+        return physics;
+    }
+
+    public TablePage opposition()
+    {
+        if (opposition == null)
+            opposition = TablePage.opposition(exe);
+        return opposition;
+    }
+
+    /** Typed text for a grid's cell; the message when refused, else null. */
+    public Message setCell(TablePage.Grid grid, int row, int col, String text)
+    {
+        boolean[] changed = new boolean[1];
+        Message m = grid.set(row, col, text, changed);
+        if (changed[0])
+            modified = true;
+        return m;
     }
 
     // --- Saving -----------------------------------------------------------

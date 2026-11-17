@@ -33,6 +33,14 @@ final class Session
     static FolderScreen folder;
     static TrackScreen track;
     static ExecutableScreen executable;
+    /** A game options, name, setup or championship file open in GameFileActivity, and where it is. */
+    static cfevolution.edit.GameFilePage gameFile;
+    static java.io.File gameFilePath;
+    /** Where a file opened from outside the game folder goes back to when saved (Open a Name File), else null. */
+    static android.net.Uri gameFileUri;
+    /** The horizon being painted in HorizonActivity, and the picture file open in PictureActivity. */
+    static cfevolution.edit.HorizonPage horizon;
+    static cfevolution.edit.PictureFilePage pictureFile;
     /** The chosen folder's files, copied in for the core; written back after each change. */
     static FolderMirror mirror;
 
@@ -42,6 +50,12 @@ final class Session
 
     private Session()
     {
+    }
+
+    /** The picture codec the core uses on Android (installed once; every screen that needs pictures calls this). */
+    static void pictures()
+    {
+        cfevolution.data.image.Pictures.setCodec(new AndroidPictures());
     }
 
     /** Something slow off the screen's thread, with a note while it runs. */

@@ -48,6 +48,15 @@ public class ImageIOPictures implements PictureCodec
         return out.toByteArray();
     }
 
+    public byte[] writeRgbPng(int[] rgb, int w, int h) throws IOException
+    {
+        BufferedImage im = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        im.setRGB(0, 0, w, h, rgb, 0, w);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(im, "png", out);
+        return out.toByteArray();
+    }
+
     public int[] argbAt(Picture p, int w, int h)
     {
         if (p.width == w && p.height == h)

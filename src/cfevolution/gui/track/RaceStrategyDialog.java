@@ -19,49 +19,40 @@
 
 package cfevolution.gui.track;
 
-import cfevolution.data.track.Footer;
-import cfevolution.data.track.RaceStrategy;
+import cfevolution.edit.RaceStrategyForm;
 import java.awt.*;
 import javax.swing.*;
 
 /**
  * Edits a track's race length and the computer cars' pit stop plan
- * (Edit > Race Strategy...). Nothing changes until OK.
+ * (Edit > Race Strategy...). Nothing changes until OK. The words, limits and
+ * rules are edit/RaceStrategyForm's.
  *
  * @author barrie
  */
 public class RaceStrategyDialog extends JDialog
 {
-    private final Footer footer;
+    private final RaceStrategyForm form;
     private final JSpinner laps, firstStop, chance;
-    private final int lapsShown, firstStopShown, chanceShown;
     private boolean changed;
 
-    public RaceStrategyDialog(Component parent, Footer footer)
+    public RaceStrategyDialog(Component parent, RaceStrategyForm form)
     {
-        super(SwingUtilities.getWindowAncestor(parent), "Race Strategy", ModalityType.APPLICATION_MODAL);
-        this.footer = footer;
-        int lapsNow = RaceStrategy.getRaceLaps(footer);
-        laps = spinner(Math.max(3, Math.min(150, lapsNow)), 3, 150);
-        firstStop = spinner(Math.max(1, Math.min(149, RaceStrategy.getFirstStopLap(footer))), 1, 149);
-        chance = spinner(RaceStrategy.getStopChancePercent(footer), 0, 100);
-        lapsShown = value(laps);
-        firstStopShown = value(firstStop);
-        chanceShown = value(chance);
+        super(SwingUtilities.getWindowAncestor(parent), RaceStrategyForm.TITLE, ModalityType.APPLICATION_MODAL);
+        this.form = form;
+        laps = spinner(form, RaceStrategyForm.LAPS);
+        firstStop = spinner(form, RaceStrategyForm.FIRST_STOP);
+        chance = spinner(form, RaceStrategyForm.CHANCE);
         laps.setName("raceLaps");
         firstStop.setName("firstStopLap");
         chance.setName("stopChance");
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(14, 16, 6, 16));
+        JPanel grid = new JPanel(new GridBagLayout());
+        grid.setBorder(BorderFactory.createEmptyBorder(14, 16, 6, 16));
         int y = 0;
-        y = row(form, y, "Laps in a full race", laps,
-                "The original circuits have 44 to 81. Shorter race distances use a share of these.");
-        y = row(form, y, "First pit stop on lap", firstStop,
-                "For a full race; shorter races stop at the same point in the race. The originals stop about a third to half way.");
-        y = row(form, y, "Chance a computer car plans a pit stop (%)", chance,
-                "Monaco, Imola and Adelaide have 0, so hardly any car stops. Only in dry races of at least "
-                + "75% distance (the executable editor can change that).");
+        JSpinner[] spinners = { laps, firstStop, chance };
+        for (int i = 0; i < spinners.length; i++)
+            y = row(grid, y, RaceStrategyForm.LABELS[i], spinners[i], RaceStrategyForm.HINTS[i]);
 
         JButton ok = new JButton("OK");
         JButton cancel = new JButton("Cancel");
@@ -79,16 +70,16 @@ public class RaceStrategyDialog extends JDialog
             public void actionPerformed(java.awt.event.ActionEvent e) { dispose(); }
         }, KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
 
-        getContentPane().add(form, BorderLayout.CENTER);
+        getContentPane().add(grid, BorderLayout.CENTER);
         getContentPane().add(buttons, BorderLayout.SOUTH);
         pack();
         setResizable(false);
         setLocationRelativeTo(parent);
     }
 
-    private static JSpinner spinner(int value, int min, int max)
+    private static JSpinner spinner(RaceStrategyForm form, int i)
     {
-        JSpinner s = new JSpinner(new SpinnerNumberModel(value, min, max, 1));
+        JSpinner s = new JSpinner(new SpinnerNumberModel(form.shown(i), RaceStrategyForm.MIN[i], RaceStrategyForm.MAX[i], 1));
         JSpinner.NumberEditor editor = new JSpinner.NumberEditor(s, "#");
         editor.getTextField().setColumns(5);
         s.setEditor(editor);
@@ -123,19 +114,14 @@ public class RaceStrategyDialog extends JDialog
 
     private void apply()
     {
-        int newLaps = value(laps), newStop = value(firstStop), newChance = value(chance);
-        if (newStop >= newLaps)
+        boolean[] did = new boolean[1];
+        cfevolution.edit.Message refused = form.apply(new int[] { value(laps), value(firstStop), value(chance) }, did);
+        if (refused != null)
         {
-            JOptionPane.showMessageDialog(this,
-                "The first pit stop has to come before the last lap. Choose a lap below " + newLaps + ".",
-                "Race Strategy", JOptionPane.WARNING_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, refused);
             return;
         }
-        // Only what the user changed is written, so a value outside the limits
-        // above (from another tool) survives OK untouched
-        if (newLaps != lapsShown) { RaceStrategy.setRaceLaps(footer, newLaps); changed = true; }
-        if (newStop != firstStopShown) { RaceStrategy.setFirstStopLap(footer, newStop); changed = true; }
-        if (newChance != chanceShown) { RaceStrategy.setStopChancePercent(footer, newChance); changed = true; }
+        changed = did[0];
         dispose();
     }
 

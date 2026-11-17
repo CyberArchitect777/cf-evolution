@@ -18,8 +18,8 @@
 */
 package cfevolution.gui.gamefiles;
 
-import cfevolution.data.GameFolder;
 import cfevolution.data.gamefiles.SetupFile;
+import cfevolution.edit.SetupFilePage;
 import cfevolution.gui.MainGUI;
 import java.awt.*;
 import java.awt.event.*;
@@ -28,17 +28,21 @@ import javax.swing.table.AbstractTableModel;
 
 /**
  * A setup file from the game's setup screen: one setup, or a whole
- * season's (qualifying and race for each circuit).
+ * season's (qualifying and race for each circuit). A view over the core's
+ * SetupFilePage (2026-11-17).
  *
  * @author barrie
  */
 public class SetupFileTab extends GameFileTab
 {
-    private static final String[] COLUMNS = { "Front wing", "Rear wing", "Gear 1", "Gear 2", "Gear 3", "Gear 4",
-                                              "Gear 5", "Gear 6", "Tyres", "Brake balance" };
-    private final SetupFile setups;
+    private final SetupFilePage setups;
 
-    public SetupFileTab(SetupFile setups, String fileName, MainGUI mainWindow)
+    public SetupFileTab(SetupFile file, String fileName, MainGUI mainWindow)
+    {
+        this(new SetupFilePage(file), fileName, mainWindow);
+    }
+
+    public SetupFileTab(SetupFilePage setups, String fileName, MainGUI mainWindow)
     {
         super(setups, fileName, mainWindow);
         this.setups = setups;
@@ -46,81 +50,44 @@ public class SetupFileTab extends GameFileTab
         content.add(new JScrollPane(setupTable()), BorderLayout.CENTER);
         if (setups.isSeason())
         {
-            final JCheckBox separate = new JCheckBox("Separate race and qualifying setups",
-                                                     setups.isSeparateRaceSetups());
+            final JCheckBox separate = new JCheckBox(SetupFilePage.SEPARATE, setups.separate());
             separate.setName("separate");
-            separate.setToolTipText("When off, the game uses the qualifying setup in the race too.");
+            separate.setToolTipText(SetupFilePage.SEPARATE_TIP);
             separate.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent e) {
-                    if (separate.isSelected() != SetupFileTab.this.setups.isSeparateRaceSetups())
-                    {
-                        SetupFileTab.this.setups.setSeparateRaceSetups(separate.isSelected());
+                    SetupFileTab.this.setups.setSeparate(separate.isSelected());
+                    if (SetupFileTab.this.setups.changed())
                         setModified(true);
-                    }
                 }
             });
             content.add(separate, BorderLayout.NORTH);
         }
-        add(page(setups.isSeason() ? "Season Setups" : "Setup",
-                 setups.isSeason() ? "A qualifying and a race setup for each circuit, as the game's setup screen saves them."
-                                   : "One car setup, as the game's setup screen saves it.",
-                 content));
-    }
-
-    private String rowName(int r)
-    {
-        if (!setups.isSeason())
-            return "Setup";
-        return (r % 16 + 1) + "  " + GameFolder.CIRCUIT_NAMES[r % 16] + (r < 16 ? ", qualifying" : ", race");
+        add(page(content));
     }
 
     private JTable setupTable()
     {
+        final String[] columns = SetupFilePage.COLUMNS;
         AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return setups.getSetupCount(); }
-            public int getColumnCount() { return COLUMNS.length + 1; }
-            public String getColumnName(int c) { return c == 0 ? "" : COLUMNS[c - 1]; }
+            public int getRowCount() { return setups.rows(); }
+            public int getColumnCount() { return columns.length + 1; }
+            public String getColumnName(int c) { return c == 0 ? "" : columns[c - 1]; }
             public boolean isCellEditable(int r, int c) { return c > 0; }
             public Object getValueAt(int r, int c) {
-                if (c == 0) return rowName(r);
-                int v = setups.get(r, c - 1);
-                if (c - 1 == SetupFile.TYRES) return v < SetupFile.COMPOUNDS.length ? SetupFile.COMPOUNDS[v] : String.valueOf(v);
-                return v;
+                if (c == 0) return setups.rowName(r);
+                return setups.cell(r, c - 1);
             }
             public void setValueAt(Object v, int r, int c) {
-                // The game's own limits (Hrvoje, 2026-11-05)
-                int field = c - 1, n;
-                if (field == SetupFile.TYRES)
-                    n = java.util.Arrays.asList(SetupFile.COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
-                else
-                {
-                    try { n = Integer.parseInt(String.valueOf(v).trim()); }
-                    catch (NumberFormatException e) { n = Integer.MIN_VALUE; }
-                }
-                int[] setup = new int[SetupFile.SETUP_SIZE];
-                for (int i = 0; i < setup.length; i++) setup[i] = setups.get(r, i);
-                String problem = SetupFile.problem(setup, field, n);
-                if (problem != null)
-                {
-                    JOptionPane.showMessageDialog(SetupFileTab.this, problem, "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                if (n == setups.get(r, field)) return;
-                setups.set(r, field, n);
+                if (refused(setups.set(r, c - 1, v)) || !setups.changed()) return;
                 fireTableCellUpdated(r, c);
             }
         };
-        int[] widths = new int[COLUMNS.length + 1];
+        int[] widths = new int[columns.length + 1];
         widths[0] = setups.isSeason() ? 200 : 80;
         for (int i = 1; i < widths.length; i++) widths[i] = 76;
         JTable table = table(model, widths);
         table.setName("setups");
         table.getColumnModel().getColumn(1 + SetupFile.TYRES).setCellEditor(new DefaultCellEditor(new JComboBox<String>(SetupFile.COMPOUNDS)));
         return table;
-    }
-
-    public String getStatusText()
-    {
-        return setups.isSeason() ? "Season setup file  ·  16 circuits, qualifying and race" : "Setup file  ·  one setup";
     }
 }

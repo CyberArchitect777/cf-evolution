@@ -107,53 +107,49 @@ public class SegmentEditGUI extends JPanel
         segmentTable.setDefaultEditor(JComboBox.class, new SelectionTableCellEditor());
     }
 
-    public void editTrackSegment(TrackSegment trackSegment)
+    /** Shows a property sheet from the core (cfevolution.edit.PropertySheet). */
+    private void edit(cfevolution.edit.PropertySheet sheet, Object edited)
     {
         prepareTable();
-        segmentTable.setModel(new SegmentTableModel(trackSegment));
+        final PropertyTableModel model = new PropertyTableModel(sheet);
+        segmentTable.setModel(model);
         labelColumns();
-        statusLabel.setVisible(false);
-        editedObject = trackSegment;
+        if (sheet.note() != null)
+        {
+            statusLabel.setText("<html>" + sheet.note() + "</html>");
+            statusLabel.setVisible(true);
+            model.addTableModelListener(new TableModelListener() {
+                public void tableChanged(TableModelEvent e) {
+                    if (segmentTable.getModel() == model)
+                        statusLabel.setText("<html>" + model.getSheet().note() + "</html>");
+                }
+            });
+        }
+        else
+            statusLabel.setVisible(false);
+        editedObject = edited;
         setPending(false);
+    }
+
+    public void editTrackSegment(TrackSegment trackSegment)
+    {
+        edit(cfevolution.edit.PropertySheet.segment(trackSegment), trackSegment);
     }
 
     public void editDataHeaders(TrackDataHeader trackHeaders)
     {
-        prepareTable();
-        segmentTable.setModel(new HeaderTableModel(trackHeaders));
-        labelColumns();
-        statusLabel.setVisible(false);
-        editedObject = trackHeaders;
-        setPending(false);
+        edit(cfevolution.edit.PropertySheet.headers(trackHeaders), trackHeaders);
     }
 
     public void editBestLineSegment(CCLineSegment lineSegment)
     {
-        prepareTable();
-        BestLineTableModel lineData = new BestLineTableModel(lineSegment);
-        segmentTable.setModel(lineData);
-        labelColumns();
-        statusLabel.setText("<html>" + lineData.getSafeRadiusText() + "</html>");
-        statusLabel.setVisible(true);
-        lineData.addTableModelListener(new TableModelListener() {
-            public void tableChanged(TableModelEvent e) {
-                if (segmentTable.getModel() instanceof BestLineTableModel)
-                    statusLabel.setText("<html>" + ((BestLineTableModel) segmentTable.getModel()).getSafeRadiusText() + "</html>");
-            }
-        });
-        editedObject = lineSegment;
-        setPending(false);
+        edit(cfevolution.edit.PropertySheet.bestLine(lineSegment), lineSegment);
     }
 
     public void editCmdParams(Command currentCommand, String[] paramText)
     {
-        prepareTable();
-        segmentTable.setModel(new CmdParamTableModel(currentCommand, paramText));
-        labelColumns();
-        statusLabel.setVisible(false);
-        editedObject = currentCommand;
+        edit(cfevolution.edit.PropertySheet.command(currentCommand, paramText), currentCommand);
         editedParamText = paramText;
-        setPending(false);
     }
 
     /** Shows a short note instead of a table, e.g. when a branch is selected. */
@@ -232,7 +228,8 @@ public class SegmentEditGUI extends JPanel
         stopEditing();
         if (editedObject == null)
             return;
-        updateData();
+        if (!updateData())
+            return;                      // refused: the typing stays, to be corrected
         setPending(false);
         if (afterApply != null)
             afterApply.run();
@@ -261,49 +258,32 @@ public class SegmentEditGUI extends JPanel
             parentObjectWindow.updateNodeLabel(editedNode);
     }
 
-    public void updateData()
+    /** Writes the table into the track; false (after saying why) when a value is not a number. */
+    public boolean updateData()
     {
-        // Updates game data by using the current values displayed in the table
-        if (segmentTable.getModel() instanceof HeaderTableModel)
+        if (!(segmentTable.getModel() instanceof PropertyTableModel))
+            return true;
+        PropertyTableModel model = (PropertyTableModel) segmentTable.getModel();
+        cfevolution.edit.PropertySheet sheet = model.getSheet();
+        cfevolution.edit.Message problem = sheet.problem();
+        if (problem != null)
         {
-            HeaderTableModel currentTable = (HeaderTableModel)segmentTable.getModel();
-            currentTable.updateTrackData();
-            parentTrackWindow.updateTrackMap();
+            cfevolution.gui.MessageBoxes.show(this, problem);
+            return false;
         }
-        else if (segmentTable.getModel() instanceof SegmentTableModel)
-        {
-            SegmentTableModel currentTable = (SegmentTableModel)segmentTable.getModel();
-            currentTable.updateTrackData();
-            parentTrackWindow.updateTrackMap();
+        // Before a best line edit, snapshot the line so Tools > Repair can
+        // refit the following sectors onto the old line
+        if (sheet.what == cfevolution.edit.PropertySheet.LINE)
+            parentTrackWindow.prepareBestLineRepair(sheet.lineSegment());
+        cfevolution.edit.Message notice = sheet.apply();
+        model.showSheet();
+        cfevolution.gui.MessageBoxes.show(null, notice);
+        if (sheet.what == cfevolution.edit.PropertySheet.LINE)
+            parentTrackWindow.confirmBestLineRepair(sheet.lineChanged());
+        parentTrackWindow.updateTrackMap();
+        if (sheet.what == cfevolution.edit.PropertySheet.SEGMENT || sheet.what == cfevolution.edit.PropertySheet.LINE)
             relabelNode();
-        }
-        else if (segmentTable.getModel() instanceof BestLineTableModel)
-        {
-            BestLineTableModel currentTable = (BestLineTableModel)segmentTable.getModel();
-            // Snapshot the pre-edit line stamps so Tools > Repair
-            // can refit the following sectors onto the old line
-            cfevolution.data.track.CCLineSegment lineSegment = currentTable.getLineSegment();
-            int[] before = { lineSegment.getType(), lineSegment.getTlu(),
-                             lineSegment.getParam(0), lineSegment.getParam(1),
-                             lineSegment.getParam(2), lineSegment.getParam(3) };
-            parentTrackWindow.prepareBestLineRepair(lineSegment);
-            currentTable.updateTrackData();
-            boolean changed = lineSegment.getType() != before[0]
-                || lineSegment.getTlu() != before[1]
-                || lineSegment.getParam(0) != before[2]
-                || lineSegment.getParam(1) != before[3]
-                || lineSegment.getParam(2) != before[4]
-                || lineSegment.getParam(3) != before[5];
-            parentTrackWindow.confirmBestLineRepair(changed);
-            parentTrackWindow.updateTrackMap();
-            relabelNode();
-        }
-        else if (segmentTable.getModel() instanceof CmdParamTableModel)
-        {
-            CmdParamTableModel currentTable = (CmdParamTableModel)segmentTable.getModel();
-            currentTable.updateTrackData();
-            parentTrackWindow.updateTrackMap();
-        }
+        return true;
     }
 
     // Variables declaration

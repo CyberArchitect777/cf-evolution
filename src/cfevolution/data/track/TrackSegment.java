@@ -96,6 +96,10 @@ public class TrackSegment extends CFDataObject {
             int nType = fis.read();
             while ( ( nType != 0 ) && ( nType != 0xFF ) )
             {
+                // The end of the file before the end of the list: not a track file.
+                // (Until 2026-11-17 this read on forever, adding commands until memory ran out.)
+                if ( nType < 0 )
+                    throw new IllegalStateException( "the file ends inside the track segments" );
                 // This is a command. Read in and store into list
                 Command cmd = new Command(nType, nTlu);
                 cmd.load(fis);

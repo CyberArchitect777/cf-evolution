@@ -18,8 +18,8 @@
 */
 package cfevolution.gui.gamefiles;
 
-import cfevolution.data.GameFolder;
 import cfevolution.data.gamefiles.PreferencesFile;
+import cfevolution.edit.PreferencesPage;
 import cfevolution.gui.MainGUI;
 import java.awt.*;
 import java.awt.event.*;
@@ -29,60 +29,39 @@ import javax.swing.event.*;
 
 /**
  * F1PREFS.DAT: the options the game saves with Save Options and reads at
- * start-up. Meanings are from our IDA names and the F1GP-SDL project's
- * reading (2026-10-25). Each value is written only when it is changed; the
- * on/off options are read as on when bit 7 is set and written as FFh or 0,
- * as the game's own menus write them.
+ * start-up. A view over the core's PreferencesPage (2026-11-17), which holds
+ * the rows, their meanings and how each value is written.
  *
  * @author barrie
  */
 public class PreferencesTab extends GameFileTab
 {
-    private static final String[] LEVELS = { "Rookie", "Amateur", "Semi-Pro", "Pro", "Ace" };
-    private static final String[] SPREADS = { "All the same", "1991 levels", "Random" };
-    private static final String[] AIDS = { "Automatic brakes (F1)", "Automatic gears (F2)", "Spin recovery (F3)",
-                                           "Indestructible (F4)", "Ideal line (F5)", "Suggested gear (F6)" };
-    private static final int AIDS_AT = 1144, KPH_AT = 1020, TEXTURES_AT = 1022;
-
-    private final PreferencesFile prefs;
+    private final PreferencesPage prefs;
     private final JPanel form = new JPanel(new GridBagLayout());
     private int row;
 
-    public PreferencesTab(PreferencesFile prefs, String fileName, MainGUI mainWindow)
+    public PreferencesTab(PreferencesFile file, String fileName, MainGUI mainWindow)
+    {
+        this(new PreferencesPage(file, new File(fileName)), fileName, mainWindow);
+    }
+
+    public PreferencesTab(PreferencesPage prefs, String fileName, MainGUI mainWindow)
     {
         super(prefs, fileName, mainWindow);
         this.prefs = prefs;
-
-        section("Races");
-        choice("Opposition standard", LEVELS, PreferencesFile.OPPOSITION_STANDARD, true, null);
-        choice("Opposition spread", SPREADS, PreferencesFile.OPPOSITION_SPREAD, true,
-               "1991 levels keeps each team's own engine power.");
-        number("Race distance (%)", PreferencesFile.RACE_DISTANCE, true, 5, 100, "5% is the shortest: 3 laps.");
-        number("Qualifying session (minutes)", PreferencesFile.QUALIFYING_MINUTES, true, 1, 120, null);
-        number("Practice sessions (minutes)", PreferencesFile.PRACTICE_MINUTES, true, 1, 120, null);
-
-        section("Driving aids");
-        for (int bit = 0; bit < AIDS.length; bit++)
-            aid(AIDS[bit], bit);
-        note("The opposition standard can switch some aids off whatever is set here.");
-
-        section("Display");
-        toggle("Speeds in km/h", KPH_AT, true);
-        toggle("Textures", TEXTURES_AT, false);
-        frameRate();
-
-        section("Quick race");
-        choice("Circuit", GameFolder.CIRCUIT_NAMES, PreferencesFile.QUICK_RACE_CIRCUIT, false, null);
-        number("Driver (car number)", PreferencesFile.QUICK_RACE_DRIVER, false, 1, 40, null);
-        number("Race distance (%)", PreferencesFile.QUICK_RACE_DISTANCE, false, 5, 100, null);
-        toggle("Wet race", PreferencesFile.QUICK_RACE_WET, false);
-
-        section("Files loaded when the game starts");
-        autoLoad("Name file", PreferencesFile.AUTO_LOAD_NAMES, PreferencesFile.NAME_FILE_PATH);
-        autoLoad("Setup file", PreferencesFile.AUTO_LOAD_SETUP, PreferencesFile.SETUP_FILE_PATH);
-        autoLoad("Lap records file", PreferencesFile.AUTO_LOAD_RECORDS, PreferencesFile.RECORDS_FILE_PATH);
-        note("A file in the game folder, for example gpsaves\\MYNAMES.NAM.");
-
+        for (PreferencesPage.Item item : prefs.items())
+        {
+            switch (item.kind)
+            {
+                case PreferencesPage.SECTION: section(item.label); break;
+                case PreferencesPage.NOTE: note(item.label); break;
+                case PreferencesPage.CHOICE: choice(item); break;
+                case PreferencesPage.NUMBER: number(item); break;
+                case PreferencesPage.FRAME_RATE: frameRate(item); break;
+                case PreferencesPage.AUTO_LOAD: autoLoad(item); break;
+                default: toggle(item);      // TOGGLE, AID
+            }
+        }
         GridBagConstraints filler = new GridBagConstraints();
         filler.gridy = row;
         filler.weighty = 1;
@@ -91,7 +70,7 @@ public class PreferencesTab extends GameFileTab
         JScrollPane scroll = new JScrollPane(form);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(16);
-        add(page("Game Options", "The options the game keeps in F1PREFS.DAT and reads when it starts.", scroll));
+        add(page(scroll));
     }
 
     // --- rows ---------------------------------------------------------------
@@ -141,102 +120,73 @@ public class PreferencesTab extends GameFileTab
         form.add(n, c);
     }
 
-    private int get(int at, boolean word)
+    private void changed()
     {
-        return word ? prefs.getWord(at) : prefs.getByte(at);
+        if (prefs.changed())
+            setModified(true);
     }
 
-    private void put(int at, boolean word, int value)
+    private void choice(final PreferencesPage.Item item)
     {
-        if (get(at, word) == value)
-            return;
-        if (word) prefs.setWord(at, value); else prefs.setByte(at, value);
-        setModified(true);
-    }
-
-    private void choice(String label, String[] items, final int at, final boolean word, String hint)
-    {
-        final JComboBox<String> box = new JComboBox<String>(items);
-        box.setName(label);
-        int v = get(at, word);
-        if (v < items.length)
-            box.setSelectedIndex(v);
-        else
-        {
-            box.addItem("Other (" + v + ")");   // a value the editor does not know: kept unless changed
-            box.setSelectedIndex(items.length);
-        }
-        final int known = items.length;
+        final JComboBox<String> box = new JComboBox<String>(item.items.toArray(new String[0]));
+        box.setName(item.label);
+        box.setSelectedIndex(prefs.chosen(item));
         box.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                if (box.getSelectedIndex() < known)
-                    put(at, word, box.getSelectedIndex());
+                prefs.choose(item, box.getSelectedIndex());
+                changed();
             }
         });
-        addRow(label, box, hint);
+        addRow(item.label, box, item.hint);
     }
 
-    private void number(String label, final int at, final boolean word, int min, int max, String hint)
+    private void number(final PreferencesPage.Item item)
     {
-        int v = get(at, word);
-        final JSpinner spinner = new JSpinner(new SpinnerNumberModel(Math.max(min, Math.min(max, v)), min, max, 1));
-        spinner.setName(label);
+        final JSpinner spinner = new JSpinner(new SpinnerNumberModel(prefs.number(item), item.min, item.max, 1));
+        spinner.setName(item.label);
         ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setColumns(5);
         spinner.addChangeListener(new ChangeListener() {
-            public void stateChanged(ChangeEvent e) { put(at, word, (Integer) spinner.getValue()); }
+            public void stateChanged(ChangeEvent e) {
+                prefs.setNumber(item, (Integer) spinner.getValue());
+                changed();
+            }
         });
-        addRow(label, spinner, v < min || v > max ? "Stored as " + v + "; kept unless changed. " + (hint == null ? "" : hint) : hint);
+        addRow(item.label, spinner, item.hint);
     }
 
-    /** An on/off option: on when bit 7 (of the byte, or of the word's high byte) is set. */
-    private void toggle(String label, final int at, final boolean word)
+    /** An on/off option or a driving aid. */
+    private void toggle(final PreferencesPage.Item item)
     {
         final JCheckBox box = new JCheckBox();
-        box.setName(label);
-        box.setSelected(word ? (prefs.getWord(at) & 0x8000) != 0 : (prefs.getByte(at) & 0x80) != 0);
+        box.setName(item.label);
+        box.setSelected(prefs.on(item));
         box.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                put(at, word, box.isSelected() ? (word ? 0xFFFF : 0xFF) : 0);
+                prefs.setOn(item, box.isSelected());
+                changed();
             }
         });
-        addRow(label, box, null);
+        addRow(item.label, box, null);
     }
 
-    /** The frame rate, stored as 300 / fps. Offers the game's own menu range (25 to 8.1 fps) and,
-     *  with a warning, the faster rates GPFPS allowed down to 50 fps; any other stored value is kept
-     *  unless changed. */
-    private void frameRate()
+    /** The frame rate: the game's own menu range and, with a warning, the faster rates GPFPS allowed. */
+    private void frameRate(final PreferencesPage.Item item)
     {
-        final int fastest = 6, slowest = PreferencesFile.MENU_SLOWEST_PERIOD;
-        final JComboBox<String> box = new JComboBox<String>();
-        box.setName("Frame rate");
-        for (int p = fastest; p <= slowest; p++)
-            box.addItem(fps(p) + " fps" + (p == PreferencesFile.MENU_FASTEST_PERIOD ? " (the game's fastest)"
-                                         : p == slowest ? " (the game's slowest)"
-                                         : p < PreferencesFile.MENU_FASTEST_PERIOD ? " (faster than the game offers)" : ""));
-        final int v = prefs.getWord(PreferencesFile.FRAME_PERIOD);
-        if (v >= fastest && v <= slowest)
-            box.setSelectedIndex(v - fastest);
-        else
-        {
-            box.addItem("Other (stored as " + v + ")");   // kept unless changed
-            box.setSelectedIndex(box.getItemCount() - 1);
-        }
-        final JLabel warning = new JLabel("<html>Faster than the game's own Options menu allows. The car may spin "
-            + "away at the start of a race; if it does, choose a slower rate.</html>");
+        final JComboBox<String> box = new JComboBox<String>(item.items.toArray(new String[0]));
+        box.setName(item.label);
+        box.setSelectedIndex(prefs.chosen(item));
+        final JLabel warning = new JLabel("<html>" + PreferencesPage.FRAME_RATE_WARNING + "</html>");
         warning.setName("Frame rate warning");
         warning.setForeground(new Color(0xB04A00));
-        warning.setVisible(v >= fastest && v < PreferencesFile.MENU_FASTEST_PERIOD);
+        warning.setVisible(prefs.frameRateWarning());
         box.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                int i = box.getSelectedIndex();
-                if (i > slowest - fastest)
-                    return;
-                put(PreferencesFile.FRAME_PERIOD, true, fastest + i);
-                warning.setVisible(fastest + i < PreferencesFile.MENU_FASTEST_PERIOD);
+                prefs.choose(item, box.getSelectedIndex());
+                warning.setVisible(prefs.frameRateWarning());
+                changed();
             }
         });
-        addRow("Frame rate", box, "Faster is smoother if the PC can keep up.");
+        addRow(item.label, box, item.hint);
         GridBagConstraints c = new GridBagConstraints();
         c.gridy = row++;
         c.gridx = 1;
@@ -246,52 +196,27 @@ public class PreferencesTab extends GameFileTab
         form.add(warning, c);
     }
 
-    /** Frames per second for a stored period, to one decimal place when not whole. */
-    static String fps(int period)
+    private void autoLoad(final PreferencesPage.Item item)
     {
-        return 300 % period == 0 ? String.valueOf(300 / period)
-                                 : String.valueOf(Math.round(3000.0 / period) / 10.0);
-    }
-
-    private void aid(String label, final int bit)
-    {
-        final JCheckBox box = new JCheckBox();
-        box.setName(label);
-        box.setSelected((prefs.getWord(AIDS_AT) & (1 << bit)) != 0);
-        box.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                int v = prefs.getWord(AIDS_AT);
-                put(AIDS_AT, true, box.isSelected() ? v | (1 << bit) : v & ~(1 << bit));
-            }
-        });
-        addRow(label, box, null);
-    }
-
-    private void autoLoad(final String label, final int flagAt, final int pathAt)
-    {
-        final JCheckBox load = new JCheckBox("Load");
-        load.setName(label + " load");
-        load.setSelected(prefs.getByte(flagAt) == 0xFF);
-        final JTextField path = new JTextField(prefs.getText(pathAt, PreferencesFile.PATH_LENGTH), 24);
-        path.setName(label + " path");
-        JButton choose = new JButton("Choose...");
-        choose.setName(label + " choose");
+        final JCheckBox load = new JCheckBox(PreferencesPage.LOAD);
+        load.setName(item.label + " load");
+        load.setSelected(prefs.on(item));
+        final JTextField path = new JTextField(prefs.path(item), 24);
+        path.setName(item.label + " path");
+        JButton choose = new JButton(PreferencesPage.CHOOSE);
+        choose.setName(item.label + " choose");
         load.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) { put(flagAt, false, load.isSelected() ? 0xFF : 0); }
+            public void actionPerformed(ActionEvent e) {
+                prefs.setOn(item, load.isSelected());
+                changed();
+            }
         });
         final Runnable storePath = new Runnable() {
             public void run() {
-                String t = text(path.getText(), PreferencesFile.PATH_LENGTH - 1, "The path");
-                if (t == null)
-                {
-                    path.setText(prefs.getText(pathAt, PreferencesFile.PATH_LENGTH));
-                    return;
-                }
-                if (!t.equals(prefs.getText(pathAt, PreferencesFile.PATH_LENGTH)))
-                {
-                    prefs.setText(pathAt, PreferencesFile.PATH_LENGTH, t);
-                    setModified(true);
-                }
+                if (refused(prefs.setPath(item, path.getText())))
+                    path.setText(prefs.path(item));
+                else
+                    changed();
             }
         };
         path.addActionListener(new ActionListener() {
@@ -305,20 +230,13 @@ public class PreferencesTab extends GameFileTab
                 File game = new File(fileName).getAbsoluteFile().getParentFile();
                 File saves = new File(game, "GPSAVES");
                 JFileChooser chooser = new JFileChooser(saves.isDirectory() ? saves : game);
-                chooser.setDialogTitle("Choose the " + label.toLowerCase());
+                chooser.setDialogTitle(PreferencesPage.chooseTitle(item));
                 if (chooser.showOpenDialog(PreferencesTab.this) != JFileChooser.APPROVE_OPTION)
                     return;
-                String relative = relativePath(game, chooser.getSelectedFile());
-                if (relative == null || relative.length() > PreferencesFile.PATH_LENGTH - 1)
-                {
-                    JOptionPane.showMessageDialog(PreferencesTab.this,
-                        "The game can only load a file inside its own folder, with a path of at most "
-                        + (PreferencesFile.PATH_LENGTH - 1) + " characters.", "File Not Chosen",
-                        JOptionPane.WARNING_MESSAGE);
+                if (refused(prefs.choosePath(item, chooser.getSelectedFile())))
                     return;
-                }
-                path.setText(relative);
-                storePath.run();
+                path.setText(prefs.path(item));
+                changed();
                 if (!load.isSelected())
                     load.doClick();
             }
@@ -327,20 +245,6 @@ public class PreferencesTab extends GameFileTab
         controls.add(load);
         controls.add(path);
         controls.add(choose);
-        addRow(label, controls, null);
-    }
-
-    /** The DOS path of a file relative to the game folder, or null if outside it. */
-    static String relativePath(File game, File file)
-    {
-        String base = game.getAbsolutePath() + File.separator, path = file.getAbsolutePath();
-        if (!path.startsWith(base))
-            return null;
-        return path.substring(base.length()).replace(File.separatorChar, '\\').toUpperCase();
-    }
-
-    public String getStatusText()
-    {
-        return "Game options  ·  read by the game when it starts";
+        addRow(item.label, controls, null);
     }
 }

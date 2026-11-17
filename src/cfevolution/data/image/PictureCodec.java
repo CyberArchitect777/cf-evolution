@@ -33,6 +33,9 @@ public interface PictureCodec
     /** An 8-bit indexed PNG of these palette indices, carrying the palette (0xRRGGBB, 256 entries). */
     byte[] writeIndexedPng(byte[] pixels, int width, int height, int[] palette) throws IOException;
 
+    /** A true colour PNG of these colours (0xRRGGBB, row by row). */
+    byte[] writeRgbPng(int[] rgb, int width, int height) throws IOException;
+
     /** The picture's pixels at this size as ARGB: its own when the size already matches, else smoothly scaled. */
     int[] argbAt(Picture picture, int width, int height);
 }

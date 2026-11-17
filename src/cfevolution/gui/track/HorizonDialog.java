@@ -38,10 +38,9 @@ public class HorizonDialog extends JDialog
     private static final String PREF_FOLDER = "HorizonGameFolder";
 
     private final Track track;
-    private final byte[] palette;
+    private final cfevolution.edit.HorizonPage page;
     private final GameLiveries colours;
-    private final byte[] work;
-    private int current = TrackHorizon.SKY;
+    private final byte[] work;          // the page's picture (the capture reads it)
     private boolean changed;
     private final JPanel canvas;
     private final JButton colourButton;
@@ -55,9 +54,7 @@ public class HorizonDialog extends JDialog
             folder(prefs.get(PREF_FOLDER, "")), folder(prefs.get(MainGUI.PREF_GAME_FOLDER, "")));
         if (exe == null)
         {
-            JOptionPane.showMessageDialog(parent,
-                "The horizon is drawn in the game's own colours, which are in its GP.EXE.\n"
-              + "Choose the folder the game is installed in.", "Horizon", JOptionPane.INFORMATION_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(parent, cfevolution.edit.HorizonPage.NEEDS_GAME);
             JFileChooser chooser = new JFileChooser();
             chooser.setDialogTitle("Choose the game folder");
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -66,8 +63,7 @@ public class HorizonDialog extends JDialog
             exe = TrackHorizon.findGameExe(null, chooser.getSelectedFile());
             if (exe == null)
             {
-                JOptionPane.showMessageDialog(parent, "That folder does not have the game's GP.EXE.",
-                                              "Horizon", JOptionPane.WARNING_MESSAGE);
+                cfevolution.gui.MessageBoxes.show(parent, cfevolution.edit.HorizonPage.NO_GAME_EXE);
                 return false;
             }
             prefs.put(PREF_FOLDER, chooser.getSelectedFile().getPath());
@@ -84,11 +80,11 @@ public class HorizonDialog extends JDialog
 
     HorizonDialog(Window owner, Track track, byte[] palette)
     {
-        super(owner, "Horizon", ModalityType.APPLICATION_MODAL);
+        super(owner, cfevolution.edit.HorizonPage.TITLE, ModalityType.APPLICATION_MODAL);
         this.track = track;
-        this.palette = palette;
-        this.colours = GameLiveries.ofPalette(palette);
-        this.work = java.util.Arrays.copyOf(track.getHorizon(), TrackHorizon.BYTES);
+        this.page = new cfevolution.edit.HorizonPage(track, palette);
+        this.colours = page.colours;
+        this.work = page.work();
 
         canvas = new JPanel() {
             protected void paintComponent(Graphics g) {
@@ -103,7 +99,7 @@ public class HorizonDialog extends JDialog
         };
         canvas.setName("horizonCanvas");
         canvas.setPreferredSize(new Dimension(TrackHorizon.WIDTH * SCALE_X, TrackHorizon.HEIGHT * SCALE_Y));
-        canvas.setToolTipText("Click to paint in the chosen colour; right-click to pick up a colour");
+        canvas.setToolTipText(cfevolution.edit.HorizonPage.CANVAS_TIP);
         MouseAdapter paint = new MouseAdapter() {
             public void mousePressed(MouseEvent e) { at(e); }
             public void mouseDragged(MouseEvent e) { if (!SwingUtilities.isRightMouseButton(e)) at(e); }
@@ -113,36 +109,36 @@ public class HorizonDialog extends JDialog
                     return;
                 if (SwingUtilities.isRightMouseButton(e))
                 {
-                    current = work[y * TrackHorizon.WIDTH + x] & 0xFF;
+                    page.pick(x, y);
                     showColour();
                     return;
                 }
-                work[y * TrackHorizon.WIDTH + x] = (byte) current;
+                page.paint(x, y);
                 canvas.repaint();
             }
         };
         canvas.addMouseListener(paint);
         canvas.addMouseMotionListener(paint);
 
-        colourButton = new JButton("Colour...");
+        colourButton = new JButton(cfevolution.edit.HorizonPage.COLOUR);
         colourButton.setName("horizonColour");
         colourButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                int c = PaletteChooser.choose(HorizonDialog.this, "Horizon colour", colours, current);
+                int c = PaletteChooser.choose(HorizonDialog.this, cfevolution.edit.HorizonPage.CHOOSER_TITLE, colours, page.current());
                 if (c >= 0)
                 {
-                    current = c;
+                    page.setCurrent(c);
                     showColour();
                 }
             }
         });
         showColour();
-        JButton export = new JButton("Export...");
+        JButton export = new JButton(cfevolution.edit.HorizonPage.EXPORT);
         export.setName("horizonExport");
         export.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { exportPng(); }
         });
-        JButton importButton = new JButton("Import...");
+        JButton importButton = new JButton(cfevolution.edit.HorizonPage.IMPORT);
         importButton.setName("horizonImport");
         importButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { importPng(); }
@@ -153,11 +149,7 @@ public class HorizonDialog extends JDialog
         tools.add(export);
         tools.add(importButton);
 
-        JLabel about = new JLabel("<html><div style='width:520px'>The distant scenery the game draws along the "
-            + "horizon, 512 by 8 pixels. The picture covers a quarter turn, so it is seen four times round a "
-            + "lap. Nothing in it is see-through: the sky is painted in the game's sky colour (the one every "
-            + "original uses), which changes with the weather. Colours marked in the colour chooser change "
-            + "with the circuit or the weather, and in the rain the game greys the whole picture.</div></html>");
+        JLabel about = new JLabel("<html><div style='width:520px'>" + cfevolution.edit.HorizonPage.ABOUT + "</div></html>");
         about.setForeground(new Color(0x4A525C));
         about.setBorder(BorderFactory.createEmptyBorder(8, 10, 4, 10));
 
@@ -165,12 +157,7 @@ public class HorizonDialog extends JDialog
         ok.setName("horizonOk");
         ok.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                byte[] h = HorizonDialog.this.track.getHorizon();
-                if (!java.util.Arrays.equals(h, work))
-                {
-                    System.arraycopy(work, 0, h, 0, TrackHorizon.BYTES);
-                    changed = true;
-                }
+                changed = page.ok();
                 dispose();
             }
         });
@@ -200,7 +187,7 @@ public class HorizonDialog extends JDialog
 
     private void showColour()
     {
-        Color c = new java.awt.Color(colours.getPaletteRgb(current));
+        final int current = page.current();
         colourButton.setIcon(new Icon() {
             public void paintIcon(Component cmp, Graphics g, int x, int y) {
                 g.setColor(new java.awt.Color(colours.getPaletteRgb(current)));
@@ -211,29 +198,27 @@ public class HorizonDialog extends JDialog
             public int getIconWidth() { return 14; }
             public int getIconHeight() { return 14; }
         });
-        colourButton.setToolTipText("The colour clicks paint in (" + current + "); choose another");
+        colourButton.setToolTipText(page.colourTip());
     }
 
     private void exportPng()
     {
         File dir = track.getFile() == null ? null : track.getFile().getAbsoluteFile().getParentFile();
         JFileChooser chooser = new JFileChooser(dir);
-        chooser.setDialogTitle("Export the horizon");
+        chooser.setDialogTitle(cfevolution.edit.HorizonPage.EXPORT_TITLE);
         final javax.swing.filechooser.FileNameExtensionFilter png =
-            new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png");
+            new javax.swing.filechooser.FileNameExtensionFilter(cfevolution.edit.HorizonPage.PNG_FILTER, "png");
         final javax.swing.filechooser.FileNameExtensionFilter arg =
-            new javax.swing.filechooser.FileNameExtensionFilter("ArgTrack horizon (*.arghoriz)", "arghoriz");
+            new javax.swing.filechooser.FileNameExtensionFilter(cfevolution.edit.HorizonPage.RAW_FILTER, "arghoriz");
         chooser.addChoosableFileFilter(png);
         chooser.addChoosableFileFilter(arg);
         chooser.setAcceptAllFileFilterUsed(false);
         chooser.setFileFilter(png);
-        final String base = track.getFile() == null ? "horizon" : track.getFile().getName().replaceAll("\\.[^.]*$", "");
-        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), base + "-horizon.png"));
+        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), page.exportName(false)));
         chooser.addPropertyChangeListener(JFileChooser.FILE_FILTER_CHANGED_PROPERTY, new java.beans.PropertyChangeListener() {
             public void propertyChange(java.beans.PropertyChangeEvent e) {
                 JFileChooser c = (JFileChooser) e.getSource();
-                String ext = c.getFileFilter() == arg ? ".arghoriz" : ".png";
-                c.setSelectedFile(new File(c.getCurrentDirectory(), base + "-horizon" + ext));
+                c.setSelectedFile(new File(c.getCurrentDirectory(), page.exportName(c.getFileFilter() == arg)));
             }
         });
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
@@ -247,14 +232,11 @@ public class HorizonDialog extends JDialog
             f = new File(f.getParentFile(), f.getName() + ".png");
         try
         {
-            if (raw)
-                java.nio.file.Files.write(f.toPath(), work);
-            else
-                java.nio.file.Files.write(f.toPath(), TrackHorizon.toPng(work, palette));
+            java.nio.file.Files.write(f.toPath(), page.export(raw));
         }
         catch (java.io.IOException e)
         {
-            JOptionPane.showMessageDialog(this, f.getName() + " could not be saved.", "Export", JOptionPane.ERROR_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.HorizonPage.notExported(f.getName()));
         }
     }
 
@@ -262,41 +244,25 @@ public class HorizonDialog extends JDialog
     {
         File dir = track.getFile() == null ? null : track.getFile().getAbsoluteFile().getParentFile();
         JFileChooser chooser = new JFileChooser(dir);
-        chooser.setDialogTitle("Import a horizon");
+        chooser.setDialogTitle(cfevolution.edit.HorizonPage.IMPORT_TITLE);
         javax.swing.filechooser.FileNameExtensionFilter all = new javax.swing.filechooser.FileNameExtensionFilter(
-            "Horizons (*.png, *.arghoriz, track files *.dat)", "png", "arghoriz", "dat");
+            cfevolution.edit.HorizonPage.IMPORT_FILTER, "png", "arghoriz", "dat");
         chooser.addChoosableFileFilter(all);
-        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("PNG picture (*.png)", "png"));
-        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("ArgTrack horizon (*.arghoriz)", "arghoriz"));
-        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Another track's horizon (*.dat)", "dat"));
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(cfevolution.edit.HorizonPage.PNG_FILTER, "png"));
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(cfevolution.edit.HorizonPage.RAW_FILTER, "arghoriz"));
+        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(cfevolution.edit.HorizonPage.TRACK_FILTER, "dat"));
         chooser.setFileFilter(all);
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         File f = chooser.getSelectedFile();
-        boolean picture = f.getName().toLowerCase().endsWith(".png");
-        byte[] h = null;
+        byte[] bytes = null;
         try
         {
-            if (picture)
-            {
-                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(f);
-                if (img != null)
-                    h = TrackHorizon.fromPicture(cfevolution.gui.ImageIOPictures.toPicture(img), palette);
-            }
-            else
-                h = TrackHorizon.fromHorizonFile(java.nio.file.Files.readAllBytes(f.toPath()));
+            bytes = java.nio.file.Files.readAllBytes(f.toPath());
         }
-        catch (java.io.IOException e) { /* reported below */ }
-        if (h == null)
-        {
-            JOptionPane.showMessageDialog(this, picture
-                ? "A horizon picture must be 512 by 8 pixels (or that size enlarged a whole number of\n"
-                  + "times, such as 1024 by 16). Nothing was changed."
-                : f.getName() + " is too short to hold a horizon. Nothing was changed.",
-                "Import", JOptionPane.WARNING_MESSAGE);
+        catch (java.io.IOException e) { /* reported by the page */ }
+        if (cfevolution.gui.MessageBoxes.showRefusal(this, page.importFile(f.getName(), bytes)))
             return;
-        }
-        System.arraycopy(h, 0, work, 0, TrackHorizon.BYTES);
         canvas.repaint();
     }
 }

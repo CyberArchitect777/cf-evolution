@@ -25,6 +25,9 @@
 
 package cfevolution.gui.track;
 
+import cfevolution.edit.Message;
+import cfevolution.edit.TrackOutline;
+import cfevolution.gui.MessageBoxes;
 import cfevolution.data.track.*;
 import javax.swing.tree.*;
 import javax.swing.*;
@@ -113,10 +116,10 @@ public class TrackTreeSelector extends javax.swing.JPanel {
     {
         // Creates tree elements from information obtained from the current track
         
-        DefaultMutableTreeNode mainTrackHeaderNode = new DefaultMutableTreeNode("Track Headers");
-        mainTrackSegmentNode = new DefaultMutableTreeNode("Track Segments");
-        mainPitSegmentNode = new DefaultMutableTreeNode("Pit Segments");
-        mainLineSegmentNode = new DefaultMutableTreeNode("Best Line Segments");
+        DefaultMutableTreeNode mainTrackHeaderNode = new DefaultMutableTreeNode(TrackOutline.HEADERS_BRANCH);
+        mainTrackSegmentNode = new DefaultMutableTreeNode(TrackOutline.TRACK_BRANCH);
+        mainPitSegmentNode = new DefaultMutableTreeNode(TrackOutline.PIT_BRANCH);
+        mainLineSegmentNode = new DefaultMutableTreeNode(TrackOutline.LINE_BRANCH);
         rootNode.add(mainTrackHeaderNode);
         rootNode.add(mainTrackSegmentNode);
         rootNode.add(mainPitSegmentNode);
@@ -149,70 +152,14 @@ public class TrackTreeSelector extends javax.swing.JPanel {
     
     public String getBestLineDirection(CCLineSegment currentSegment)
     {
-        
-        // Returns the CC Line direction from the passed segment
-        
-        if (currentSegment.getType() == 128) // 0x80 in hexidecimal 
-        {
-            if (currentSegment.getParam(2) == 0)
-            {
-                return "Straight";
-            }
-            else
-            {
-                if (currentSegment.getParam(2) < 0)
-                {
-                    return "Turn Left";
-                }
-                else
-                {
-                    return "Turn Right";
-                }
-            }
-        }
-        else
-        {
-            if (currentSegment.getParam(1) == 0)
-            {
-                return "Straight";
-            }
-            else
-            {
-                if (currentSegment.getParam(1) < 0)
-                {
-                    return "Turn Left";
-                }
-                else
-                {
-                    return "Turn Right";
-                }
-            }
-            
-        }
+        return TrackOutline.direction(currentSegment);
     }
-    
+
     public String getSegmentDirection(TrackSegment currentSegment)
     {
-        
-        // Returns the direction from the passed segment
-        
-        if (currentSegment.getCurvature() < 0)
-        {
-            return "Turn Left";
-        }
-        else
-        {
-            if (currentSegment.getCurvature() > 0)
-            {
-                return "Turn Right";
-            }
-            else
-            {
-                return "Straight";
-            }
-        }
+        return TrackOutline.direction(currentSegment);
     }
-    
+
     public void setTrack(Track selectedTrack)
     {
         // Passes the current track 
@@ -223,7 +170,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
     private void setDefaultElement()
     {
         // Adds a single root node to the tree as part of initial configuration.
-        rootNode = new DefaultMutableTreeNode("Track Data");        
+        rootNode = new DefaultMutableTreeNode(TrackOutline.ROOT);        
     }
     
     private void createTree()
@@ -351,11 +298,9 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             {
                 currentTrackSegments = currentTrack.getTrackSegments();
                 int originalSegmentNumber = currentTrackSegments.size();
+                TrackOutline.clear(currentTrack, TrackOutline.TRACK);
                 for (int x=1;x<originalSegmentNumber;x++)
-                {
-                    currentTrackSegments.deleteAt(2);
                     mainTrackSegmentNode.remove(1);
-                }
                 ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainTrackSegmentNode);
                 deleteType = 1;
                 parentTrackWindow.updateTrackMap();
@@ -365,11 +310,9 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             {
                 currentTrackSegments = currentTrack.getPitlaneSegments();
                 int originalSegmentNumber = currentTrackSegments.size();
+                TrackOutline.clear(currentTrack, TrackOutline.PIT);
                 for (int x=1;x<originalSegmentNumber;x++)
-                {
-                    currentTrackSegments.deleteAt(2);
                     mainPitSegmentNode.remove(1);
-                }
                 ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainPitSegmentNode);
                 deleteType = 2;
                 parentTrackWindow.updateTrackMap();
@@ -380,11 +323,9 @@ public class TrackTreeSelector extends javax.swing.JPanel {
         {
             CCLine currentLines = currentTrack.getCCLine();
             int originalLineNumber = currentLines.size();
+            TrackOutline.clear(currentTrack, TrackOutline.LINE);
             for (int x=1;x<originalLineNumber;x++)
-            {
-                currentLines.deleteAt(2);
                 mainLineSegmentNode.remove(1);
-            }
             ((DefaultTreeModel)(trackDetails.getModel())).nodeStructureChanged(mainLineSegmentNode);
             deleteType = 3;
             parentTrackWindow.updateTrackMap();
@@ -406,19 +347,19 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
                 int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
-                if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
+                if (((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH)) || ((parentNode.toString()).equals(TrackOutline.PIT_BRANCH)))
                 {
                     TrackSegments currentTrackSegments = new TrackSegments();
-                    if ((parentNode.toString()).equals("Track Segments"))
+                    if ((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH))
                     {
                         currentTrackSegments = currentTrack.getTrackSegments();
-                        if (currentTrackSegments.size() == 1)
+                        Message refused = TrackOutline.delete(currentTrack, TrackOutline.TRACK, segmentNo);
+                        if (refused != null)
                         {
-                            JOptionPane.showMessageDialog(this, "The last remaining track segment cannot be deleted.", "Error", JOptionPane.ERROR_MESSAGE);
+                            MessageBoxes.show(this, refused);
                         }
                         else
                         {
-                            currentTrackSegments.deleteAt(segmentNo);
                             mainTrackSegmentNode.remove(segmentNo-1);
                             int[] entryDeletions = {(segmentNo-1)};
                             String[] dataDeletions = {selectedNode.toString()};
@@ -430,13 +371,13 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                     else
                     {
                         currentTrackSegments = currentTrack.getPitlaneSegments();
-                        if (currentTrackSegments.size() == 1)
+                        Message refused = TrackOutline.delete(currentTrack, TrackOutline.PIT, segmentNo);
+                        if (refused != null)
                         {
-                            JOptionPane.showMessageDialog(this, "The last remaining pit segment cannot be deleted.", "Error", JOptionPane.ERROR_MESSAGE);
+                            MessageBoxes.show(this, refused);
                         }
                         else
                         {
-                            currentTrackSegments.deleteAt(segmentNo);
                             mainPitSegmentNode.remove(segmentNo-1);
                             int[] entryDeletions = {(segmentNo-1)};
                             String[] dataDeletions = {selectedNode.toString()};
@@ -449,13 +390,13 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 else
                 {
                     CCLine currentLines = currentTrack.getCCLine();
-                    if (currentLines.size() == 1)
+                    Message refused = TrackOutline.delete(currentTrack, TrackOutline.LINE, segmentNo);
+                    if (refused != null)
                     {
-                        JOptionPane.showMessageDialog(this, "The last remaining best line segment cannot be deleted.", "Error", JOptionPane.ERROR_MESSAGE);
+                        MessageBoxes.show(this, refused);
                     }
                     else
                     {
-                        currentLines.deleteAt(segmentNo);
                         mainLineSegmentNode.remove(segmentNo-1);
                         int[] entryDeletions = {(segmentNo-1)};
                         String[] dataDeletions = {selectedNode.toString()};
@@ -477,7 +418,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             }
             else
             {
-                JOptionPane.showMessageDialog(this, "Deleting sections is only possible in the track, pit or best line branches", "Error", JOptionPane.ERROR_MESSAGE);
+                MessageBoxes.show(this, TrackOutline.DELETE_NOT_HERE);
             }
         }
         catch (Exception exceptionError)
@@ -536,13 +477,14 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
                 int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
-                if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
+                if (((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH)) || ((parentNode.toString()).equals(TrackOutline.PIT_BRANCH)))
                 {
                     TrackSegments currentTrackSegments = new TrackSegments();
-                    if ((parentNode.toString()).equals("Track Segments"))
+                    if ((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH))
                     {
                        currentTrackSegments = currentTrack.getTrackSegments();
-                       TrackSegment newTrackSegment = currentTrackSegments.insertAt(segmentNo+positionCorrection);
+                       TrackOutline.insert(currentTrack, TrackOutline.TRACK, segmentNo, aboveSelected);
+                       TrackSegment newTrackSegment = currentTrackSegments.getAt(segmentNo+positionCorrection);
                        mainTrackSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getSegmentDirection(newTrackSegment)),(segmentNo-1)+positionCorrection);
                        int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                        ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainTrackSegmentNode, entryAdditions);
@@ -551,7 +493,8 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                     else
                     {
                        currentTrackSegments = currentTrack.getPitlaneSegments();
-                       TrackSegment newPitSegment = currentTrackSegments.insertAt(segmentNo+positionCorrection);
+                       TrackOutline.insert(currentTrack, TrackOutline.PIT, segmentNo, aboveSelected);
+                       TrackSegment newPitSegment = currentTrackSegments.getAt(segmentNo+positionCorrection);
                        mainPitSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getSegmentDirection(newPitSegment)),(segmentNo-1)+positionCorrection);
                        int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                        ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainPitSegmentNode, entryAdditions);
@@ -561,7 +504,8 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 else
                 {
                     CCLine currentLines = currentTrack.getCCLine();
-                    CCLineSegment newLineSegment = currentLines.insertAt(segmentNo+positionCorrection);
+                    TrackOutline.insert(currentTrack, TrackOutline.LINE, segmentNo, aboveSelected);
+                    CCLineSegment newLineSegment = currentLines.getAt(segmentNo+positionCorrection);
                     mainLineSegmentNode.insert(new DefaultMutableTreeNode(Integer.toString(200) + " " + getBestLineDirection(newLineSegment)),(segmentNo-1)+positionCorrection);
                     int[] entryAdditions =  {(segmentNo-1)+positionCorrection};
                     ((DefaultTreeModel)(trackDetails.getModel())).nodesWereInserted(mainLineSegmentNode, entryAdditions);
@@ -572,7 +516,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
             }
             else
             {
-                JOptionPane.showMessageDialog(this, "Adding new sections is only possible in the track, pit or best line branches", "Error", JOptionPane.ERROR_MESSAGE);
+                MessageBoxes.show(this, TrackOutline.ADD_NOT_HERE);
             }
         }
         catch (Exception exceptionError)
@@ -671,10 +615,10 @@ public class TrackTreeSelector extends javax.swing.JPanel {
         int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
         TreePath parentPath = fullPath.getParentPath();
         DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
-        if (((parentNode.toString()).equals("Track Segments")) || ((parentNode.toString()).equals("Pit Segments")))
+        if (((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH)) || ((parentNode.toString()).equals(TrackOutline.PIT_BRANCH)))
         {
             TrackSegments currentTrackSegments = new TrackSegments();
-            if ((parentNode.toString()).equals("Track Segments"))
+            if ((parentNode.toString()).equals(TrackOutline.TRACK_BRANCH))
             {
                 currentTrackSegments = currentTrack.getTrackSegments();
             }
@@ -687,7 +631,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
         }
         else
         {
-            if ((parentNode.toString()).equals("Best Line Segments"))
+            if ((parentNode.toString()).equals(TrackOutline.LINE_BRANCH))
             {   
                 CCLine currentLines = currentTrack.getCCLine();
                 CCLineSegment selectedBestLine = currentLines.getAt(segmentNo);
@@ -791,13 +735,13 @@ public class TrackTreeSelector extends javax.swing.JPanel {
                 DefaultMutableTreeNode parentNode = (DefaultMutableTreeNode)parentPath.getLastPathComponent();
                 int spaceIndex = ((selectedNode.toString()).indexOf(" "));
                 int segmentNo = Integer.parseInt((selectedNode.toString()).substring(0,spaceIndex));
-                if (parentNode.toString() == "Track Segments")
+                if (parentNode == mainTrackSegmentNode)
                 {
                     parentTrackWindow.highlightSection(1, segmentNo);
                 }
                 else
                 {
-                    if (parentNode.toString() == "Pit Segments")
+                    if (parentNode == mainPitSegmentNode)
                     {
                         parentTrackWindow.highlightSection(2, segmentNo);
                     }
@@ -826,7 +770,7 @@ public class TrackTreeSelector extends javax.swing.JPanel {
         DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) fullPath.getLastPathComponent();
         if (selectedNode.getLevel() == 1)
         {
-            parentTrackWindow.selectionChanged(selectedNode.toString().equals("Track Headers") ? 4 : 0, -1, selectedNode);
+            parentTrackWindow.selectionChanged(selectedNode.toString().equals(TrackOutline.HEADERS_BRANCH) ? 4 : 0, -1, selectedNode);
             return;
         }
         if (selectedNode.getLevel() != 2)

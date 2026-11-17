@@ -51,6 +51,7 @@ public class MainActivity extends Activity
     protected void onCreate(Bundle state)
     {
         super.onCreate(state);
+        Session.pictures();
         setTitle("CF Evolution");
         int pad = Ui.dp(this, 16);
         LinearLayout col = new LinearLayout(this);

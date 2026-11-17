@@ -737,34 +737,24 @@ public class MainGUI extends JFrame
                 tab = new cfevolution.gui.gamefiles.PictureFileTab(cfevolution.data.gamefiles.MediaContainer.load(file), path, this, game);
             else if (cfevolution.data.gamefiles.SoundEffectsFile.isSoundEffects(file))
                 tab = new cfevolution.gui.gamefiles.SoundEffectsTab(cfevolution.data.gamefiles.SoundEffectsFile.load(file), path, this);
-            else if (size == cfevolution.data.gamefiles.PreferencesFile.SIZE)
-                tab = new cfevolution.gui.gamefiles.PreferencesTab(cfevolution.data.gamefiles.PreferencesFile.load(file), path, this);
-            else if (size == cfevolution.data.gamefiles.NameFile.SIZE)
-                tab = new cfevolution.gui.gamefiles.NameFileTab(cfevolution.data.gamefiles.NameFile.load(file), path, this);
-            else if (size == cfevolution.data.gamefiles.ChampionshipSave.SIZE)
-            {
-                int[] points = null;
-                int best = 0;
-                Executable exe = new Executable(game.getExecutable());
-                if (exe.loadData() == 0)
-                {
-                    points = new int[26];
-                    for (int i = 0; i < points.length; i++)
-                        points[i] = exe.getGamePoints().getPointValue(i);
-                    best = exe.getGameSettings().getBestResultsCounted();
-                }
-                tab = new cfevolution.gui.gamefiles.ChampionshipSaveTab(cfevolution.data.gamefiles.ChampionshipSave.load(file),
-                                                                        path, this, points, best);
-            }
             else
-                tab = new cfevolution.gui.gamefiles.SetupFileTab(cfevolution.data.gamefiles.SetupFile.load(file), path, this);
+            {
+                cfevolution.edit.GameFilePage page = cfevolution.edit.GameFilePage.open(file, game);
+                if (page instanceof cfevolution.edit.PreferencesPage)
+                    tab = new cfevolution.gui.gamefiles.PreferencesTab((cfevolution.edit.PreferencesPage) page, path, this);
+                else if (page instanceof cfevolution.edit.NameFilePage)
+                    tab = new cfevolution.gui.gamefiles.NameFileTab((cfevolution.edit.NameFilePage) page, path, this);
+                else if (page instanceof cfevolution.edit.ChampionshipPage)
+                    tab = new cfevolution.gui.gamefiles.ChampionshipSaveTab((cfevolution.edit.ChampionshipPage) page, path, this);
+                else
+                    tab = new cfevolution.gui.gamefiles.SetupFileTab((cfevolution.edit.SetupFilePage) page, path, this);
+            }
             addTab(tab);
             return true;
         }
         catch (java.io.IOException e)
         {
-            JOptionPane.showMessageDialog(this, file.getName() + " could not be opened. It may be damaged.",
-                "File Not Opened", JOptionPane.ERROR_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFilePage.notOpened(file));
             return false;
         }
     }
@@ -805,13 +795,7 @@ public class MainGUI extends JFrame
         the 1,480 bytes there are laid out exactly as a name file is. */
     public void writeNameFileFromGame(GameFolder game, File target) throws java.io.IOException
     {
-        byte[] exe = java.nio.file.Files.readAllBytes(game.getExecutable().toPath());
-        int build = Executable.identify(exe);
-        if (build < 1 || build > 3)
-            throw new java.io.IOException("GP.EXE could not be read");
-        int at = new int[] { 180250, 180186, 180202 }[build - 1];   // the driver names, then teams and engines
-        target.getParentFile().mkdirs();
-        cfevolution.data.gamefiles.NameFile.fromGame(java.util.Arrays.copyOfRange(exe, at, at + 1480)).save(target);
+        cfevolution.edit.GameFolderList.writeNameFile(game, target);
     }
 
     /** Breaks a message into lines of about {@code width} characters. */

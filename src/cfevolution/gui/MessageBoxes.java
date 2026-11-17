@@ -48,6 +48,20 @@ public final class MessageBoxes
             JOptionPane.showMessageDialog(parent, m.text, m.title, look(m.kind));
     }
 
+    /** Shows a refusal, if there is one; true when there was. */
+    public static boolean showRefusal(Component parent, Message m)
+    {
+        show(parent, m);
+        return m != null;
+    }
+
+    /** Asks with the message's own buttons (Message.choose); the button chosen, the first being 0, or -1 if closed. */
+    public static int choose(Component parent, Message m)
+    {
+        return JOptionPane.showOptionDialog(parent, m.text, m.title, JOptionPane.DEFAULT_OPTION, look(m.kind), null,
+                                            m.options, m.options[0]);
+    }
+
     /** Asks a yes/no question; true for Yes. */
     public static boolean ask(Component parent, Message m)
     {

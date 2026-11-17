@@ -18,96 +18,46 @@
 */
 package cfevolution.gui.gamefiles;
 
-import cfevolution.data.gamefiles.ColourReducer;
 import cfevolution.data.GameFolder;
 import cfevolution.data.gamefiles.MediaContainer;
+import cfevolution.edit.Message;
+import cfevolution.edit.PictureFilePage;
 import cfevolution.gui.EditorTab;
 import cfevolution.gui.MainGUI;
+import cfevolution.gui.MessageBoxes;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import javax.imageio.ImageIO;
 import javax.swing.*;
 
 /**
- * The game's picture files: HELMETS.DAT (the menu helmets, one per car),
- * FLAGS.DAT, BACKDROP.DAT (the menu backgrounds) and TRACKPIX.DAT (each
- * circuit's picture on the circuit menu). Small pictures can be drawn on
- * directly; every picture can be exported to PNG and replaced from one.
- *
- * The menu helmets are drawn in the palette of the driver selection
- * background (BACKDROP.DAT picture 6) and the language flags in the title
- * screen's (picture 4), as ArgDocs says and as drawing them confirms. The
- * first 32 colours of every menu palette are the menus' own (F1GP-SDL) and
- * are never changed.
+ * The game's picture files: HELMETS.DAT, FLAGS.DAT, BACKDROP.DAT and
+ * TRACKPIX.DAT. A view over the core's PictureFilePage (2026-11-17), which
+ * holds the names, palettes, drawing, PNG export and import.
  *
  * @author barrie
  */
 public class PictureFileTab extends JPanel implements EditorTab
 {
-    /** What BACKDROP.DAT's pictures are (ArgDocs, and looking at them). */
-    private static final String[] BACKDROP_NAMES = {
-        "Benetton (title sequence)", "Marshal waving a flag (between races)", "Honda engine (constructors' table)",
-        "Title screen", "Two Lotuses", "Mansell's helmet (driver selection)", "Pit board", "Mansell in the pits (Esc in a session)",
-        "Car from behind", "Car in the pits (setup screen)", "Car in the pits, wheels off (setup screen)",
-        "Car in the pits, bodywork off (setup screen)", "Senna with champagne", "Nose of a car",
-        "Senna and a Williams in the rain", "McLaren and Williams at Monaco (main menu)", "Three drivers on the podium",
-        "Drivers together" };
-    private static final int FIRST_UI_COLOURS = 32;
-    private static final int DRIVER_SELECTION_PICTURE = 5, TITLE_PICTURE = 3;
-
-    private final MediaContainer pictures;
+    private final PictureFilePage page;
     private String fileName;
     private final MainGUI mainWindow;
-    private final GameFolder game;
-    private final boolean small;
-    private final List<Integer> items = new ArrayList<Integer>();
-    private final List<String> names = new ArrayList<String>();
-    private final MediaContainer original;
     private boolean modified;
 
     private final JList<String> list;
     private final Preview preview = new Preview();
-    private int[] smallPalette;
-    private int colour = 15;
-    private final JRadioButton draw = new JRadioButton("Draw", true), replace = new JRadioButton("Replace a colour");
+    private final JRadioButton draw = new JRadioButton(PictureFilePage.DRAW, true), replace = new JRadioButton(PictureFilePage.REPLACE);
     private final Swatches swatches = new Swatches();
 
     public PictureFileTab(MediaContainer pictures, String fileName, MainGUI mainWindow, GameFolder game) throws IOException
     {
         super(new BorderLayout());
-        this.pictures = pictures;
         this.fileName = fileName;
         this.mainWindow = mainWindow;
-        this.game = game;
-        this.original = MediaContainer.load(new File(fileName));
-        String file = new File(fileName).getName().toUpperCase();
-        small = pictures.getItemCount() > 0 && pictures.getItem(0).type == MediaContainer.SMALL_PICTURE;
-        String[] drivers = game != null && file.startsWith("HELMETS") ? game.getDriverNames() : null;
-        for (int i = 0; i < pictures.getItemCount(); i++)
-        {
-            int type = pictures.getItem(i).type;
-            if (small ? type != MediaContainer.SMALL_PICTURE : type != MediaContainer.FULL_SCREEN)
-                continue;
-            int n = items.size();
-            items.add(i);
-            if (file.startsWith("HELMETS"))
-                names.add(drivers != null && n < drivers.length && drivers[n].length() > 0
-                          ? (n + 1) + "  " + drivers[n] : "Car " + (n + 1));
-            else if (file.startsWith("TRACKPIX"))
-                names.add(n < 16 ? (n + 1) + "  " + GameFolder.CIRCUIT_NAMES[n] : (n + 1) + "  Circuit selection screen");
-            else if (file.startsWith("FLAGS"))
-                names.add("Flag " + (n + 1));
-            else if (file.startsWith("BACKDROP"))
-                names.add((n + 1) + "  " + (n < BACKDROP_NAMES.length ? BACKDROP_NAMES[n] : "Picture"));
-            else
-                names.add("Picture " + (n + 1));
-        }
-        list = new JList<String>(names.toArray(new String[0]));
+        this.page = new PictureFilePage(pictures, MediaContainer.load(new File(fileName)), new File(fileName), game);
+        list = new JList<String>(page.names().toArray(new String[0]));
         list.setName("pictures");
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.addListSelectionListener(new javax.swing.event.ListSelectionListener() {
@@ -115,17 +65,15 @@ public class PictureFileTab extends JPanel implements EditorTab
         });
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-        buttons.add(button("Export PNG...", "export", new Runnable() { public void run() { exportPicture(); } }));
-        buttons.add(button("Import PNG...", "import", new Runnable() { public void run() { importPicture(); } }));
-        buttons.add(button("Revert Picture", "revert", new Runnable() { public void run() { revertPicture(); } }));
+        buttons.add(button(PictureFilePage.EXPORT, "export", new Runnable() { public void run() { exportPicture(); } }));
+        buttons.add(button(PictureFilePage.IMPORT, "import", new Runnable() { public void run() { importPicture(); } }));
+        buttons.add(button(PictureFilePage.REVERT, "revert", new Runnable() { public void run() { revertPicture(); } }));
 
         JPanel centre = new JPanel(new BorderLayout(0, 8));
         centre.add(buttons, BorderLayout.NORTH);
         centre.add(preview, BorderLayout.CENTER);
-        String explanation;
-        if (small)
+        if (page.small)
         {
-            smallPalette = defaultSmallPalette(file);
             JPanel tools = new JPanel(new BorderLayout(0, 6));
             JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
             ButtonGroup group = new ButtonGroup();
@@ -133,28 +81,24 @@ public class PictureFileTab extends JPanel implements EditorTab
             group.add(replace);
             draw.setName("draw");
             replace.setName("replace");
+            ActionListener mode = new ActionListener() {
+                public void actionPerformed(ActionEvent e) { page.setReplaceMode(replace.isSelected()); }
+            };
+            draw.addActionListener(mode);
+            replace.addActionListener(mode);
             modes.add(draw);
             modes.add(replace);
-            JLabel hint = new JLabel("Click to use the chosen colour; right-click a pixel to pick up its colour.");
+            JLabel hint = new JLabel(PictureFilePage.HINT);
             hint.setForeground(new Color(0x6A7380));
             modes.add(hint);
             tools.add(modes, BorderLayout.NORTH);
             tools.add(swatches, BorderLayout.CENTER);
             centre.add(tools, BorderLayout.SOUTH);
-            explanation = file.startsWith("HELMETS")
-                ? "The helmets on the driver menus, one for each car. They are pictures: the helmet colours in GP.EXE do not change them."
-                : "The flags on the language screen when the European version starts.";
         }
-        else
-            explanation = file.startsWith("TRACKPIX")
-                ? "Each circuit's picture on the circuit menu, and the circuit selection screen. Replace one with Import PNG (320 x 200)."
-                : "The menu backgrounds. Replace one with Import PNG (320 x 200).";
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(list), centre);
         split.setDividerLocation(260);
-        add(GameFileTab.page(small ? (file.startsWith("HELMETS") ? "Menu Helmets" : "Flags")
-                                   : (file.startsWith("TRACKPIX") ? "Circuit Pictures" : "Menu Backgrounds"),
-                             explanation, split));
+        add(GameFileTab.page(page.title(), page.explanation(), split));
         list.setSelectedIndex(0);
     }
 
@@ -166,62 +110,11 @@ public class PictureFileTab extends JPanel implements EditorTab
         return b;
     }
 
-    // --- palettes -----------------------------------------------------------
-
-    private MediaContainer backdrops()
+    private BufferedImage image(int picture)
     {
-        File[] candidates = { new File(new File(fileName).getAbsoluteFile().getParentFile(), "BACKDROP.DAT"),
-                              game == null ? null : new File(game.getFolder(), "BACKDROP.DAT") };
-        for (File f : candidates)
-            if (f != null && f.isFile())
-            {
-                if (f.getAbsolutePath().equals(new File(fileName).getAbsolutePath()))
-                    return pictures;
-                try { return MediaContainer.load(f); } catch (IOException e) { /* try the next */ }
-            }
-        return null;
-    }
-
-    /** Helmets: the driver selection background's palette; flags: the title screen's. */
-    private int[] defaultSmallPalette(String file)
-    {
-        MediaContainer b = backdrops();
-        int background = file.startsWith("FLAGS") ? TITLE_PICTURE : DRIVER_SELECTION_PICTURE;
-        if (b != null && b.getItemCount() > background * 2)
-            return b.getPalette(background * 2);
-        int[] grey = new int[256];
-        for (int i = 0; i < 256; i++) grey[i] = i * 0x010101;
-        return grey;
-    }
-
-    private int[] paletteOf(int item)
-    {
-        return small ? smallPalette : pictures.getPalette(item - 1);
-    }
-
-    // --- the picture ----------------------------------------------------------
-
-    private int selectedItem()
-    {
-        int i = list.getSelectedIndex();
-        return i < 0 ? -1 : items.get(i);
-    }
-
-    private byte[] pixels(int item)
-    {
-        return small ? pictures.getSmallPicture(item) : pictures.getFullScreen(item);
-    }
-
-    private BufferedImage image(int item)
-    {
-        MediaContainer.Item it = pictures.getItem(item);
-        int w = small ? it.width : 320, h = small ? it.height : 200;
-        byte[] px = pixels(item);
-        int[] pal = paletteOf(item);
+        int w = page.width(picture), h = page.height(picture);
         BufferedImage im = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-                im.setRGB(x, y, pal[px[y * w + x] & 0xFF]);
+        im.setRGB(0, 0, w, h, page.rgb(picture), 0, w);
         return im;
     }
 
@@ -241,51 +134,39 @@ public class PictureFileTab extends JPanel implements EditorTab
 
         Rectangle area()
         {
-            int item = selectedItem();
-            if (item < 0)
+            int picture = list.getSelectedIndex();
+            if (picture < 0)
                 return null;
-            MediaContainer.Item it = pictures.getItem(item);
-            int w = small ? it.width : 320, h = small ? it.height : 200;
+            int w = page.width(picture), h = page.height(picture);
             int scale = Math.max(1, Math.min(getWidth() / w, getHeight() / h));
             return new Rectangle((getWidth() - w * scale) / 2, (getHeight() - h * scale) / 2, w * scale, h * scale);
         }
 
         protected void paintComponent(Graphics g)
         {
-            int item = selectedItem();
+            int picture = list.getSelectedIndex();
             Rectangle a = area();
-            if (item < 0 || a == null)
+            if (picture < 0 || a == null)
                 return;
-            g.drawImage(image(item), a.x, a.y, a.width, a.height, null);
+            g.drawImage(image(picture), a.x, a.y, a.width, a.height, null);
         }
 
         void paintAt(MouseEvent e)
         {
-            int item = selectedItem();
+            int picture = list.getSelectedIndex();
             Rectangle a = area();
-            if (!small || item < 0 || a == null || !a.contains(e.getPoint()))
+            if (!page.small || picture < 0 || a == null || !a.contains(e.getPoint()))
                 return;
-            MediaContainer.Item it = pictures.getItem(item);
-            int scale = a.width / it.width;
+            int scale = a.width / page.width(picture);
             int x = (e.getX() - a.x) / scale, y = (e.getY() - a.y) / scale;
-            byte[] px = pixels(item);
-            int at = y * it.width + x;
             if (SwingUtilities.isRightMouseButton(e))
             {
-                colour = px[at] & 0xFF;
+                page.pick(picture, x, y);
                 swatches.repaint();
                 return;
             }
-            if (replace.isSelected())
-            {
-                byte old = px[at];
-                for (int i = 0; i < px.length; i++)
-                    if (px[i] == old)
-                        px[i] = (byte) colour;
-            }
-            else
-                px[at] = (byte) colour;
-            setPixels(item, px);
+            page.paint(picture, x, y);
+            changed(null);
         }
     }
 
@@ -296,11 +177,11 @@ public class PictureFileTab extends JPanel implements EditorTab
         {
             setName("colours");
             setPreferredSize(new Dimension(16 * 32, 8 * 14));
-            setToolTipText("Choose a colour");
+            setToolTipText(PictureFilePage.COLOURS_TIP);
             addMouseListener(new MouseAdapter() {
                 public void mousePressed(MouseEvent e) {
                     int c = (e.getY() / 14) * 32 + e.getX() * 32 / Math.max(1, getWidth());
-                    if (c >= 0 && c < 256) { colour = c; repaint(); }
+                    if (c >= 0 && c < 256) { page.setColour(c); repaint(); }
                 }
             });
         }
@@ -308,9 +189,11 @@ public class PictureFileTab extends JPanel implements EditorTab
         protected void paintComponent(Graphics g)
         {
             int w = getWidth() / 32;
+            int[] pal = page.smallPalette();
+            int colour = page.colour();
             for (int c = 0; c < 256; c++)
             {
-                g.setColor(new Color(smallPalette[c]));
+                g.setColor(new Color(pal[c]));
                 g.fillRect((c % 32) * w, (c / 32) * 14, w, 14);
             }
             g.setColor(Color.BLACK);
@@ -320,139 +203,94 @@ public class PictureFileTab extends JPanel implements EditorTab
         }
     }
 
-    private void setPixels(int item, byte[] px)
+    /** After a change: the refusal shown, or the tab marked changed. */
+    private void changed(Message refusal)
     {
-        if (small)
-            pictures.setSmallPicture(item, px);
-        else if (!pictures.setFullScreen(item, px))
-        {
-            JOptionPane.showMessageDialog(this, "This picture is too detailed for the game to load. Try a simpler one.",
-                "Picture Not Changed", JOptionPane.WARNING_MESSAGE);
+        if (MessageBoxes.showRefusal(this, refusal))
             return;
-        }
-        setModified(true);
+        if (page.changed())
+            setModified(true);
         preview.repaint();
     }
 
     private void revertPicture()
     {
-        int item = selectedItem();
-        if (item < 0)
-            return;
-        byte[] px = small ? original.getSmallPicture(item) : original.getFullScreen(item);
-        if (!small)
-            pictures.setPalette(item - 1, original.getPalette(item - 1));
-        setPixels(item, px);
+        int picture = list.getSelectedIndex();
+        if (picture >= 0)
+            changed(page.revert(picture));
     }
 
     // --- PNG ------------------------------------------------------------------
 
     private void exportPicture()
     {
-        int item = selectedItem();
-        if (item < 0)
+        int picture = list.getSelectedIndex();
+        if (picture < 0)
             return;
         JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
-        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(),
-            new File(fileName).getName().replaceAll("\\..*$", "") + "-" + (list.getSelectedIndex() + 1) + ".png"));
+        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), page.exportName(picture)));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         try
         {
-            ImageIO.write(image(item), "png", chooser.getSelectedFile());
+            java.nio.file.Files.write(chooser.getSelectedFile().toPath(), page.exportPng(picture));
         }
         catch (IOException e)
         {
-            JOptionPane.showMessageDialog(this, "The picture could not be saved.", "Export Failed", JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(this, PictureFilePage.NOT_EXPORTED);
         }
     }
 
     private void importPicture()
     {
-        int item = selectedItem();
-        if (item < 0)
+        int picture = list.getSelectedIndex();
+        if (picture < 0)
             return;
         JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
         if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
-        BufferedImage in;
+        byte[] bytes;
         try
         {
-            in = ImageIO.read(chooser.getSelectedFile());
+            bytes = java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath());
         }
         catch (IOException e)
         {
-            in = null;
+            bytes = null;
         }
+        cfevolution.data.image.Picture in = PictureFilePage.read(bytes);
         if (in == null)
         {
-            JOptionPane.showMessageDialog(this, "That file is not a picture the editor can read.", "Import Failed",
-                                          JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(this, PictureFilePage.NOT_A_PICTURE);
             return;
         }
-        importImage(item, in, null);
+        importInto(picture, in, null);
     }
 
-    /**
-     * Puts a picture in place of item: scaled to fit if its size differs, then
-     * matched to the nearest colours. For a full-screen picture, newColours
-     * (or the user, if null) decides whether it gets a palette of its own.
-     */
+    /** As importInto, for a desktop image and the file's item number (GuiSweep uses it). */
     public void importImage(int item, BufferedImage in, Boolean newColours)
     {
-        MediaContainer.Item it = pictures.getItem(item);
-        int w = small ? it.width : 320, h = small ? it.height : 200;
-        if (in.getWidth() != w || in.getHeight() != h)
+        importInto(page.pictureOfItem(item), cfevolution.gui.ImageIOPictures.toPicture(in), newColours);
+    }
+
+    /** Puts a picture in place of this one, asking first (newColours null) when the page says to. */
+    private void importInto(int picture, cfevolution.data.image.Picture in, Boolean newColours)
+    {
+        Message q = page.importQuestion(picture);
+        boolean fresh = false;
+        if (q != null)
         {
-            BufferedImage scaled = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-            Graphics2D g = scaled.createGraphics();
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g.drawImage(in, 0, 0, w, h, null);
-            g.dispose();
-            in = scaled;
-        }
-        int[] rgb = in.getRGB(0, 0, w, h, null, 0, w);
-        int[] pal = paletteOf(item).clone();
-        if (!small)
-        {
-            // the helmets and flags are drawn in these two backgrounds' colours, so those stay
-            boolean helmetsUseIt = new File(fileName).getName().toUpperCase().startsWith("BACKDROP")
-                                   && (item == DRIVER_SELECTION_PICTURE * 2 + 1 || item == TITLE_PICTURE * 2 + 1);
             if (newColours == null)
             {
-                if (helmetsUseIt)
-                    newColours = false;
-                else
-                {
-                    int choice = JOptionPane.showOptionDialog(this,
-                        "Give this picture colours of its own (best for a new picture), or match it to the colours it has now?",
-                        "Import Picture", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null,
-                        new String[] { "New Colours", "Keep Colours", "Cancel" }, "New Colours");
-                    if (choice != 0 && choice != 1)
-                        return;
-                    newColours = choice == 0;
-                }
+                int choice = JOptionPane.showOptionDialog(this, q.text, q.title, JOptionPane.YES_NO_CANCEL_OPTION,
+                    JOptionPane.QUESTION_MESSAGE, null, q.options, q.options[0]);
+                if (choice != 0 && choice != 1)
+                    return;
+                newColours = choice == 0;
             }
-            if (newColours && !helmetsUseIt)
-                pal = ColourReducer.palette(rgb, pal, FIRST_UI_COLOURS);
+            fresh = newColours;
         }
-        byte[] px = ColourReducer.match(rgb, pal, small ? 0 : FIRST_UI_COLOURS);
-        if (!small)
-        {
-            int[] was = pictures.getPalette(item - 1);
-            pictures.setPalette(item - 1, pal);
-            if (!pictures.setFullScreen(item, px))
-            {
-                pictures.setPalette(item - 1, was);
-                JOptionPane.showMessageDialog(this, "This picture is too detailed for the game to load. Try a simpler one.",
-                    "Picture Not Changed", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            setModified(true);
-            preview.repaint();
-        }
-        else
-            setPixels(item, px);
+        changed(page.importPicture(picture, in, fresh));
     }
 
     // --- EditorTab ----------------------------------------------------------
@@ -474,16 +312,8 @@ public class PictureFileTab extends JPanel implements EditorTab
 
     public boolean save()
     {
-        try
-        {
-            pictures.save(new File(fileName));
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(this, new File(fileName).getName() + " could not be saved.", "Save Failed",
-                                          JOptionPane.ERROR_MESSAGE);
+        if (MessageBoxes.showRefusal(this, page.save(new File(fileName))))
             return false;
-        }
         setModified(false);
         return true;
     }
@@ -518,6 +348,6 @@ public class PictureFileTab extends JPanel implements EditorTab
 
     public String getStatusText()
     {
-        return names.size() + " pictures  ·  " + (small ? "draw on them, or import PNG" : "320 x 200, import PNG to replace");
+        return page.status();
     }
 }

@@ -20,9 +20,16 @@
 package cfevolution.screens;
 
 import cfevolution.data.track.Track;
+import cfevolution.data.track.TrackSegment;
+import cfevolution.edit.BestLineRepair;
+import cfevolution.edit.PropertySheet;
+import cfevolution.edit.SegmentCommands;
+import cfevolution.edit.TrackOutline;
 import cfevolution.edit.BestLineGeneration;
 import cfevolution.edit.GameFolderOpening;
 import cfevolution.edit.Message;
+import cfevolution.edit.CarSettingsForm;
+import cfevolution.edit.RaceStrategyForm;
 import cfevolution.edit.RandomTrackGeneration;
 import cfevolution.edit.TrackCheck;
 import cfevolution.edit.TrackMap;
@@ -52,11 +59,14 @@ public final class TrackScreen
     private boolean modified;
     private CCLineGenerationResult pendingLine;
     private boolean randomConfirmed;
+    private final BestLineRepair repair;
+    private int pickedKind = TrackOutline.NOTHING, pickedNo = -1;
 
     private TrackScreen(File file, Track track)
     {
         this.file = file;
         this.track = track;
+        this.repair = new BestLineRepair(track);
         TrackTools.recalculate(track);           // as the desktop map does when it first shows the track
     }
 
@@ -110,6 +120,214 @@ public final class TrackScreen
         modified = true;
     }
 
+    /** After a change to whole lists: nothing stays picked, and when the best
+        line was replaced, Repair Best Line After Edit has nothing to go on. */
+    private void replaced(boolean line)
+    {
+        changed();
+        pick(TrackOutline.NOTHING, -1);
+        if (line)
+            repair.clear();
+    }
+
+    // --- The track's list, a part's properties, a segment's commands ---------
+
+    /** Picks the headers (n ignored), a track, pit or best line segment (1-based), or NOTHING. */
+    public void pick(int kind, int n)
+    {
+        boolean segment = kind == TrackOutline.TRACK || kind == TrackOutline.PIT || kind == TrackOutline.LINE;
+        if (segment && (n < 1 || n > TrackOutline.count(track, kind)))
+            kind = TrackOutline.NOTHING;
+        pickedKind = kind;
+        pickedNo = segment && kind != TrackOutline.NOTHING ? n : -1;
+    }
+
+    public int pickedKind()
+    {
+        return pickedKind;
+    }
+
+    public int pickedNo()
+    {
+        return pickedNo;
+    }
+
+    /** "Track segment 12", and under it "Turns left · 40 TLU". */
+    public String heading()
+    {
+        return TrackOutline.heading(pickedKind, pickedNo);
+    }
+
+    public String hint()
+    {
+        return TrackOutline.hint(track, pickedKind, pickedNo);
+    }
+
+    /** A list's segments as the desktop names them ("12 Turn Left"). */
+    public String[] list(int kind)
+    {
+        String[] out = new String[TrackOutline.count(track, kind)];
+        for (int i = 0; i < out.length; i++)
+            out[i] = TrackOutline.label(track, kind, i + 1);
+        return out;
+    }
+
+    /** The picked part's properties to edit, or null when nothing is picked. */
+    public PropertySheet properties()
+    {
+        return TrackOutline.sheet(track, pickedKind, pickedNo);
+    }
+
+    /**
+     * OK on the properties: the refusal when a value is not a number (nothing
+     * is written; sheet.problem() says the same), else writes them and returns
+     * the notice about a best line length brought into range, or null.
+     */
+    public Message applyProperties(PropertySheet sheet)
+    {
+        Message problem = sheet.problem();
+        if (problem != null)
+            return problem;
+        if (sheet.what == PropertySheet.LINE)
+            repair.prepare(sheet.lineSegment());
+        Message notice = sheet.apply();
+        if (sheet.what == PropertySheet.LINE)
+            repair.confirm(sheet.lineChanged());
+        changed();
+        return notice;
+    }
+
+    /** Adds a segment above or below the picked one, which stays picked. */
+    public Flow addSegment(boolean above)
+    {
+        if (pickedNo < 1)
+            return Flow.tell(TrackOutline.ADD_NOT_HERE);
+        pickedNo = TrackOutline.insert(track, pickedKind, pickedNo, above);
+        changed();
+        return Flow.tell();
+    }
+
+    /** Deletes the picked segment; the next one is picked. */
+    public Flow deleteSegment()
+    {
+        if (pickedNo < 1)
+            return Flow.tell(TrackOutline.DELETE_NOT_HERE);
+        Message refused = TrackOutline.delete(track, pickedKind, pickedNo);
+        if (refused != null)
+            return Flow.tell(refused);
+        changed();
+        pick(pickedKind, TrackOutline.afterDelete(track, pickedKind, pickedNo));
+        return Flow.tell();
+    }
+
+    /** Edit > Remove All ... Segments: asks, then leaves only the first. */
+    public Flow clearSegments(final int kind)
+    {
+        return new Flow() {
+            {
+                show(TrackOutline.clearQuestion(kind));
+            }
+            protected void next(Message asked, int choice)
+            {
+                if (choice != YES)
+                    return;
+                pick(TrackOutline.NOTHING, -1);
+                TrackOutline.clear(track, kind);
+                changed();
+            }
+        };
+    }
+
+    /** The picked track or pit segment, else null (only those have commands). */
+    public TrackSegment pickedSegment()
+    {
+        return pickedKind == TrackOutline.TRACK || pickedKind == TrackOutline.PIT
+            ? TrackOutline.segment(track, pickedKind, pickedNo) : null;
+    }
+
+    public String commandsText()
+    {
+        return SegmentCommands.countText(pickedSegment());
+    }
+
+    public String[] commands()
+    {
+        return SegmentCommands.list(pickedSegment());
+    }
+
+    /** "Parameters of Track markings", or that it has none. */
+    public String commandHeading(int index)
+    {
+        return SegmentCommands.paramHeading(pickedSegment(), index);
+    }
+
+    /** A command's parameters, or null when it has none. */
+    public PropertySheet commandProperties(int index)
+    {
+        return SegmentCommands.params(pickedSegment(), index);
+    }
+
+    /** OK on a command's parameters: the refusal, else null. */
+    public Message applyCommand(PropertySheet sheet)
+    {
+        Message problem = sheet.problem();
+        if (problem != null)
+            return problem;
+        sheet.apply();
+        changed();
+        return null;
+    }
+
+    /** Adds SegmentCommands.available()[choice] to the picked segment; returns where it is in the list. */
+    public int addCommand(int choice)
+    {
+        int at = SegmentCommands.add(pickedSegment(), choice);
+        changed();
+        return at;
+    }
+
+    public void removeCommand(int index)
+    {
+        SegmentCommands.remove(pickedSegment(), index);
+        changed();
+    }
+
+    // --- Edit > Horizon ---------------------------------------------------------
+
+    /** The horizon to paint, in the colours of the GP.EXE beside the track; null when there is none. */
+    public cfevolution.edit.HorizonPage horizon()
+    {
+        return cfevolution.edit.HorizonPage.of(track);
+    }
+
+    /** OK on the horizon: the picture into the track. */
+    public void applyHorizon(cfevolution.edit.HorizonPage page)
+    {
+        if (page.ok())
+            modified = true;
+    }
+
+    // --- Tools > Repair Best Line After Edit -----------------------------------
+
+    public boolean canRepairLine()
+    {
+        return repair.available();
+    }
+
+    /** Refits the sectors after an edited best line segment onto the line as it was. */
+    public Flow repairLine()
+    {
+        BestLineRepair.Result r = repair.repair();
+        if (r == null)
+            return Flow.tell();
+        if (r.repaired != null)
+        {
+            TrackTools.replaceBestLine(track, r.repaired);
+            replaced(true);
+        }
+        return Flow.tell(r.message);
+    }
+
     /** A fix from Check Track or a warning (TrackCheck.ACTION_*). Generating a
         line (ACTION_GENERATE_LINE) is prepareBestLine + generateBestLine instead. */
     public Flow fix(int action)
@@ -121,6 +339,39 @@ public final class TrackScreen
             case TrackCheck.ACTION_PIT_MOUTHS: return pitMouths();
             default: return Flow.tell();
         }
+    }
+
+    // --- Edit > Race Strategy, Edit > Car and AI Settings ----------------------
+
+    /** The race settings as a form, or null for a file without them (RaceStrategyForm.NOT_AVAILABLE says so). */
+    public RaceStrategyForm raceStrategy()
+    {
+        return RaceStrategyForm.of(track.getFooter());
+    }
+
+    /** OK with typed values; the message when refused, else null. */
+    public Message applyRaceStrategy(RaceStrategyForm form, String[] typed)
+    {
+        boolean[] changed = new boolean[1];
+        Message m = form.apply(typed, changed);
+        if (changed[0])
+            modified = true;
+        return m;
+    }
+
+    public CarSettingsForm carSettings()
+    {
+        return new CarSettingsForm(track.getCCSetup());
+    }
+
+    /** OK with typed values, one per field (the tyre as A-D); the message when refused, else null. */
+    public Message applyCarSettings(CarSettingsForm form, String[] typed)
+    {
+        boolean[] changed = new boolean[1];
+        Message m = form.apply(typed, changed);
+        if (changed[0])
+            modified = true;
+        return m;
     }
 
     public Flow moveFromEdge()
@@ -135,22 +386,22 @@ public final class TrackScreen
     {
         TrackTools.Outcome done = TrackTools.setUpPitMouths(track);
         if (done.changed)
-            changed();
+            replaced(false);
         return Flow.tell(done.message);
     }
 
     public Flow matchHeading()
     {
-        return planned(TrackTools.planHeading(track));
+        return planned(TrackTools.planHeading(track), false);
     }
 
     public Flow reduceToMinimal()
     {
-        return planned(TrackTools.planMinimal(track));
+        return planned(TrackTools.planMinimal(track), true);
     }
 
     /** A tool that may ask first: failure or nothing-to-do, else ask, then do it and report. */
-    private Flow planned(final TrackTools.Plan plan)
+    private Flow planned(final TrackTools.Plan plan, final boolean line)
     {
         if (!plan.canApply())
             return Flow.tell(plan.failure != null ? plan.failure : plan.nothingToDo);
@@ -166,7 +417,7 @@ public final class TrackScreen
                 asked = false;
                 TrackTools.Outcome done = plan.apply();
                 if (done.changed)
-                    changed();
+                    replaced(line);         // Reduce to Minimal Track clears the best line
                 show(done.message);
             }
         };
@@ -242,7 +493,7 @@ public final class TrackScreen
             return;
         TrackTools.replaceBestLine(track, pendingLine.ccLine);
         pendingLine = null;
-        changed();
+        replaced(true);
     }
 
     public void discardBestLine()
@@ -328,7 +579,7 @@ public final class TrackScreen
             return run.problem;
         int trimmed = RandomTrackGeneration.apply(track, run.result.layout, run.result.line.ccLine);
         pendingLine = null;
-        changed();
+        replaced(true);
         return RandomTrackGeneration.status(run.result.layout, trimmed, track.getPitSegCount());
     }
 

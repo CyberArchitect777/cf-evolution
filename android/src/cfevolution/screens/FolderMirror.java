@@ -42,7 +42,9 @@ import java.util.Set;
  * every file that is new or changed. Plain Java: the folder is reached through
  * a Store, so this runs and is checked on the desktop (ScreenGate).
  *
- * Copied in: GP.EXE, GPPACKED.EXE and the 16 circuits; and, until the folder
+ * Copied in: GP.EXE, GPPACKED.EXE, the 16 circuits and the game's car, helmet
+ * and pit crew pictures (F1GPDATA.DAT, F1GPDATB.DAT: read for the Liveries
+ * page, never changed, so never written back); and, until the folder
  * has its first-open copy (CFE-BACKUP/original), the other files that copy
  * keeps (F1PREFS.DAT, the picture files, XSOUND.BIN, GPSAVES). When the copy
  * exists it is not copied in: an empty folder stands for it, so the core
@@ -135,7 +137,7 @@ public final class FolderMirror
                 new File(local, path).mkdirs();            // stands for the copy: the core keeps none
             }
         }
-        Set<String> wanted = new HashSet<String>(Arrays.asList("GP.EXE", GameFolder.BACKUP_NAME));
+        Set<String> wanted = new HashSet<String>(Arrays.asList("GP.EXE", GameFolder.BACKUP_NAME, "F1GPDATA.DAT", "F1GPDATB.DAT"));
         for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
             wanted.add(GameFolder.trackFileName(slot));
         if (!haveOriginals)

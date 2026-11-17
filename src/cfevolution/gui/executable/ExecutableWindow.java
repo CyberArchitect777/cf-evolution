@@ -24,10 +24,14 @@
  */
 package cfevolution.gui.executable;
 
-import cfevolution.data.dataset.OtherEditorFiles;
 
 import cfevolution.data.executable.*;
 import cfevolution.data.gamefiles.SetupFile;
+import cfevolution.edit.GameSettingsPage;
+import cfevolution.edit.LapRecordsPage;
+import cfevolution.edit.LiveriesPage;
+import cfevolution.edit.SetupsPage;
+import cfevolution.edit.TablePage;
 import cfevolution.gui.*;
 import java.awt.*;
 import java.io.File;
@@ -536,42 +540,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         return cfevolution.edit.ExecutableEdits.carNumber(String.valueOf(value));
     }
 
-    /** Refuses a line-up change that puts a car in two seats or leaves too
-        few cars to fill a race, saying why. */
-    // --- Liveries ---------------------------------------------------------
-
-    /** One table of colours: a row per team or driver, a column per part. */
-    private interface ColourTable
-    {
-        int rows();
-        String rowName(int row);
-        String[] parts();
-        /** Which of the set's 16 colours each part is. */
-        int[] slots();
-        int get(int row, int part);
-        void set(int row, int part, int colour);
-        /** Any of the set's 16 colours, for drawing the pictures. */
-        int setColour(int row, int slot);
-    }
-
-    /** The game's pictures for one tab: either one picture the user can turn, or several to step through. */
-    private static class Pictures
-    {
-        final int first, last, start, scale;
-        final int[] group;
-
-        /** Pictures first..last show the subject turning from behind to in front. */
-        Pictures(int first, int last, int start, int scale)
-        {
-            this.first = first; this.last = last; this.start = start; this.scale = scale; this.group = null;
-        }
-
-        /** Pictures shown one at a time, with buttons to step between them. */
-        Pictures(int[] pictures)
-        {
-            this.first = pictures[0]; this.last = pictures[0]; this.start = 0; this.scale = 2; this.group = pictures;
-        }
-    }
+    // --- Liveries (the page's rules and words are edit/LiveriesPage) ------
 
     private static final String PREF_GAME_FOLDER = "ExecutableGameFolder";
 
@@ -597,10 +566,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         GameSprites found = GameSprites.find(chooser.getSelectedFile());
         if (found == null)
         {
-            JOptionPane.showMessageDialog(parent,
-                "That folder does not have the game's F1GPDATA.DAT and F1GPDATB.DAT files.\n"
-                + "Choose the folder the game is installed in.",
-                "Pictures not found", JOptionPane.WARNING_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(parent, LiveriesPage.PICTURES_NOT_FOUND);
             return;
         }
         java.util.prefs.Preferences.userRoot().node("cfevolution").put(PREF_GAME_FOLDER, found.getFolder().getPath());
@@ -611,53 +577,21 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     private JComponent liveriesPage()
     {
-        final GameLiveries liveries = currentExecutable.getGameLiveries();
-        final GameTeams teams = currentExecutable.getGameTeams();
-        final GameDrivers drivers = currentExecutable.getGameDrivers();
+        LiveriesPage page = new LiveriesPage(currentExecutable.getGameLiveries(), currentExecutable.getGameTeams(),
+                                             currentExecutable.getGameDrivers());
         sprites = findSprites();
-
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Cars", colourTable(liveries, new ColourTable() {
-            public int rows() { return GameLiveries.TEAMS; }
-            public String rowName(int r) { return teams.getTeamName(r); }
-            public String[] parts() { return GameLiveries.CAR_PARTS; }
-            public int[] slots() { return GameLiveries.CAR_BYTES; }
-            public int get(int r, int p) { return liveries.getCarColour(r, p); }
-            public void set(int r, int p, int c) { liveries.setCarColour(r, p, c); }
-            public int setColour(int r, int s) { return liveries.getCarSetColour(r, s); }
-        }, new Pictures(GameSprites.CAR_FIRST, GameSprites.CAR_LAST, 212, 6), CAR_FILE));
-        tabs.addTab("Helmets", colourTable(liveries, new ColourTable() {
-            public int rows() { return GameLiveries.DRIVERS; }
-            public String rowName(int r) { return (r + 1) + "  " + drivers.getDriverName(r); }
-            public String[] parts() { return GameLiveries.HELMET_PARTS; }
-            public int[] slots() { return GameLiveries.HELMET_BYTES; }
-            public int get(int r, int p) { return liveries.getHelmetColour(r, p); }
-            public void set(int r, int p, int c) { liveries.setHelmetColour(r, p, c); }
-            public int setColour(int r, int s) { return liveries.getHelmetSetColour(r, s); }
-        }, new Pictures(GameSprites.HELMET_FIRST, GameSprites.HELMET_LAST, 70, 12), HELMET_FILE));
-        tabs.addTab("Pit crews", colourTable(liveries, new ColourTable() {
-            public int rows() { return GameLiveries.TEAMS; }
-            public String rowName(int r) { return teams.getTeamName(r); }
-            public String[] parts() { return GameLiveries.PIT_CREW_PARTS; }
-            public int[] slots() { return GameLiveries.PIT_CREW_BYTES; }
-            public int get(int r, int p) { return liveries.getPitCrewColour(r, p); }
-            public void set(int r, int p, int c) { liveries.setPitCrewColour(r, p, c); }
-            public int setColour(int r, int s) { return liveries.getPitCrewSetColour(r, s); }
-        }, new Pictures(GameSprites.PIT_CREW), null));
-        return page("Liveries",
-            "Colours of each team's cars and pit crew, and each driver's helmet. Click a colour, or part of the picture, to change it.",
-            tabs);
+        for (int tab = 0; tab < LiveriesPage.TAB_TITLES.length; tab++)
+            tabs.addTab(LiveriesPage.TAB_TITLES[tab], colourTable(page, tab));
+        return page(LiveriesPage.TITLE, LiveriesPage.DESCRIPTION, tabs);
     }
 
-    /** ArgEditor's file for one team's car colours, or one driver's helmet colours. */
-    private static final String CAR_FILE = "car", HELMET_FILE = "hel";
-
-    private JComponent colourTable(final GameLiveries liveries, final ColourTable source, final Pictures pictures,
-                                   final String fileKind)
+    private JComponent colourTable(final LiveriesPage page, final int tab)
     {
-        final String[] parts = source.parts();
+        final GameLiveries liveries = page.liveries();
+        final String[] parts = LiveriesPage.parts(tab);
         final AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return source.rows(); }
+            public int getRowCount() { return page.rows(tab); }
             public int getColumnCount() { return parts.length + 1; }
             public String getColumnName(int c) {
                 if (c == 0) return "";
@@ -668,7 +602,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
             public Class<?> getColumnClass(int c) { return c == 0 ? String.class : Integer.class; }
             public boolean isCellEditable(int r, int c) { return false; }
-            public Object getValueAt(int r, int c) { return c == 0 ? source.rowName(r) : (Object) source.get(r, c - 1); }
+            public Object getValueAt(int r, int c) { return c == 0 ? page.rowName(tab, r) : (Object) page.get(tab, r, c - 1); }
         };
         final JTable table = table(model, new int[0]);
         // Room for part names of up to three lines
@@ -723,13 +657,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 int r = table.getSelectedRow(), c = table.getSelectedColumn();
                 if (r < 0 || c < 1)
                     return;
-                int colour = PaletteChooser.choose(table, source.rowName(r) + ": " + parts[c - 1],
-                                                   liveries, source.get(r, c - 1));
-                if (colour >= 0 && colour != source.get(r, c - 1))
-                {
-                    source.set(r, c - 1, colour);
+                int colour = PaletteChooser.choose(table, page.chooserTitle(tab, r, c - 1), liveries, page.get(tab, r, c - 1));
+                if (page.set(tab, r, c - 1, colour))
                     model.fireTableCellUpdated(r, c);
-                }
             }
         };
         table.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -747,7 +677,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
              .put(KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_SPACE, 0), "chooseColour");
         table.getActionMap().put("chooseColour", chooseAction);
 
-        JPanel tab = new JPanel(new BorderLayout());
+        JPanel panel = new JPanel(new BorderLayout());
         final JScrollPane tableScroll = new JScrollPane(table);
         // Fill the width when the columns fit; scroll sideways when they do not
         tableScroll.getViewport().addComponentListener(new java.awt.event.ComponentAdapter() {
@@ -761,15 +691,15 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     table.setAutoResizeMode(mode);
             }
         });
-        tab.add(tableScroll, BorderLayout.CENTER);
-        tab.add(picturePanel(liveries, source, pictures, table, model, choose), BorderLayout.EAST);
+        panel.add(tableScroll, BorderLayout.CENTER);
+        panel.add(picturePanel(page, tab, table, model, choose), BorderLayout.EAST);
         JPanel south = new JPanel();
         south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
-        south.add(copyPasteButtons(source, table, model, fileKind == null ? "crew" : fileKind));
-        if (fileKind != null)
-            south.add(colourFileButtons(source, table, model, fileKind));
-        tab.add(south, BorderLayout.SOUTH);
-        return tab;
+        south.add(copyPasteButtons(page, tab, table, model));
+        if (LiveriesPage.hasFile(tab))
+            south.add(colourFileButtons(page, tab, table, model));
+        panel.add(south, BorderLayout.SOUTH);
+        return panel;
     }
 
     /** The design last copied on each tab (car, hel, crew), as the offered parts' colours.
@@ -782,29 +712,23 @@ public class ExecutableWindow extends JPanel implements EditorTab
      * extremely useful"). Only the parts the page offers are copied; the bytes it
      * keeps as the game has them stay with each row. Ctrl+C / Ctrl+V do the same.
      */
-    private JComponent copyPasteButtons(final ColourTable source, final JTable table, final AbstractTableModel model,
-                                        final String kind)
+    private JComponent copyPasteButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model)
     {
-        final String what = kind.equals(CAR_FILE) ? "car colours" : kind.equals(HELMET_FILE) ? "helmet" : "pit crew colours";
-        final String rowWord = kind.equals(HELMET_FILE) ? "driver" : "team";
+        final String kind = LiveriesPage.kind(tab);
         final JButton paste = new JButton("Paste");
         paste.setName("paste " + kind);
-        paste.setToolTipText("Give every selected " + rowWord + " the copied " + what);
+        paste.setToolTipText(LiveriesPage.pasteTip(tab));
         paste.setEnabled(copiedDesigns.containsKey(kind));
         final JLabel copied = new JLabel(" ");
         copied.setForeground(new Color(0x6A7380));
-
         final Runnable copy = new Runnable() {
             public void run() {
                 int r = table.getSelectedRow();
                 if (r < 0)
                     return;
-                int[] design = new int[source.parts().length];
-                for (int p = 0; p < design.length; p++)
-                    design[p] = source.get(r, p);
-                copiedDesigns.put(kind, design);
+                copiedDesigns.put(kind, page.design(tab, r));
                 paste.setEnabled(true);
-                copied.setText("Copied: " + source.rowName(r).replaceAll("^[0-9]+ +", ""));
+                copied.setText(page.copiedText(tab, r));
             }
         };
         final Runnable pasteRun = new Runnable() {
@@ -815,16 +739,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     return;
                 for (int r : rows)
                 {
-                    for (int p = 0; p < design.length; p++)
-                        if (source.get(r, p) != design[p])
-                            source.set(r, p, design[p]);
+                    page.paste(tab, new int[] { r }, design);
                     model.fireTableRowsUpdated(r, r);
                 }
             }
         };
         JButton copyButton = new JButton("Copy");
         copyButton.setName("copy " + kind);
-        copyButton.setToolTipText("Copy the selected " + rowWord + "'s " + what);
+        copyButton.setToolTipText(LiveriesPage.copyTip(tab));
         copyButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { copy.run(); }
         });
@@ -844,84 +766,72 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
         p.add(copyButton);
         p.add(paste);
-        p.add(new JLabel("<html><font color='#6A7380'>the selected " + rowWord + "'s " + what
-            + " onto other " + rowWord + "s (select several to paste onto them all)</font></html>"));
+        p.add(new JLabel("<html><font color='#6A7380'>" + LiveriesPage.copyPasteNote(tab) + "</font></html>"));
         p.add(copied);
         return p;
     }
 
     /** Import and export of the selected row's colours as ArgEditor's .car or .hel file. */
-    private JComponent colourFileButtons(final ColourTable source, final JTable table, final AbstractTableModel model,
-                                         final String kind)
+    private JComponent colourFileButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model)
     {
-        final boolean car = kind.equals(CAR_FILE);
-        final String what = car ? "car colours" : "helmet colours";
+        final String kind = LiveriesPage.kind(tab);
         final javax.swing.filechooser.FileNameExtensionFilter filter =
-            new javax.swing.filechooser.FileNameExtensionFilter("ArgEditor " + what + " (*." + kind + ")", kind);
-        JButton in = new JButton("Import ." + kind + "...");
+            new javax.swing.filechooser.FileNameExtensionFilter(LiveriesPage.fileFilter(tab), kind);
+        JButton in = new JButton(LiveriesPage.importLabel(tab));
         in.setName("import " + kind);
-        in.setToolTipText("Bring in " + what + " saved by ArgEditor, for the selected " + (car ? "team" : "driver"));
+        in.setToolTipText(LiveriesPage.importTip(tab));
         in.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 int r = Math.max(0, table.getSelectedRow());
                 JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
-                chooser.setDialogTitle("Import " + what + " for " + source.rowName(r));
+                chooser.setDialogTitle(page.importTitle(tab, r));
                 chooser.setFileFilter(filter);
                 if (chooser.showOpenDialog(table) != JFileChooser.APPROVE_OPTION)
                     return;
-                int[] colours = null;
+                byte[] b = null;
                 try
                 {
-                    byte[] b = java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath());
-                    colours = car ? OtherEditorFiles.readCarFile(b) : OtherEditorFiles.readHelmetFile(b);
+                    b = java.nio.file.Files.readAllBytes(chooser.getSelectedFile().toPath());
                 }
                 catch (java.io.IOException ex) { /* reported below */ }
-                if (colours == null)
+                cfevolution.edit.Message refused = page.importFile(tab, r, chooser.getSelectedFile().getName(), b);
+                if (refused != null)
                 {
-                    JOptionPane.showMessageDialog(table, chooser.getSelectedFile().getName() + " is not an ArgEditor ." + kind
-                        + " file, so nothing was changed.", "Import ." + kind, JOptionPane.WARNING_MESSAGE);
+                    cfevolution.gui.MessageBoxes.show(table, refused);
                     return;
                 }
-                // only the colours the page offers; the others stay as the game has them
-                int[] slots = source.slots();
-                for (int p = 0; p < slots.length; p++)
-                    source.set(r, p, colours[slots[p]]);
                 model.fireTableRowsUpdated(r, r);
             }
         });
-        JButton out = new JButton("Export ." + kind + "...");
+        JButton out = new JButton(LiveriesPage.exportLabel(tab));
         out.setName("export " + kind);
-        out.setToolTipText("Save the selected " + (car ? "team's " : "driver's ") + what + " for ArgEditor");
+        out.setToolTipText(LiveriesPage.exportTip(tab));
         out.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 int r = Math.max(0, table.getSelectedRow());
                 JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
-                chooser.setDialogTitle("Export " + what + " of " + source.rowName(r));
+                chooser.setDialogTitle(page.exportTitle(tab, r));
                 chooser.setFileFilter(filter);
-                String base = source.rowName(r).replaceAll("^[0-9]+ +", "").replaceAll("[^A-Za-z0-9 _-]", "").trim();
-                chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), (base.isEmpty() ? kind : base) + "." + kind));
+                chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), page.exportName(tab, r)));
                 if (chooser.showSaveDialog(table) != JFileChooser.APPROVE_OPTION)
                     return;
                 File f = chooser.getSelectedFile();
                 if (!f.getName().toLowerCase().endsWith("." + kind))
                     f = new File(f.getParentFile(), f.getName() + "." + kind);
-                int[] colours = new int[16];
-                for (int s = 0; s < 16; s++)
-                    colours[s] = source.setColour(r, s);
                 try
                 {
-                    java.nio.file.Files.write(f.toPath(), car ? OtherEditorFiles.writeCarFile(colours) : OtherEditorFiles.writeHelmetFile(colours));
+                    java.nio.file.Files.write(f.toPath(), page.exportFile(tab, r));
                 }
                 catch (java.io.IOException ex)
                 {
-                    JOptionPane.showMessageDialog(table, f.getName() + " could not be saved.", "Export ." + kind, JOptionPane.ERROR_MESSAGE);
+                    cfevolution.gui.MessageBoxes.show(table, LiveriesPage.notSaved(tab, f.getName()));
                 }
             }
         });
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
         p.add(in);
         p.add(out);
-        p.add(new JLabel("<html><font color='#6A7380'>for the selected " + (car ? "team" : "driver") + ", in ArgEditor's file</font></html>"));
+        p.add(new JLabel("<html><font color='#6A7380'>" + LiveriesPage.fileNote(tab) + "</font></html>"));
         return p;
     }
 
@@ -930,8 +840,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
      * part selects its cell and opens the colour chooser, exactly as clicking
      * the cell does.
      */
-    private JComponent picturePanel(final GameLiveries liveries, final ColourTable source, final Pictures pictures,
-                                    final JTable table, final AbstractTableModel model, final Runnable choose)
+    private JComponent picturePanel(final LiveriesPage page, final int tab, final JTable table,
+                                    final AbstractTableModel model, final Runnable choose)
     {
         final JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createCompoundBorder(
@@ -941,32 +851,27 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
         final JLabel title = new JLabel(" ");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 14f));
-        final int[] slots = source.slots();
         final java.util.List<LiveryPicture> shown = new java.util.ArrayList<LiveryPicture>();
 
         final LiveryPicture.Colours colours = new LiveryPicture.Colours() {
             int row() { return Math.max(0, table.getSelectedRow()); }
-            public Color colour(int slot) { return new java.awt.Color(liveries.getPaletteRgb(source.setColour(row(), slot))); }
+            public Color colour(int slot) { return new java.awt.Color(page.liveries().getPaletteRgb(page.setColour(tab, row(), slot))); }
             public String part(int slot) {
-                for (int p = 0; p < slots.length; p++)
-                    if (slots[p] == slot)
-                        return source.parts()[p];
-                return null;
+                int p = LiveriesPage.partOfSlot(tab, slot);
+                return p < 0 ? null : LiveriesPage.parts(tab)[p];
             }
             public void clicked(int slot) {
-                for (int p = 0; p < slots.length; p++)
-                    if (slots[p] == slot)
-                    {
-                        table.changeSelection(row(), p + 1, false, false);
-                        choose.run();
-                        return;
-                    }
+                int p = LiveriesPage.partOfSlot(tab, slot);
+                if (p < 0)
+                    return;
+                table.changeSelection(row(), p + 1, false, false);
+                choose.run();
             }
         };
 
         final Runnable refresh = new Runnable() {
             public void run() {
-                title.setText(source.rowName(Math.max(0, table.getSelectedRow())));
+                title.setText(page.rowName(tab, Math.max(0, table.getSelectedRow())));
                 for (LiveryPicture p : shown)
                     p.repaint();
             }
@@ -985,10 +890,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 panel.add(title, BorderLayout.NORTH);
                 if (sprites == null)
                     panel.add(missingPictures(panel), BorderLayout.CENTER);
-                else if (pictures.group == null)
-                    panel.add(turningPicture(pictures, colours, shown), BorderLayout.CENTER);
+                else if (LiveriesPage.turns(tab))
+                    panel.add(turningPicture(tab, colours, shown), BorderLayout.CENTER);
                 else
-                    panel.add(steppedPicture(pictures, colours, shown), BorderLayout.CENTER);
+                    panel.add(steppedPicture(tab, colours, shown), BorderLayout.CENTER);
                 refresh.run();
                 panel.revalidate();
                 panel.repaint();
@@ -1010,30 +915,19 @@ public class ExecutableWindow extends JPanel implements EditorTab
     }
 
     /** One picture and a slider that turns it all the way round. */
-    private JComponent turningPicture(final Pictures pictures, LiveryPicture.Colours colours,
-                                      java.util.List<LiveryPicture> shown)
+    private JComponent turningPicture(final int tab, LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown)
     {
-        final LiveryPicture picture = new LiveryPicture(pictures.scale, colours);
+        final LiveryPicture picture = new LiveryPicture(LiveriesPage.scale(tab), colours);
         picture.setName("liveryPicture");
         shown.add(picture);
-        // Behind, round one side to in front, then the game's mirror image back round the other
-        final int n = pictures.last - pictures.first + 1;
-        int boxW = 0, boxH = 0;
-        for (int i = pictures.first; i <= pictures.last; i++)
-        {
-            GameSprites.Sprite s = sprites.get(i);
-            if (s != null) { boxW = Math.max(boxW, s.width); boxH = Math.max(boxH, s.height); }
-        }
-        picture.setBox(boxW, boxH);
-        final JSlider turn = new JSlider(0, 2 * n - 2, pictures.start - pictures.first);
+        int[] box = LiveriesPage.box(tab, sprites);
+        picture.setBox(box[0], box[1]);
+        final JSlider turn = new JSlider(0, LiveriesPage.positions(tab) - 1, LiveriesPage.startPosition(tab));
         turn.setName("liveryTurn");
         final Runnable show = new Runnable() {
             public void run() {
                 int v = turn.getValue();
-                if (v < n)
-                    picture.setSprite(sprites.get(pictures.first + v), false);
-                else
-                    picture.setSprite(sprites.get(pictures.first + 2 * n - 2 - v), true);
+                picture.setSprite(sprites.get(LiveriesPage.pictureAt(tab, v)), LiveriesPage.mirroredAt(tab, v));
             }
         };
         turn.addChangeListener(new javax.swing.event.ChangeListener() {
@@ -1047,58 +941,58 @@ public class ExecutableWindow extends JPanel implements EditorTab
         stage.add(picture, BorderLayout.CENTER);
 
         JPanel below = new JPanel(new BorderLayout());
-        below.add(new JLabel("Turn"), BorderLayout.WEST);
+        below.add(new JLabel(LiveriesPage.TURN), BorderLayout.WEST);
         below.add(turn, BorderLayout.CENTER);
-        below.add(pictureHint("Click part of the picture to change its colour."), BorderLayout.SOUTH);
+        below.add(pictureHint(LiveriesPage.PICTURE_HINT), BorderLayout.SOUTH);
 
+        JPanel holder = new JPanel(new BorderLayout());
+        holder.add(pictureBox(stage, below), BorderLayout.NORTH);
+        return holder;
+    }
+
+    private static JPanel pictureBox(JComponent stage, JComponent below)
+    {
         JPanel box = new JPanel(new BorderLayout(0, 8));
         box.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
         box.add(stage, BorderLayout.NORTH);
         box.add(below, BorderLayout.CENTER);
-        JPanel holder = new JPanel(new BorderLayout());
-        holder.add(box, BorderLayout.NORTH);
-        return holder;
+        return box;
     }
 
     /** One picture at a time, with Previous and Next buttons stepping through the rest. */
-    private JComponent steppedPicture(final Pictures pictures, LiveryPicture.Colours colours,
-                                      java.util.List<LiveryPicture> shown)
+    private JComponent steppedPicture(final int tab, LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown)
     {
-        final LiveryPicture picture = new LiveryPicture(pictures.scale, colours);
+        final LiveryPicture picture = new LiveryPicture(LiveriesPage.scale(tab), colours);
         picture.setName("liveryPicture");
         shown.add(picture);
         // Room for the largest picture, so the buttons below stay put whichever is shown (Hrvoje, 2026-11-05:
         // on the pit crew tab they jumped up and down with each picture's height)
-        int boxW = 0, boxH = 0;
-        for (int i : pictures.group)
-        {
-            GameSprites.Sprite s = sprites.get(i);
-            if (s != null) { boxW = Math.max(boxW, s.width); boxH = Math.max(boxH, s.height); }
-        }
-        picture.setBox(boxW, boxH);
-        final int[] index = { pictures.start };
-        final JLabel count = new JLabel("", SwingConstants.CENTER);
-        count.setName("liveryPictureNumber");
-        final JButton previous = new JButton("\u25C0"), next = new JButton("\u25B6");
+        int[] box = LiveriesPage.box(tab, sprites);
+        picture.setBox(box[0], box[1]);
+        final int count = LiveriesPage.positions(tab);
+        final int[] index = { LiveriesPage.startPosition(tab) };
+        final JLabel number = new JLabel("", SwingConstants.CENTER);
+        number.setName("liveryPictureNumber");
+        final JButton previous = new JButton("◀"), next = new JButton("▶");
         previous.setName("liveryPrevious");
         next.setName("liveryNext");
         previous.setToolTipText("Previous picture");
         next.setToolTipText("Next picture");
         final Runnable show = new Runnable() {
             public void run() {
-                picture.setSprite(sprites.get(pictures.group[index[0]]), false);
-                count.setText("Picture " + (index[0] + 1) + " of " + pictures.group.length);
+                picture.setSprite(sprites.get(LiveriesPage.pictureAt(tab, index[0])), false);
+                number.setText(LiveriesPage.pictureNumber(tab, index[0]));
             }
         };
         previous.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                index[0] = (index[0] + pictures.group.length - 1) % pictures.group.length;
+                index[0] = (index[0] + count - 1) % count;
                 show.run();
             }
         });
         next.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                index[0] = (index[0] + 1) % pictures.group.length;
+                index[0] = (index[0] + 1) % count;
                 show.run();
             }
         });
@@ -1111,18 +1005,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
         JPanel buttons = new JPanel(new BorderLayout(6, 0));
         buttons.add(previous, BorderLayout.WEST);
-        buttons.add(count, BorderLayout.CENTER);
+        buttons.add(number, BorderLayout.CENTER);
         buttons.add(next, BorderLayout.EAST);
         JPanel below = new JPanel(new BorderLayout());
         below.add(buttons, BorderLayout.NORTH);
-        below.add(pictureHint("Click part of the picture to change its colour."), BorderLayout.SOUTH);
+        below.add(pictureHint(LiveriesPage.PICTURE_HINT), BorderLayout.SOUTH);
 
-        JPanel box = new JPanel(new BorderLayout(0, 8));
-        box.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
-        box.add(stage, BorderLayout.NORTH);
-        box.add(below, BorderLayout.CENTER);
         JPanel holder = new JPanel(new BorderLayout());
-        holder.add(box, BorderLayout.NORTH);
+        holder.add(pictureBox(stage, below), BorderLayout.NORTH);
         return holder;
     }
 
@@ -1132,10 +1022,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel box = new JPanel();
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
         box.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
-        JLabel text = pictureHint("The pictures are drawn from the game's own files, which are not in this "
-            + "executable's folder. Choose the folder the game is installed in to see them.");
+        JLabel text = pictureHint(LiveriesPage.MISSING_PICTURES);
         text.setAlignmentX(0f);
-        JButton find = new JButton("Choose Game Folder...");
+        JButton find = new JButton(LiveriesPage.CHOOSE_GAME_FOLDER);
         find.setName("chooseGameFolder");
         find.setAlignmentX(0f);
         find.addActionListener(new java.awt.event.ActionListener() {
@@ -1196,134 +1085,44 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     private JComponent settingsPage()
     {
-        final GameSettings settings = currentExecutable.getGameSettings();
-        final GameOptions options = currentExecutable.getGameOptions();
-
-        final JCheckBox tyres = new JCheckBox("Allow unlimited qualifying tyres", settings.getQualifyingTyres());
-        tyres.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                settings.setQualifyingTyres(tyres.isSelected()); setModified(true); }
-        });
-        final JCheckBox rainEverywhere = new JCheckBox("Allow rain at circuits that are always dry (Phoenix)",
-                                                       settings.getRainEverywhere());
-        rainEverywhere.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                settings.setRainEverywhere(rainEverywhere.isSelected()); setModified(true); }
-        });
-        final JCheckBox fade = new JCheckBox("Move through the menus faster", options.getFastFade());
-        fade.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                options.setFastFade(fade.isSelected()); setModified(true); }
-        });
-        final JCheckBox language = new JCheckBox("Skip the language selection screen", options.getLanguageSelection());
-        language.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                options.setLanguageSelection(language.isSelected()); setModified(true); }
-        });
-
+        // the groups, numbers, switches and notes are the core's (GameSettingsPage), shared with Android
         JPanel box = new JPanel();
         box.setLayout(new BoxLayout(box, BoxLayout.Y_AXIS));
-
-        JPanel yourCar = group("Your car");
-        row(yourCar, "Engine power (BHP)", 1, 1460, new Setting() {
-            public int get() { return settings.getPlayerPower(); }
-            public void set(int v) { settings.setPlayerPower(v); } },
-            "The original game gives you 716.");
-        box.add(yourCar);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel computerCars = group("Computer cars");
-        if (settings.getAIGripLevel() >= 1)
-            row(computerCars, "Grip level", 1, 100, new Setting() {
-                public int get() { return settings.getAIGripLevel(); }
-                public void set(int v) { settings.setAIGripLevel(v); } },
-                "1 is the original game. Higher gives all cars more grip, yours too.");
-        else
-            note(computerCars, "The grip setting in this file was changed by another tool, so it is left as it is.");
-        row(computerCars, "Team engine power measured against (BHP)", 100, 2000, new Setting() {
-            public int get() { return settings.getTeamPowerReference(); }
-            public void set(int v) { settings.setTeamPowerReference(v); } },
-            "The original game has 716. Raising it slows every team.");
-        box.add(computerCars);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel racing = group("Racing");
-        row(racing, "Computer cars make pit stops in races of at least (%)", 1, 100, new Setting() {
-            public int get() { return settings.getPitStopRaceDistance(); }
-            public void set(int v) { settings.setPitStopRaceDistance(v); } },
-            "The original game has 75. Shorter races have no pit stops.");
-        row(racing, "Most cars in the pits at once", 1, 26, new Setting() {
-            public int get() { return settings.getMaxCarsPitting(); }
-            public void set(int v) { settings.setMaxCarsPitting(v); } },
-            "The original game has 7. Team-mates never stop together.");
-        row(racing, "Shortest race (laps)", 1, 50, new Setting() {
-            public int get() { return settings.getMinimumRaceLaps(); }
-            public void set(int v) { settings.setMinimumRaceLaps(v); } },
-            "The original game has 3.");
-        row(racing, "Computer cars out at once in practice and qualifying", 1, 26, new Setting() {
-            public int get() { return settings.getMaxPracticeRunners(); }
-            public void set(int v) { settings.setMaxPracticeRunners(v); } },
-            "The original game has 16. The whole field is 26.");
-        racing.add(tyres, wide());
-        box.add(racing);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel championship = group("Championship");
-        row(championship, "Best results that count", 0, 16, new Setting() {
-            public int get() { return settings.getBestResultsCounted(); }
-            public void set(int v) { settings.setBestResultsCounted(v); } },
-            "The original game has 16, every race. 0 also counts every race.");
-        box.add(championship);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel weather = group("Weather");
-        row(weather, "Chance of rain (%)", 0, 100, new Setting() {
-            public int get() { return settings.getRainChance(); }
-            public void set(int v) { settings.setRainChance(v); } },
-            "The original game has 6. 0 means it never rains.");
-        weather.add(rainEverywhere, wide());
-        box.add(weather);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel damage = group("Damage");
-        note(damage, "How hard a hit has to be. Higher numbers make the cars tougher.");
-        row(damage, "Retire after hitting a wall", 0, 32767, new Setting() {
-            public int get() { return settings.getRetireAfterWall(); }
-            public void set(int v) { settings.setRetireAfterWall(v); } }, "Original: 7424");
-        row(damage, "Retire after hitting another car", 0, 32767, new Setting() {
-            public int get() { return settings.getRetireAfterCar(); }
-            public void set(int v) { settings.setRetireAfterCar(v); } }, "Original: 8192");
-        row(damage, "Break a wing after hitting a wall", 0, 32767, new Setting() {
-            public int get() { return settings.getDamageAfterWall(); }
-            public void set(int v) { settings.setDamageAfterWall(v); } }, "Original: 1792");
-        row(damage, "Break a wing after hitting another car", 0, 32767, new Setting() {
-            public int get() { return settings.getDamageAfterCar(); }
-            public void set(int v) { settings.setDamageAfterCar(v); } }, "Original: 1792");
-        box.add(damage);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel marshals = group("Stopped and retired cars");
-        row(marshals, "Yellow flags for a stopped car after (seconds)", 1, 60, new Setting() {
-            public int get() { return settings.getYellowFlagSeconds(); }
-            public void set(int v) { settings.setYellowFlagSeconds(v); } }, "Original: 20");
-        row(marshals, "Retired cars removed after (seconds)", 1, 60, new Setting() {
-            public int get() { return settings.getRetiredRemovedSeconds(); }
-            public void set(int v) { settings.setRetiredRemovedSeconds(v); } }, "Original: 15");
-        box.add(marshals);
-        box.add(Box.createVerticalStrut(12));
-
-        JPanel starting = group("Starting the game");
-        starting.add(fade, wide());
-        starting.add(language, wide());
-        note(starting, "These two change the game program only. They are not part of a carset.");
-        box.add(starting);
+        java.util.List<GameSettingsPage.Group> groups = GameSettingsPage.groups(currentExecutable);
+        for (int g = 0; g < groups.size(); g++)
+        {
+            GameSettingsPage.Group group = groups.get(g);
+            JPanel panel = group(group.title);
+            for (final GameSettingsPage.Item item : group.items)
+            {
+                if (item.kind == GameSettingsPage.Kind.NUMBER)
+                    row(panel, item.label, item.min, item.max, new Setting() {
+                        public int get() { return item.get(); }
+                        public void set(int v) { item.set(v); } },
+                        item.hint);
+                else if (item.kind == GameSettingsPage.Kind.SWITCH)
+                {
+                    final JCheckBox check = new JCheckBox(item.label, item.isOn());
+                    check.addActionListener(new java.awt.event.ActionListener() {
+                        public void actionPerformed(java.awt.event.ActionEvent e) {
+                            item.set(check.isSelected() ? 1 : 0); setModified(true); }
+                    });
+                    panel.add(check, wide());
+                }
+                else
+                    note(panel, item.label);
+            }
+            box.add(panel);
+            if (g < groups.size() - 1)
+                box.add(Box.createVerticalStrut(12));
+        }
 
         JPanel holder = new JPanel(new BorderLayout());
         holder.add(box, BorderLayout.NORTH);
         JScrollPane scroll = new JScrollPane(holder);
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
-        return page("Game Settings", "Changes to how the game behaves.", scroll);
+        return page(GameSettingsPage.TITLE, GameSettingsPage.DESCRIPTION, scroll);
     }
 
     private static GridBagConstraints wide()
@@ -1387,39 +1186,24 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     // --- Number tables (setups, physics, opposition) ------------------------
 
-    /** One grid of stored numbers: a row label, then a column per value. */
-    private interface Cells
+    /** One of the core's grids (TablePage): a row label, then a column per value. */
+    private JComponent grid(final TablePage.Grid g, int labelWidth, int cellWidth)
     {
-        int get(int row, int col);
-        int original(int row, int col);
-        void set(int row, int col, int value);
-    }
-
-    /** Cells straight from a table, row-major, as unsigned or signed words. */
-    private static Cells words(final GameTables.Table t, final int cols, final boolean signed)
-    {
-        return new Cells() {
-            int fix(int v) { return signed ? (short) v : v; }
-            public int get(int r, int c) { return fix(t.word(r * cols + c)); }
-            public int original(int r, int c) { return fix(t.originalWord(r * cols + c)); }
-            public void set(int r, int c, int v) { t.setWord(r * cols + c, v); }
-        };
-    }
-
-    private JComponent grid(final String[] rows, final String[] cols, final int min, final int max, final Cells cells,
-                            int labelWidth, int cellWidth)
-    {
+        final String[] rows = g.rows, cols = g.cols;
         final AbstractTableModel model = new AbstractTableModel() {
             public int getRowCount() { return rows.length; }
             public int getColumnCount() { return cols.length + 1; }
             public String getColumnName(int c) { return c == 0 ? "" : cols[c - 1]; }
             public Class<?> getColumnClass(int c) { return c == 0 ? String.class : Integer.class; }
             public boolean isCellEditable(int r, int c) { return c > 0; }
-            public Object getValueAt(int r, int c) { return c == 0 ? rows[r] : (Object) cells.get(r, c - 1); }
+            public Object getValueAt(int r, int c) { return c == 0 ? rows[r] : (Object) g.get(r, c - 1); }
             public void setValueAt(Object v, int r, int c) {
-                Integer n = number(v, min, max, "This value");
-                if (n == null || n.intValue() == cells.get(r, c - 1)) return;
-                cells.set(r, c - 1, n);
+                cfevolution.edit.Message m = g.check(String.valueOf(v));
+                if (m != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, m); return; }
+                int n = Integer.parseInt(String.valueOf(v).trim());
+                if (n == g.get(r, c - 1)) return;
+                m = g.put(r, c - 1, n);
+                if (m != null) cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, m);
                 fireTableCellUpdated(r, c);
             }
         };
@@ -1430,9 +1214,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
         table.setDefaultRenderer(Integer.class, new StripedRenderer() {
             public Component getTableCellRendererComponent(JTable t, Object value, boolean sel, boolean focus, int r, int c) {
                 Component comp = super.getTableCellRendererComponent(t, value, sel, focus, r, c);
-                int orig = cells.original(r, c - 1);
+                int orig = g.original(r, c - 1);
                 ((JComponent) comp).setToolTipText("Original: " + orig);
-                if (!sel) comp.setFont(comp.getFont().deriveFont(cells.get(r, c - 1) != orig ? Font.BOLD : Font.PLAIN));
+                if (!sel) comp.setFont(comp.getFont().deriveFont(g.get(r, c - 1) != orig ? Font.BOLD : Font.PLAIN));
                 return comp;
             }
         });
@@ -1444,6 +1228,21 @@ public class ExecutableWindow extends JPanel implements EditorTab
         scroll.setAlignmentX(LEFT_ALIGNMENT);
         scroll.setMaximumSize(new Dimension(Math.min(900, labelWidth + cols.length * cellWidth + 4), scroll.getPreferredSize().height));
         return scroll;
+    }
+
+    /** A page of the core's grids (TablePage), each section's grid with its label and cell widths. */
+    private JComponent tablePage(TablePage p, int[][] widths)
+    {
+        JPanel box = verticalBox();
+        JLabel intro = new JLabel("<html>" + p.intro + " " + TablePage.DESKTOP_HINT + "</html>");
+        intro.setAlignmentX(LEFT_ALIGNMENT);
+        box.add(intro);
+        for (int i = 0; i < p.sections.size(); i++)
+        {
+            TablePage.Section sec = p.sections.get(i);
+            section(box, sec.title, sec.note, grid(sec.grid, widths[i][0], widths[i][1]));
+        }
+        return page(p.title, p.description, scrollingBox(box));
     }
 
     /** A titled section of a scrolling page of grids. */
@@ -1484,8 +1283,6 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     private static final String[] CIRCUITS = { "United States", "Brazil", "San Marino", "Monaco", "Canada", "Mexico",
         "France", "Great Britain", "Germany", "Hungary", "Belgium", "Italy", "Portugal", "Spain", "Japan", "Australia" };
-    private static final String[] LEVELS = { "Rookie", "Amateur", "Semi-Pro", "Pro", "Ace" };
-    private static final String[] COMPOUNDS = { "A", "B", "C", "D", "Q", "W" };
 
     // --- Pit lane -----------------------------------------------------------
 
@@ -1625,37 +1422,28 @@ public class ExecutableWindow extends JPanel implements EditorTab
     private JComponent setupsPage()
     {
         final GameTables tables = currentExecutable.getGameTables();
-        final GameDrivers drivers = currentExecutable.getGameDrivers();
-        String[] carRows = new String[40];
-        for (int i = 0; i < 40; i++) carRows[i] = (i + 1) + "  " + drivers.getDriverName(i);
-        String[] circuitRows = CIRCUITS;
-        // Only human drivers' cars read these; the computer cars read the
-        // circuit file's CC setup (Car.bID bit 7 picks arCarSetups or
-        // strTrkCCSetup). sub_4A9E copies the circuit's setup over all 40 at
-        // the start of a weekend and of main-menu Practice, and the race setup
-        // at the warm-up when they are separate (sub_4A8B). DoQuickRace does not
-        // copy, so a quick race run first in a run of the game uses these (GP1E).
-        // Saved games carry them. Hrvoje, 2026-11-02; the tools below, 2026-11-03.
+        // the values, rules, wording and copying are the core's (SetupsPage, which notes which cars read
+        // these), shared with Android; the game's setup files are still this window's
+        final SetupsPage setups = new SetupsPage(tables, currentExecutable.getGameDrivers());
         final JTabbedPane tabs = new JTabbedPane();
         final JTable[] grids = {
-            setupTable(circuitRows, tables.circuitSetups, 0, "qualifying setups"),
-            setupTable(circuitRows, tables.circuitSetups, 16, "race setups"),
-            setupTable(carRows, tables.carSetups, 0, "quick race setups") };
+            setupTable(setups, SetupsPage.QUALIFYING, "qualifying setups"),
+            setupTable(setups, SetupsPage.RACE, "race setups"),
+            setupTable(setups, SetupsPage.QUICK_RACE, "quick race setups") };
         final GameTables.Table[] sources = { tables.circuitSetups, tables.circuitSetups, tables.carSetups };
         final int[] firstRows = { 0, 16, 0 };
-        tabs.addTab("Qualifying setup", new JScrollPane(grids[0]));
-        tabs.addTab("Race setup", new JScrollPane(grids[1]));
-        tabs.addTab("Quick Race setup", new JScrollPane(grids[2]));
+        for (int tab = 0; tab < 3; tab++)
+            tabs.addTab(setups.tabTitle(tab), new JScrollPane(grids[tab]));
 
-        final JCheckBox separate = new JCheckBox("Separate race and qualifying setups", tables.separateSetups.word(0) != 0);
+        final JCheckBox separate = new JCheckBox(SetupsPage.SEPARATE, setups.isSeparate());
         separate.setName("separate setups");
-        separate.setToolTipText("The game's own option, as it is when the game starts. When off, the one setup is used all weekend.");
-        final JButton toRace = new JButton("Copy Qualifying to Race");
-        final JButton toQualifying = new JButton("Copy Race to Qualifying");
+        separate.setToolTipText(SetupsPage.SEPARATE_TIP);
+        final JButton toRace = new JButton(SetupsPage.TO_RACE);
+        final JButton toQualifying = new JButton(SetupsPage.TO_QUALIFYING);
         final Runnable showSeparate = new Runnable() {
             public void run() {
                 boolean on = separate.isSelected();
-                tabs.setTitleAt(0, on ? "Qualifying setup" : "Setup");
+                tabs.setTitleAt(0, setups.tabTitle(SetupsPage.QUALIFYING));
                 tabs.setEnabledAt(1, on);
                 tabs.setToolTipTextAt(1, on ? null : "Used only when race and qualifying setups are separate");
                 if (!on && tabs.getSelectedIndex() == 1)
@@ -1667,7 +1455,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         showSeparate.run();
         separate.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                tables.separateSetups.setWord(0, separate.isSelected() ? 0xFFFF : 0);
+                setups.setSeparate(separate.isSelected());
                 setModified(true);
                 showSeparate.run();
             }
@@ -1678,14 +1466,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
         paste.setName("paste setup");
         paste.setToolTipText("Give every selected row the copied setup");
         paste.setEnabled(copiedSetup != null);
-        final JButton applyAll = new JButton("Apply to All Circuits");
+        final JButton applyAll = new JButton(SetupsPage.applyAllLabel(SetupsPage.QUALIFYING));
         applyAll.setName("apply setup to all");
         final JLabel copied = new JLabel(" ");
         copied.setForeground(new Color(0x6A7380));
         tabs.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent e) {
                 boolean cars = tabs.getSelectedIndex() == 2;
-                applyAll.setText(cars ? "Apply to All Cars" : "Apply to All Circuits");
+                applyAll.setText(SetupsPage.applyAllLabel(tabs.getSelectedIndex()));
                 applyAll.setToolTipText("Give every " + (cars ? "car" : "circuit") + " on this tab the selected row's setup");
             }
         });
@@ -1696,16 +1484,19 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 int r = grids[tab].getSelectedRow();
                 if (r < 0)
                     return;
-                copiedSetup = readSetup(sources[tab], firstRows[tab] + r);
+                copiedSetup = setups.read(tab, r);
                 paste.setEnabled(true);
-                copied.setText("Copied: " + tabs.getTitleAt(tab).toLowerCase() + ", " + String.valueOf(grids[tab].getValueAt(r, 0)).replaceAll("^[0-9]+ +", ""));
+                copied.setText(setups.copiedText(tab, r));
             }
         };
         final Runnable pasteRun = new Runnable() {
             public void run() {
                 int tab = tabs.getSelectedIndex();
                 if (copiedSetup != null)
-                    writeSetups(grids[tab], sources[tab], firstRows[tab], grids[tab].getSelectedRows(), copiedSetup);
+                {
+                    setups.write(tab, grids[tab].getSelectedRows(), copiedSetup);
+                    redraw(grids[tab], grids[tab].getSelectedRows());
+                }
             }
         };
         JButton copyButton = new JButton("Copy");
@@ -1723,13 +1514,13 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 JTable grid = grids[tab];
                 if (grid.getSelectedRow() < 0)
                 {
-                    JOptionPane.showMessageDialog(grid, "Select the row whose setup the others should have.",
-                        applyAll.getText(), JOptionPane.INFORMATION_MESSAGE);
+                    cfevolution.gui.MessageBoxes.show(grid, SetupsPage.chooseRowFirst(tab));
                     return;
                 }
+                setups.applyToAll(tab, grid.getSelectedRow());
                 int[] all = new int[grid.getRowCount()];
                 for (int r = 0; r < all.length; r++) all[r] = r;
-                writeSetups(grid, sources[tab], firstRows[tab], all, readSetup(sources[tab], firstRows[tab] + grid.getSelectedRow()));
+                redraw(grid, all);
             }
         });
         int menuKey = java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
@@ -1752,13 +1543,12 @@ public class ExecutableWindow extends JPanel implements EditorTab
         java.awt.event.ActionListener between = new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
                 boolean race = e.getSource() == toRace;
-                if (JOptionPane.showConfirmDialog(tabs, "Replace all 16 " + (race ? "race" : "qualifying") + " setups with the "
-                        + (race ? "qualifying" : "race") + " setups?", ((JButton) e.getSource()).getText(),
-                        JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION)
+                if (cfevolution.gui.MessageBoxes.choose(tabs, SetupsPage.betweenQuestion(race)) != 0)
                     return;
-                for (int c = 0; c < 16; c++)
-                    writeSetups(grids[race ? 1 : 0], tables.circuitSetups, race ? 16 : 0, new int[] { c },
-                                readSetup(tables.circuitSetups, (race ? 0 : 16) + c));
+                setups.copyBetween(race);
+                int[] all = new int[16];
+                for (int c = 0; c < 16; c++) all[c] = c;
+                redraw(grids[race ? 1 : 0], all);
             }
         };
         toRace.addActionListener(between);
@@ -1781,15 +1571,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         content.add(separate, BorderLayout.NORTH);
         content.add(tabs, BorderLayout.CENTER);
         content.add(south, BorderLayout.SOUTH);
-        return page("Setups",
-            "<html>The setups the game gives human drivers' cars. The computer cars do not use these:<br>"
-            + "theirs are in each circuit file (open a circuit, then Edit &gt; Car and AI Settings).<br>"
-            + "With separate setups, the race setup is used from the warm-up on; otherwise the one setup is used all weekend.<br>"
-            + "Quick Race setup: each car's setup in a quick race started before any other session since the game was loaded.<br>"
-            + "A race weekend or practice replaces them with the circuit's setup until the game is restarted.<br>"
-            + "If the game's options load a setup file when the game starts, that file's setups are used instead.<br>"
-            + "Select several rows (Shift or Ctrl and click) to paste or load onto them all.</html>",
-            content);
+        return page(SetupsPage.TITLE, "<html>" + String.join("<br>", SetupsPage.DESCRIPTION) + "</html>", content);
     }
 
     private static int[] readSetup(GameTables.Table t, int row)
@@ -1907,7 +1689,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         p.add(saveOne);
         p.add(loadSeason);
         p.add(saveSeason);
-        p.add(new JLabel("<html><font color='#6A7380'>the game's own setup files (Load-Save Menu, and the setup screen)</font></html>"));
+        p.add(new JLabel("<html><font color='#6A7380'>" + SetupsPage.SETUP_FILES + "</font></html>"));
         return p;
     }
 
@@ -1962,42 +1744,32 @@ public class ExecutableWindow extends JPanel implements EditorTab
         }
     }
 
-    private JTable setupTable(final String[] rows, final GameTables.Table t, final int firstRow, String name)
+    /** Redraws these rows of a setups tab, which marks the tab changed. */
+    private static void redraw(JTable grid, int[] rows)
     {
-        final String[] cols = { "Front wing", "Rear wing", "Gear 1", "Gear 2", "Gear 3", "Gear 4", "Gear 5", "Gear 6", "Tyres", "Brake balance" };
+        for (int r : rows)
+            ((AbstractTableModel) grid.getModel()).fireTableRowsUpdated(r, r);
+    }
+
+    private JTable setupTable(final SetupsPage setups, final int tab, String name)
+    {
+        final String[] cols = SetupsPage.COLUMNS;
         final AbstractTableModel model = new AbstractTableModel() {
-            int at(int r, int c) { return (firstRow + r) * GameTables.SETUP_SIZE + c - 1; }
-            public int getRowCount() { return rows.length; }
+            public int getRowCount() { return setups.rows(tab); }
             public int getColumnCount() { return cols.length + 1; }
             public String getColumnName(int c) { return c == 0 ? "" : cols[c - 1]; }
             public boolean isCellEditable(int r, int c) { return c > 0; }
             public Object getValueAt(int r, int c) {
-                if (c == 0) return rows[r];
-                int v = t.getByte(at(r, c));
-                if (c == 9) return v < SetupFile.COMPOUNDS.length ? SetupFile.COMPOUNDS[v] : String.valueOf(v);
-                if (c == 10) return (int) (byte) v;
-                return v;
+                if (c == 0) return setups.rowLabel(tab, r);
+                String v = setups.value(tab, r, c - 1);
+                return c - 1 == SetupFile.TYRES ? (Object) v : (Object) Integer.valueOf(v);
             }
             public void setValueAt(Object v, int r, int c) {
                 // The game's own limits (Hrvoje, 2026-11-05: wings went to 255, the game's screen stops at 64)
-                int field = c - 1, n;
-                if (field == SetupFile.TYRES)
-                    n = java.util.Arrays.asList(SetupFile.COMPOUNDS).indexOf(String.valueOf(v).trim().toUpperCase());
-                else
-                {
-                    try { n = Integer.parseInt(String.valueOf(v).trim()); }
-                    catch (NumberFormatException e) { n = Integer.MIN_VALUE; }
-                }
-                String problem = SetupFile.problem(readSetup(t, firstRow + r), field, n);
-                if (problem != null)
-                {
-                    JOptionPane.showMessageDialog(ExecutableWindow.this, problem, "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                n &= 0xFF;
-                if (n == t.getByte(at(r, c))) return;
-                t.setByte(at(r, c), n);
-                fireTableCellUpdated(r, c);
+                boolean[] changed = new boolean[1];
+                cfevolution.edit.Message m = setups.set(tab, r, c - 1, String.valueOf(v), changed);
+                if (m != null) cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, m);
+                if (changed[0]) fireTableCellUpdated(r, c);
             }
         };
         int[] widths = new int[cols.length + 1];
@@ -2015,187 +1787,41 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     // --- Lap records --------------------------------------------------------
 
-    private static String lapTime(int ms)
-    {
-        return String.format("%d:%02d.%03d", ms / 60000, (ms / 1000) % 60, ms % 1000);
-    }
-
     private JComponent lapRecordsPage()
     {
-        final GameTables tables = currentExecutable.getGameTables();
-        final String[] cols = { "Circuit", "Qualifying: driver", "Team", "Time", "Date", "Race: driver", "Team", "Time", "Date" };
-        final java.time.format.DateTimeFormatter dates = java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.UK);
+        // what each cell shows and the rules for changing it are the core's (LapRecordsPage), shared with Android
+        final LapRecordsPage records = new LapRecordsPage(currentExecutable.getGameTables());
+        final String[] cols = LapRecordsPage.COLUMNS;
         final AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return 16; }
+            public int getRowCount() { return LapRecordsPage.ROWS; }
             public int getColumnCount() { return cols.length; }
             public String getColumnName(int c) { return cols[c]; }
             public boolean isCellEditable(int r, int c) { return c > 0; }
-            public Object getValueAt(int r, int c) {
-                if (c == 0) return CIRCUITS[r];
-                boolean race = c >= 5;
-                switch ((c - 1) % 4)
-                {
-                    case 0: return tables.getRecordDriver(r, race);
-                    case 1: return tables.getRecordTeam(r, race);
-                    case 2: return lapTime(tables.getRecordTime(r, race));
-                    default: return GameTables.dateOfDay(tables.getRecordDay(r, race)).format(dates);
-                }
-            }
+            public Object getValueAt(int r, int c) { return records.value(r, c); }
             public void setValueAt(Object v, int r, int c) {
-                boolean race = c >= 5;
-                String text = String.valueOf(v).trim();
-                switch ((c - 1) % 4)
-                {
-                    case 0: {
-                        String n = name(text, GameTables.NAME_LENGTH - 1, "A driver's name");
-                        if (n == null || n.equals(tables.getRecordDriver(r, race))) return;
-                        tables.setRecordDriver(r, race, n);
-                        break;
-                    }
-                    case 1: {
-                        String n = name(text, GameTables.TEAM_LENGTH - 1, "A team name");
-                        if (n == null || n.equals(tables.getRecordTeam(r, race))) return;
-                        tables.setRecordTeam(r, race, n);
-                        break;
-                    }
-                    case 2: {
-                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+):(\\d{1,2})\\.(\\d{1,3})").matcher(text);
-                        int ms = -1;
-                        if (m.matches() && Integer.parseInt(m.group(2)) < 60)
-                        {
-                            String frac = (m.group(3) + "00").substring(0, 3);
-                            ms = Integer.parseInt(m.group(1)) * 60000 + Integer.parseInt(m.group(2)) * 1000 + Integer.parseInt(frac);
-                        }
-                        if (ms <= 0 || ms >= 60 * 60000)
-                        {
-                            JOptionPane.showMessageDialog(ExecutableWindow.this,
-                                "A lap time must look like 1:21.434 (minutes, seconds, thousandths).",
-                                "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                            return;
-                        }
-                        if (ms == tables.getRecordTime(r, race)) return;
-                        tables.setRecordTime(r, race, ms);
-                        break;
-                    }
-                    default: {
-                        java.time.LocalDate d = null;
-                        for (String pattern : new String[] { "d MMM yyyy", "d/M/yyyy", "d-M-yyyy", "yyyy-M-d" })
-                            try { d = java.time.LocalDate.parse(text, java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.UK)); break; }
-                            catch (java.time.format.DateTimeParseException e) { /* next pattern */ }
-                        int day = d == null ? -1 : GameTables.dayOfDate(d);
-                        if (day < 0)
-                        {
-                            JOptionPane.showMessageDialog(ExecutableWindow.this,
-                                "A date must look like 10 Mar 1991 or 10/3/1991, from 1978 onwards. The game has no 29 February 2000.",
-                                "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                            return;
-                        }
-                        if (day == tables.getRecordDay(r, race)) return;
-                        tables.setRecordDay(r, race, day);
-                    }
-                }
-                fireTableCellUpdated(r, c);
+                boolean[] changed = new boolean[1];
+                cfevolution.edit.Message m = records.set(r, c, String.valueOf(v), changed);
+                if (m != null) cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, m);
+                if (changed[0]) fireTableCellUpdated(r, c);
             }
         };
         JTable table = table(model, new int[] { 110, 150, 100, 80, 100, 150, 100, 80, 100 });
-        return page("Lap Records", "The lap records the game starts with, for qualifying and the race at each circuit.",
-                    new JScrollPane(table));
+        return page(LapRecordsPage.TITLE, LapRecordsPage.DESCRIPTION, new JScrollPane(table));
     }
 
     // --- Car physics --------------------------------------------------------
 
     private JComponent physicsPage()
     {
-        final GameTables t = currentExecutable.getGameTables();
-        JPanel box = verticalBox();
-        JLabel intro = new JLabel("<html>These change how every car in the game behaves, yours included. Hover over a value to see "
-            + "the original; changed values are shown in bold.</html>");
-        intro.setAlignmentX(LEFT_ALIGNMENT);
-        box.add(intro);
-
-        String[] rpm = new String[33];
-        for (int i = 0; i < 33; i++) rpm[i] = String.valueOf(i * 512);
-        section(box, "Engine torque at each engine speed (rpm)", "The qualifying engine revs higher. Torque falls to 0 at the rev limit.",
-            grid(new String[] { "Race engine", "Qualifying engine" }, rpm, 0, 65535, new Cells() {
-                GameTables.Table of(int r) { return r == 0 ? t.torqueRace : t.torqueQualifying; }
-                public int get(int r, int c) { return of(r).word(c); }
-                public int original(int r, int c) { return of(r).originalWord(c); }
-                public void set(int r, int c, int v) { of(r).setWord(c, v); }
-            }, 150, 56));
-        String[] grip = { "1", "2", "3", "4", "5", "6", "7", "8" };
-        section(box, "Tyre grip, dry weather", "Eight values for each compound: base grip, then how it warms up, peaks and wears.",
-            grid(COMPOUNDS, grip, -32768, 32767, words(t.tyreGripDry, 8, true), 150, 70));
-        section(box, "Tyre grip, wet weather", null, grid(COMPOUNDS, grip, -32768, 32767, words(t.tyreGripWet, 8, true), 150, 70));
-        section(box, "Lowest grip a worn tyre can fall to", null,
-            grid(new String[] { "Grip floor" }, new String[] { "Dry", "Wet" }, 0, 65535, words(t.minimumGrip, 2, false), 150, 70));
-        section(box, "Car weight and fuel (lb)", "The weight is stored twice and both copies change together. It cannot be 0, which crashes the game.",
-            grid(new String[] { "Car weight", "Fuel" }, new String[] { "Value", "Second value" }, 0, 65535, new Cells() {
-                public int get(int r, int c) { return r == 0 ? t.carWeight.word(c) : t.fuel.word(c); }
-                public int original(int r, int c) { return r == 0 ? t.carWeight.originalWord(c) : t.fuel.originalWord(c); }
-                public void set(int r, int c, int v) {
-                    if (r == 1) { t.fuel.setWord(c, v); return; }
-                    if (v == 0)
-                    {
-                        JOptionPane.showMessageDialog(ExecutableWindow.this, "The car weight cannot be 0: the game would crash.",
-                            "Value Not Changed", JOptionPane.WARNING_MESSAGE);
-                        return;
-                    }
-                    t.carWeight.setWord(0, v);
-                    t.carWeight.setWord(1, v);
-                }
-            }, 150, 100));
-        String[] wing = new String[9];
-        for (int i = 0; i < 9; i++) wing[i] = String.valueOf(i * 8);
-        section(box, "Wings: drag and downforce at each wing setting", null,
-            grid(new String[] { "Drag", "Downforce" }, wing, 0, 65535, new Cells() {
-                GameTables.Table of(int r) { return r == 0 ? t.wingDrag : t.wingDownforce; }
-                public int get(int r, int c) { return of(r).word(c); }
-                public int original(int r, int c) { return of(r).originalWord(c); }
-                public void set(int r, int c, int v) { of(r).setWord(c, v); }
-            }, 150, 64));
-        section(box, "Other car values", null,
-            grid(new String[] { "Downforce factor", "Engine braking" }, new String[] { "Value" }, 0, 65535, new Cells() {
-                GameTables.Table of(int r) { return r == 0 ? t.downforceFactor : t.engineBraking; }
-                public int get(int r, int c) { return of(r).word(0); }
-                public int original(int r, int c) { return of(r).originalWord(0); }
-                public void set(int r, int c, int v) { of(r).setWord(0, v); }
-            }, 150, 80));
-        String[] revCols = { "Change up", "Change down", "3", "4", "5", "6", "7", "8", "9", "10" };
-        section(box, "Gear changes (rpm)", "Automatic gear change points: up, down, then the automatic down-shift values.",
-            grid(new String[] { "Engine speed" }, revCols, 0, 65535, words(t.revLimits, 10, false), 150, 70));
-        return page("Car Physics", "The car's engine, tyres, weight and wings.", scrollingBox(box));
+        return tablePage(TablePage.physics(currentExecutable),
+            new int[][] { { 150, 56 }, { 150, 70 }, { 150, 70 }, { 150, 70 }, { 150, 100 }, { 150, 64 }, { 150, 80 }, { 150, 70 } });
     }
 
     // --- Opposition levels --------------------------------------------------
 
     private JComponent oppositionPage()
     {
-        final GameTables t = currentExecutable.getGameTables();
-        JPanel box = verticalBox();
-        JLabel intro = new JLabel("<html>How the computer cars differ between the opposition levels chosen in the game's options. "
-            + "Hover over a value to see the original; changed values are shown in bold.</html>");
-        intro.setAlignmentX(LEFT_ALIGNMENT);
-        box.add(intro);
-        final GameTables.Table[] rowsTables = { t.oppPowerDeduction, t.oppRankPower, t.oppOversteerLow, t.oppCornerBurst,
-                                                t.oppVariationLow, t.oppVariationHigh, t.oppWingVariation };
-        String[] rows = { "Random power loss", "Power lost per skill step", "Handling variation, lowest",
-                          "Corner speed burst threshold", "Driver variation, lowest", "Driver variation, highest",
-                          "Wing setting spread" };
-        section(box, "At each level", "At Ace a driver's skill costs no power at all.",
-            grid(rows, LEVELS, 0, 65535, new Cells() {
-                public int get(int r, int c) { return rowsTables[r].word(c); }
-                public int original(int r, int c) { return rowsTables[r].originalWord(c); }
-                public void set(int r, int c, int v) { rowsTables[r].setWord(c, v); }
-            }, 220, 90));
-        final GameTables.Table[] singles = { t.oppOversteerHigh, t.globalCornerSpeed, t.wetRacePower };
-        section(box, "At every level", null,
-            grid(new String[] { "Handling variation, highest", "Corner speed from skill", "Computer car power in the wet" },
-                 new String[] { "Value" }, 0, 65535, new Cells() {
-                public int get(int r, int c) { return singles[r].word(0); }
-                public int original(int r, int c) { return singles[r].originalWord(0); }
-                public void set(int r, int c, int v) { singles[r].setWord(0, v); }
-            }, 220, 90));
-        return page("Opposition Levels", "The computer cars at Rookie, Amateur, Semi-Pro, Pro and Ace.", scrollingBox(box));
+        return tablePage(TablePage.opposition(currentExecutable), new int[][] { { 220, 90 }, { 220, 90 } });
     }
 
     // --- EditorTab ----------------------------------------------------------

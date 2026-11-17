@@ -23,18 +23,30 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.TableLayout;
+import android.widget.TableRow;
 import android.widget.TextView;
+import cfevolution.edit.GameSettingsPage;
+import cfevolution.edit.LapRecordsPage;
+import cfevolution.edit.LiveriesPage;
 import cfevolution.edit.Message;
+import cfevolution.edit.SetupsPage;
+import cfevolution.edit.TablePage;
 import cfevolution.screens.ExecutableScreen;
 
 /**
- * GP.EXE: the Drivers, Teams, Points and Pit Lane pages. Tap a row to change
+ * GP.EXE: every page of the desktop's executable tab. Tap a row to change
  * it; the rules and messages are the desktop editor's own (ExecutableScreen).
  */
 public class ExecutableActivity extends Activity
@@ -43,6 +55,9 @@ public class ExecutableActivity extends Activity
     private LinearLayout page;
     private int current;
     private int selectedBox = -1;
+    private int setupTab;
+    private int[] copiedSetup;
+    private String copiedText;
 
     protected void onCreate(Bundle state)
     {
@@ -84,13 +99,27 @@ public class ExecutableActivity extends Activity
         page.removeAllViews();
         page.addView(Ui.heading(this, ExecutableScreen.PAGES[n]));
         page.addView(Ui.text(this, ExecutableScreen.PAGE_TEXT[n], 13));
-        switch (n)
-        {
-            case 0: drivers(); break;
-            case 1: teams(); break;
-            case 2: points(); break;
-            default: pitLane(); break;
-        }
+        String name = ExecutableScreen.PAGES[n];
+        if (name.equals("Drivers"))
+            drivers();
+        else if (name.equals("Teams"))
+            teams();
+        else if (name.equals("Points"))
+            points();
+        else if (name.equals(LiveriesPage.TITLE))
+            liveries();
+        else if (name.equals(GameSettingsPage.TITLE))
+            settings();
+        else if (name.equals(SetupsPage.TITLE))
+            setups();
+        else if (name.equals(LapRecordsPage.TITLE))
+            lapRecords();
+        else if (name.equals("Car Physics"))
+            tables(screen.physics());
+        else if (name.equals("Opposition Levels"))
+            tables(screen.opposition());
+        else
+            pitLane();
     }
 
     private void again()
@@ -221,6 +250,597 @@ public class ExecutableActivity extends Activity
                 }
             });
         }
+    }
+
+    // --- Game Settings -------------------------------------------------------
+
+    private void settings()
+    {
+        for (GameSettingsPage.Group g : screen.settings())
+        {
+            TextView title = Ui.text(this, g.title, 16);
+            title.setTypeface(Typeface.DEFAULT_BOLD);
+            title.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 4));
+            page.addView(title);
+            for (final GameSettingsPage.Item it : g.items)
+            {
+                if (it.kind == GameSettingsPage.Kind.NUMBER)
+                {
+                    row(it.label + "    " + it.shown(), new Runnable() {
+                        public void run()
+                        {
+                            form(g(it.label), new String[] { it.label }, new String[] { String.valueOf(it.shown()) },
+                                new boolean[] { true }, new Apply() {
+                                    public Message apply(String[] v) { return screen.setSetting(it, v[0]); }
+                                });
+                        }
+                    });
+                    TextView hint = Ui.text(this, it.hint, 12);
+                    hint.setTextColor(Color.GRAY);
+                    page.addView(hint);
+                }
+                else if (it.kind == GameSettingsPage.Kind.SWITCH)
+                {
+                    CheckBox box = new CheckBox(this);
+                    box.setText(it.label);
+                    box.setTextSize(15);
+                    box.setChecked(it.isOn());
+                    box.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                        public void onCheckedChanged(CompoundButton b, boolean on)
+                        {
+                            if (on != it.isOn())
+                            {
+                                screen.toggle(it);
+                                setTitle(screen.title() + " *");
+                            }
+                        }
+                    });
+                    page.addView(box);
+                }
+                else
+                {
+                    TextView note = Ui.text(this, it.label, 13);
+                    note.setTextColor(Color.GRAY);
+                    page.addView(note);
+                }
+            }
+        }
+    }
+
+    /** A dialog title: the label without its unit in brackets. */
+    private static String g(String label)
+    {
+        int i = label.lastIndexOf(" (");
+        return i > 0 && label.endsWith(")") ? label.substring(0, i) : label;
+    }
+
+    // --- Setups ------------------------------------------------------------
+
+    private void setups()
+    {
+        final SetupsPage p = screen.setups();
+        if (!p.isTabUsed(setupTab))
+            setupTab = SetupsPage.QUALIFYING;
+        CheckBox separate = new CheckBox(this);
+        separate.setText(SetupsPage.SEPARATE);
+        separate.setChecked(p.isSeparate());
+        separate.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) { screen.toggleSeparate(); again(); }
+        });
+        page.addView(separate);
+        TextView tip = Ui.text(this, SetupsPage.SEPARATE_TIP, 12);
+        tip.setTextColor(Color.GRAY);
+        page.addView(tip);
+
+        LinearLayout tabs = new LinearLayout(this);
+        for (int t = 0; t < 3; t++)
+        {
+            final int tab = t;
+            Button b = Ui.button(this, p.tabTitle(t), new View.OnClickListener() {
+                public void onClick(View v) { setupTab = tab; again(); }
+            });
+            b.setEnabled(p.isTabUsed(t));
+            if (t == setupTab)
+                b.setTypeface(Typeface.DEFAULT_BOLD);
+            tabs.addView(b);
+        }
+        HorizontalScrollView tabBar = new HorizontalScrollView(this);
+        tabBar.addView(tabs);
+        page.addView(tabBar);
+
+        if (p.isSeparate())
+        {
+            LinearLayout between = new LinearLayout(this);
+            for (final boolean toRace : new boolean[] { true, false })
+                between.addView(Ui.button(this, toRace ? SetupsPage.TO_RACE : SetupsPage.TO_QUALIFYING, new View.OnClickListener() {
+                    public void onClick(View v)
+                    {
+                        Message q = SetupsPage.betweenQuestion(toRace);
+                        Dialogs.ask(ExecutableActivity.this, q.title, q.text, q.options[0], q.options[1], new Runnable() {
+                            public void run() { screen.copySetupsBetween(toRace); again(); }
+                        });
+                    }
+                }));
+            HorizontalScrollView bar = new HorizontalScrollView(this);
+            bar.addView(between);
+            page.addView(bar);
+        }
+        TextView how = Ui.text(this, "Tap a row to change its setup. Touch and hold a row to copy its setup, paste a copied one, "
+            + "or give every row on this tab its setup." + (copiedText != null ? " " + copiedText + "." : ""), 13);
+        how.setTextColor(Color.GRAY);
+        page.addView(how);
+
+        for (int i = 0; i < p.rows(setupTab); i++)
+        {
+            final int r = i;
+            final int tab = setupTab;
+            StringBuilder line = new StringBuilder(p.rowLabel(tab, r));
+            line.append("\n     wings ").append(p.value(tab, r, 0)).append(" / ").append(p.value(tab, r, 1)).append(",  gears");
+            for (int c = 2; c < 8; c++)
+                line.append(" ").append(p.value(tab, r, c));
+            line.append(",  tyres ").append(p.value(tab, r, 8)).append(",  brake balance ").append(p.value(tab, r, 9));
+            TextView row = row(line.toString(), new Runnable() {
+                public void run()
+                {
+                    String[] values = new String[SetupsPage.COLUMNS.length];
+                    boolean[] numbers = new boolean[values.length];
+                    for (int c = 0; c < values.length; c++)
+                    {
+                        values[c] = p.value(tab, r, c);
+                        numbers[c] = c != 8;
+                    }
+                    form(p.tabTitle(tab) + ": " + p.rowName(tab, r), SetupsPage.COLUMNS, values, numbers, new Apply() {
+                        public Message apply(String[] v) { return screen.setSetupRow(tab, r, v); }
+                    });
+                }
+            });
+            row.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View v)
+                {
+                    setupMenu(tab, r);
+                    return true;
+                }
+            });
+        }
+    }
+
+    private void setupMenu(final int tab, final int r)
+    {
+        final SetupsPage p = screen.setups();
+        final String[] items = copiedSetup == null
+            ? new String[] { "Copy", SetupsPage.applyAllLabel(tab) }
+            : new String[] { "Copy", "Paste", SetupsPage.applyAllLabel(tab) };
+        new AlertDialog.Builder(this).setTitle(p.rowName(tab, r))
+            .setItems(items, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    String chosen = items[which];
+                    if (chosen.equals("Copy"))
+                    {
+                        copiedSetup = p.read(tab, r);
+                        copiedText = p.copiedText(tab, r);
+                    }
+                    else if (chosen.equals("Paste"))
+                        screen.writeSetups(tab, new int[] { r }, copiedSetup);
+                    else
+                        screen.applySetupToAll(tab, r);
+                    again();
+                }
+            })
+            .show();
+    }
+
+    // --- Liveries ------------------------------------------------------------
+
+    private int liveryTab;
+    private final int[] liveryRow = new int[3];
+    private final int[] liveryPosition = { LiveriesPage.startPosition(0), LiveriesPage.startPosition(1), LiveriesPage.startPosition(2) };
+    private int fileTab, fileRow;
+    private static final int IMPORT_FILE = 41, EXPORT_FILE = 42;
+
+    private void liveries()
+    {
+        final LiveriesPage p = screen.liveries();
+        final int tab = liveryTab;
+        LinearLayout tabs = new LinearLayout(this);
+        for (int t = 0; t < LiveriesPage.TAB_TITLES.length; t++)
+        {
+            final int n = t;
+            Button b = Ui.button(this, LiveriesPage.TAB_TITLES[t], new View.OnClickListener() {
+                public void onClick(View v) { liveryTab = n; again(); }
+            });
+            if (t == tab)
+                b.setTypeface(Typeface.DEFAULT_BOLD);
+            tabs.addView(b);
+        }
+        page.addView(tabs);
+
+        final int row = liveryRow[tab];
+        TextView title = Ui.heading(this, p.rowName(tab, row));
+        page.addView(title);
+        if (screen.sprites() == null)
+        {
+            TextView none = Ui.text(this, "The game's picture files (F1GPDATA.DAT and F1GPDATB.DAT) are not in this game folder, "
+                + "so the pictures cannot be shown. The colours can still be changed below.", 13);
+            none.setTextColor(Color.GRAY);
+            page.addView(none);
+        }
+        else
+            liveryPicture(p, tab, row);
+
+        // the selected row's parts: tap one to change it
+        for (int i = 0; i < LiveriesPage.parts(tab).length; i++)
+        {
+            final int part = i;
+            LinearLayout line = new LinearLayout(this);
+            line.setGravity(Gravity.CENTER_VERTICAL);
+            int pad = Ui.dp(this, 6);
+            line.setPadding(0, pad, 0, pad);
+            line.setBackgroundResource(android.R.drawable.list_selector_background);
+            line.addView(swatch(p.liveries().getPaletteRgb(p.get(tab, row, part)), 28));
+            TextView name = Ui.text(this, "  " + LiveriesPage.parts(tab)[part] + "  (colour " + p.get(tab, row, part) + ")", 15);
+            line.addView(name);
+            line.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { chooseColour(tab, row, part); }
+            });
+            page.addView(line);
+        }
+
+        String copied = screen.copiedText(tab);
+        TextView how = Ui.text(this, "Tap a " + LiveriesPage.rowWord(tab) + " below to show it above. Touch and hold one to copy its "
+            + LiveriesPage.what(tab) + ", paste copied ones" + (LiveriesPage.hasFile(tab) ? ", or use ArgEditor's ." + LiveriesPage.kind(tab) + " file" : "")
+            + "." + (copied != null ? " " + copied + "." : ""), 13);
+        how.setTextColor(Color.GRAY);
+        how.setPadding(0, Ui.dp(this, 14), 0, Ui.dp(this, 4));
+        page.addView(how);
+
+        for (int i = 0; i < p.rows(tab); i++)
+        {
+            final int r = i;
+            LinearLayout line = new LinearLayout(this);
+            line.setOrientation(LinearLayout.VERTICAL);
+            int pad = Ui.dp(this, 6);
+            line.setPadding(0, pad, 0, pad);
+            line.setBackgroundResource(android.R.drawable.list_selector_background);
+            TextView name = Ui.text(this, p.rowName(tab, r), 15);
+            if (r == row)
+                name.setTypeface(Typeface.DEFAULT_BOLD);
+            line.addView(name);
+            LinearLayout colours = new LinearLayout(this);
+            for (int part = 0; part < LiveriesPage.parts(tab).length; part++)
+                colours.addView(swatch(p.liveries().getPaletteRgb(p.get(tab, r, part)), 16));
+            line.addView(colours);
+            line.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) { liveryRow[tab] = r; again(); }
+            });
+            line.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View v) { liveryMenu(tab, r); return true; }
+            });
+            page.addView(line);
+        }
+    }
+
+    private View swatch(int rgb, int size)
+    {
+        View v = new View(this);
+        v.setBackgroundColor(0xFF000000 | rgb);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.dp(this, size), Ui.dp(this, size));
+        lp.setMargins(0, 0, Ui.dp(this, 2), 0);
+        v.setLayoutParams(lp);
+        return v;
+    }
+
+    private void liveryPicture(final LiveriesPage p, final int tab, final int row)
+    {
+        final LiveryView view = new LiveryView(this, p, screen.sprites(), new LiveryView.Tapped() {
+            public void part(int part) { chooseColour(tab, row, part); }
+        });
+        view.show(tab, row, liveryPosition[tab]);
+        page.addView(view);
+        if (LiveriesPage.turns(tab))
+        {
+            LinearLayout turn = new LinearLayout(this);
+            turn.setGravity(Gravity.CENTER_VERTICAL);
+            turn.addView(Ui.text(this, LiveriesPage.TURN + "  ", 14));
+            android.widget.SeekBar bar = new android.widget.SeekBar(this);
+            bar.setMax(LiveriesPage.positions(tab) - 1);
+            bar.setProgress(liveryPosition[tab]);
+            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                public void onProgressChanged(android.widget.SeekBar s, int v, boolean user)
+                {
+                    liveryPosition[tab] = v;
+                    view.show(tab, row, v);
+                }
+                public void onStartTrackingTouch(android.widget.SeekBar s) { }
+                public void onStopTrackingTouch(android.widget.SeekBar s) { }
+            });
+            turn.addView(bar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+            page.addView(turn);
+        }
+        else
+        {
+            LinearLayout step = new LinearLayout(this);
+            step.setGravity(Gravity.CENTER_VERTICAL);
+            final TextView number = Ui.text(this, LiveriesPage.pictureNumber(tab, liveryPosition[tab]), 14);
+            number.setGravity(Gravity.CENTER);
+            for (final int by : new int[] { -1, 1 })
+            {
+                Button b = Ui.button(this, by < 0 ? "◀" : "▶", new View.OnClickListener() {
+                    public void onClick(View v)
+                    {
+                        int n = LiveriesPage.positions(tab);
+                        liveryPosition[tab] = (liveryPosition[tab] + by + n) % n;
+                        view.show(tab, row, liveryPosition[tab]);
+                        number.setText(LiveriesPage.pictureNumber(tab, liveryPosition[tab]));
+                    }
+                });
+                if (by > 0)
+                    step.addView(number, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+                step.addView(b);
+            }
+            page.addView(step);
+        }
+        TextView hint = Ui.text(this, "Tap part of the picture to change its colour.", 13);
+        hint.setTextColor(Color.GRAY);
+        page.addView(hint);
+    }
+
+    /** The palette: tap a colour to see what it is, then OK to use it. */
+    private void chooseColour(final int tab, final int row, final int part)
+    {
+        final LiveriesPage p = screen.liveries();
+        LinearLayout box = Ui.column(this);
+        TextView hint = Ui.text(this, "Tap a colour, then OK. A filled corner mark: the game changes that colour in a race, so avoid it. "
+            + "An open mark: worth knowing. In the rain, colours 0 to 207 all turn greyer.", 13);
+        hint.setTextColor(Color.GRAY);
+        box.addView(hint);
+        final TextView about = Ui.text(this, LiveriesPage.about(p.get(tab, row, part)), 14);
+        final PaletteView palette = new PaletteView(this, p.liveries(), p.get(tab, row, part), new PaletteView.Picked() {
+            public void colour(int index) { }
+        });
+        box.addView(palette);
+        box.addView(about);
+        palette.setOnTouchListener(new View.OnTouchListener() {
+            public boolean onTouch(View v, android.view.MotionEvent e)
+            {
+                palette.onTouchEvent(e);
+                about.setText(LiveriesPage.about(palette.highlighted()));
+                return true;
+            }
+        });
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(box);
+        new AlertDialog.Builder(this).setTitle(p.chooserTitle(tab, row, part)).setView(scroll)
+            .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int w)
+                {
+                    screen.setLiveryColour(tab, row, part, palette.highlighted());
+                    again();
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void liveryMenu(final int tab, final int r)
+    {
+        final LiveriesPage p = screen.liveries();
+        java.util.List<String> items = new java.util.ArrayList<String>();
+        items.add("Copy");
+        if (screen.copiedText(tab) != null)
+            items.add("Paste");
+        if (LiveriesPage.hasFile(tab))
+        {
+            items.add(LiveriesPage.importLabel(tab));
+            items.add(LiveriesPage.exportLabel(tab));
+        }
+        final String[] list = items.toArray(new String[0]);
+        new AlertDialog.Builder(this).setTitle(p.rowName(tab, r))
+            .setItems(list, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    String chosen = list[which];
+                    fileTab = tab;
+                    fileRow = r;
+                    if (chosen.equals("Copy"))
+                        screen.copyDesign(tab, r);
+                    else if (chosen.equals("Paste"))
+                        screen.pasteDesign(tab, new int[] { r });
+                    else if (chosen.equals(LiveriesPage.importLabel(tab)))
+                    {
+                        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+                        i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                        i.setType("*/*");
+                        startActivityForResult(i, IMPORT_FILE);
+                        return;
+                    }
+                    else
+                    {
+                        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+                        i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                        i.setType("application/octet-stream");
+                        i.putExtra(android.content.Intent.EXTRA_TITLE, p.exportName(tab, r));
+                        startActivityForResult(i, EXPORT_FILE);
+                        return;
+                    }
+                    liveryRow[tab] = r;
+                    again();
+                }
+            })
+            .show();
+    }
+
+    /** A picked file's name as the picker shows it. */
+    private String fileName(android.net.Uri uri)
+    {
+        try
+        {
+            android.database.Cursor c = getContentResolver().query(uri, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
+                                                                   null, null, null);
+            if (c != null)
+                try
+                {
+                    if (c.moveToFirst() && c.getString(0) != null)
+                        return c.getString(0);
+                }
+                finally
+                {
+                    c.close();
+                }
+        }
+        catch (RuntimeException e)
+        {
+            // named below
+        }
+        return "The file";
+    }
+
+    protected void onActivityResult(int request, int result, android.content.Intent data)
+    {
+        super.onActivityResult(request, result, data);
+        if (result != RESULT_OK || data == null || data.getData() == null || screen == null)
+            return;
+        android.net.Uri uri = data.getData();
+        String name = fileName(uri);
+        try
+        {
+            if (request == IMPORT_FILE)
+            {
+                java.io.InputStream in = getContentResolver().openInputStream(uri);
+                java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
+                for (int n; in != null && (n = in.read(buf)) > 0; )
+                    bytes.write(buf, 0, n);
+                if (in != null)
+                    in.close();
+                liveryRow[fileTab] = fileRow;
+                again();
+                Dialogs.show(this, screen.importLivery(fileTab, fileRow, name, bytes.toByteArray()), new Runnable() {
+                    public void run() { again(); }
+                });
+            }
+            else if (request == EXPORT_FILE)
+            {
+                java.io.OutputStream out = getContentResolver().openOutputStream(uri, "wt");
+                out.write(screen.exportLivery(fileTab, fileRow));
+                out.close();
+                android.widget.Toast.makeText(this, "Saved " + name + ".", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }
+        catch (java.io.IOException | RuntimeException e)
+        {
+            Dialogs.show(this, request == IMPORT_FILE ? LiveriesPage.notArgEditorFile(fileTab, name) : LiveriesPage.notSaved(fileTab, name), null);
+        }
+    }
+
+    // --- Lap Records -------------------------------------------------------
+
+    private static final String[] RECORD_FIELDS = { "Qualifying: driver", "Qualifying: team", "Qualifying: time", "Qualifying: date",
+                                                    "Race: driver", "Race: team", "Race: time", "Race: date" };
+
+    private void lapRecords()
+    {
+        final LapRecordsPage records = screen.records();
+        for (int i = 0; i < LapRecordsPage.ROWS; i++)
+        {
+            final int r = i;
+            row(records.value(r, 0) + "\n     Qualifying: " + records.value(r, 1) + ", " + records.value(r, 2) + ", "
+                + records.value(r, 3) + ", " + records.value(r, 4) + "\n     Race: " + records.value(r, 5) + ", "
+                + records.value(r, 6) + ", " + records.value(r, 7) + ", " + records.value(r, 8), new Runnable() {
+                public void run()
+                {
+                    String[] values = new String[8];
+                    for (int c = 0; c < 8; c++)
+                        values[c] = records.value(r, c + 1);
+                    form(records.value(r, 0), RECORD_FIELDS, values, new boolean[8], new Apply() {
+                        public Message apply(String[] v)
+                        {
+                            for (int c = 0; c < 8; c++)
+                            {
+                                Message m = screen.setRecord(r, c + 1, v[c]);
+                                if (m != null)
+                                    return m;
+                            }
+                            return null;
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    // --- Car Physics, Opposition Levels: grids --------------------------------
+
+    private void tables(TablePage p)
+    {
+        TextView intro = Ui.text(this, p.intro + " Changed values are shown in bold; tap a value to change it or see the original.", 13);
+        page.addView(intro);
+        for (TablePage.Section sec : p.sections)
+        {
+            TextView title = Ui.text(this, sec.title, 16);
+            title.setTypeface(Typeface.DEFAULT_BOLD);
+            title.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 4));
+            page.addView(title);
+            if (sec.note != null)
+            {
+                TextView note = Ui.text(this, sec.note, 13);
+                note.setTextColor(Color.GRAY);
+                page.addView(note);
+            }
+            page.addView(grid(sec));
+        }
+    }
+
+    /** A grid as a table that scrolls sideways: column labels, then a row label and its values. */
+    private View grid(final TablePage.Section sec)
+    {
+        final TablePage.Grid g = sec.grid;
+        TableLayout table = new TableLayout(this);
+        int p = Ui.dp(this, 6);
+        TableRow head = new TableRow(this);
+        head.addView(new TextView(this));
+        for (String col : g.cols)
+        {
+            TextView t = Ui.text(this, col, 12);
+            t.setTextColor(Color.GRAY);
+            t.setPadding(p, p, p, p);
+            t.setGravity(Gravity.END);
+            head.addView(t);
+        }
+        table.addView(head);
+        for (int i = 0; i < g.rows.length; i++)
+        {
+            final int r = i;
+            TableRow row = new TableRow(this);
+            TextView label = Ui.text(this, g.rows[r], 14);
+            label.setPadding(0, p, p, p);
+            row.addView(label);
+            for (int j = 0; j < g.cols.length; j++)
+            {
+                final int c = j;
+                TextView cell = Ui.text(this, String.valueOf(g.get(r, c)), 14);
+                cell.setPadding(p, p, p, p);
+                cell.setGravity(Gravity.END);
+                if (g.isChanged(r, c))
+                    cell.setTypeface(Typeface.DEFAULT_BOLD);
+                cell.setBackgroundResource(android.R.drawable.list_selector_background);
+                cell.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v)
+                    {
+                        String what = g.rows[r] + (g.cols.length > 1 ? ", " + g.cols[c] : "");
+                        form(sec.title, new String[] { what + " (original " + g.original(r, c) + ")" },
+                            new String[] { String.valueOf(g.get(r, c)) }, new boolean[] { true }, new Apply() {
+                                public Message apply(String[] v) { return screen.setCell(g, r, c, v[0]); }
+                            });
+                    }
+                });
+                row.addView(cell);
+            }
+            table.addView(row);
+        }
+        HorizontalScrollView sideways = new HorizontalScrollView(this);
+        sideways.addView(table);
+        return sideways;
     }
 
     // --- Pit lane -----------------------------------------------------------

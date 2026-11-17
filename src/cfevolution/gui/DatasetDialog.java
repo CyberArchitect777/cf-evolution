@@ -19,10 +19,10 @@
 package cfevolution.gui;
 
 import cfevolution.data.GameFolder;
-import cfevolution.data.dataset.Dataset;
 import cfevolution.data.dataset.DatasetGroup;
-import cfevolution.data.dataset.GameDataset;
-import cfevolution.data.dataset.OtherEditorFiles;
+import cfevolution.edit.DatasetExport;
+import cfevolution.edit.DatasetImport;
+import cfevolution.edit.Message;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
@@ -30,13 +30,13 @@ import java.io.IOException;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /**
  * Export Dataset and Import Dataset, from the game folder tab: a tick box
- * per group, pictures and circuits unticked until chosen.
+ * per group, pictures and circuits unticked until chosen. A view over the
+ * core's DatasetExport and DatasetImport (2026-11-17).
  *
  * @author barrie
  */
@@ -45,99 +45,61 @@ public class DatasetDialog extends JDialog
     private final Map<DatasetGroup, JCheckBox> boxes = new EnumMap<DatasetGroup, JCheckBox>(DatasetGroup.class);
     private boolean accepted;
 
-    /** What Export Dataset can save as. */
-    private static final String[] FORMATS = { "CF Evolution dataset (.cfe)", "ArgEditor carset (.arged)", "F1ED carset (.1ED)" };
-    private static final int CFE = 0, ARGEDITOR = 1, F1ED = 2;
-    private int format = CFE;
-    private Set<DatasetGroup> possible = java.util.EnumSet.noneOf(DatasetGroup.class);
-
     private DatasetDialog(Window owner, String title)
     {
         super(owner, title, ModalityType.APPLICATION_MODAL);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
     }
 
-    private JPanel groupList(Set<DatasetGroup> offered, Set<DatasetGroup> possible)
+    private JPanel groupList(List<DatasetGroup> offered, final GroupState state)
     {
-        this.possible = possible;
         JPanel p = new JPanel(new GridLayout(0, 1, 0, 2));
-        p.setBorder(BorderFactory.createTitledBorder("Include"));
-        for (DatasetGroup g : DatasetGroup.values())
+        p.setBorder(BorderFactory.createTitledBorder(DatasetExport.INCLUDE));
+        for (final DatasetGroup g : offered)
         {
-            if (!offered.contains(g))
-                continue;
-            JCheckBox box = new JCheckBox("<html><b>" + g.label + "</b>: " + g.detail + "</html>", !g.files);
+            final JCheckBox box = new JCheckBox(DatasetExport.label(g, true));
             box.setName("group " + g.name().toLowerCase());
-            if (!possible.contains(g))
-            {
-                box.setSelected(false);
-                box.setEnabled(false);
-                box.setToolTipText("This game folder does not have the file for this");
-            }
+            if (!state.possible(g))
+                box.setToolTipText(DatasetExport.NOT_IN_FOLDER);
+            box.addItemListener(new java.awt.event.ItemListener() {      // any change of tick, not only a click (as 0.4.1 read the boxes at OK)
+                public void itemStateChanged(java.awt.event.ItemEvent e) { if (state.ticked(g) != box.isSelected()) state.tick(g, box.isSelected()); }
+            });
             boxes.put(g, box);
             p.add(box);
         }
+        show(state);
         return p;
     }
 
-    /** The groups a format always holds; null for a .cfe, which holds what is ticked. */
-    private Set<DatasetGroup> fixedGroups()
+    /** What both pages offer the boxes. */
+    private interface GroupState
     {
-        return format == ARGEDITOR ? OtherEditorFiles.ARGEDITOR_GROUPS : format == F1ED ? OtherEditorFiles.F1ED_GROUPS : null;
+        boolean possible(DatasetGroup g);
+        boolean enabled(DatasetGroup g);
+        boolean ticked(DatasetGroup g);
+        void tick(DatasetGroup g, boolean on);
     }
 
-    /** Ticks and greys the boxes for the format chosen: another editor's carset holds what it holds. */
-    private void showFormat()
+    private void show(GroupState state)
     {
-        Set<DatasetGroup> fixed = fixedGroups();
         for (Map.Entry<DatasetGroup, JCheckBox> e : boxes.entrySet())
         {
-            DatasetGroup g = e.getKey();
-            JCheckBox box = e.getValue();
-            boolean can = possible.contains(g);
-            if (fixed == null)
-            {
-                box.setEnabled(can);
-                box.setSelected(can && !g.files);
-            }
-            else if (fixed.contains(g))
-            {
-                box.setEnabled(false);
-                box.setSelected(true);
-            }
-            else
-            {
-                boolean optional = format == ARGEDITOR && g == DatasetGroup.HELMET_PICTURES && can;
-                box.setEnabled(optional);
-                box.setSelected(false);
-            }
+            e.getValue().setSelected(state.ticked(e.getKey()));
+            e.getValue().setEnabled(state.enabled(e.getKey()));
         }
     }
 
-    private Set<DatasetGroup> chosen()
-    {
-        Set<DatasetGroup> out = java.util.EnumSet.noneOf(DatasetGroup.class);
-        if (fixedGroups() != null)
-            out.addAll(fixedGroups());
-        for (Map.Entry<DatasetGroup, JCheckBox> e : boxes.entrySet())
-            if (e.getValue().isSelected() && e.getValue().isEnabled())
-                out.add(e.getKey());
-        return out;
-    }
-
-    private JPanel buttons(String ok)
+    private JPanel buttons(String ok, final java.util.concurrent.Callable<Message> problem)
     {
         JButton okButton = new JButton(ok);
         okButton.setName("dataset ok");
         okButton.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e)
             {
-                if (chosen().isEmpty())
-                {
-                    JOptionPane.showMessageDialog(DatasetDialog.this, "Tick at least one thing to include.", getTitle(),
-                                                  JOptionPane.INFORMATION_MESSAGE);
+                Message m;
+                try { m = problem.call(); } catch (Exception x) { m = null; }
+                if (MessageBoxes.showRefusal(DatasetDialog.this, m))
                     return;
-                }
                 accepted = true;
                 dispose();
             }
@@ -169,148 +131,101 @@ public class DatasetDialog extends JDialog
         setVisible(true);
     }
 
+    /** Replace? with the desktop's Cancel default; true for Replace. */
+    private static boolean replace(Component parent, String name)
+    {
+        Message q = DatasetExport.replaceQuestion(name);
+        return JOptionPane.showOptionDialog(parent, q.text, q.title, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE,
+                                            null, q.options, q.options[1]) == 0;
+    }
+
     // --- export -----------------------------------------------------------------
 
     public static void exportDataset(MainGUI main, GameFolder game)
     {
         if (!main.releaseGameFiles(game, false))
             return;
-        GameDataset data;
-        try
+        Message[] problem = new Message[1];
+        final DatasetExport x = DatasetExport.of(game, problem);
+        if (x == null)
         {
-            data = new GameDataset(game);
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(main, "GP.EXE could not be read, so nothing was exported.", "Export Dataset",
-                                          JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(main, problem[0]);
             return;
         }
-        final DatasetDialog d = new DatasetDialog(main, "Export Dataset");
-        final JComboBox<String> formatBox = new JComboBox<String>(FORMATS);
+        final DatasetDialog d = new DatasetDialog(main, DatasetExport.TITLE);
+        final JComboBox<String> formatBox = new JComboBox<String>(DatasetExport.FORMATS);
         formatBox.setName("dataset format");
-        JTextField title = new JTextField(24);
+        final JTextField title = new JTextField(24);
         title.setName("dataset title");
         JPanel top = new JPanel(new GridBagLayout());
         GridBagConstraints gc = new GridBagConstraints();
         gc.anchor = GridBagConstraints.WEST;
         gc.insets = new Insets(0, 0, 6, 8);
-        top.add(new JLabel("Save as:"), gc);
+        top.add(new JLabel(DatasetExport.SAVE_AS), gc);
         gc.gridx = 1;
         top.add(formatBox, gc);
         gc.gridx = 0;
         gc.gridy = 1;
-        top.add(new JLabel("Title (optional):"), gc);
+        top.add(new JLabel(DatasetExport.TITLE_LABEL), gc);
         gc.gridx = 1;
         gc.fill = GridBagConstraints.HORIZONTAL;
         gc.weightx = 1;
         top.add(title, gc);
+        final GroupState state = new GroupState() {
+            public boolean possible(DatasetGroup g) { return x.possible(g); }
+            public boolean enabled(DatasetGroup g) { return x.enabled(g); }
+            public boolean ticked(DatasetGroup g) { return x.ticked(g); }
+            public void tick(DatasetGroup g, boolean on) { x.tick(g, on); }
+        };
         JPanel content = new JPanel(new BorderLayout(0, 10));
         content.add(top, BorderLayout.NORTH);
-        content.add(d.groupList(java.util.EnumSet.allOf(DatasetGroup.class), data.available()), BorderLayout.CENTER);
+        content.add(d.groupList(DatasetExport.groups(), state), BorderLayout.CENTER);
         JPanel south = new JPanel(new BorderLayout());
-        final JLabel formatNote = note(CFE_NOTE);
+        final JLabel formatNote = note(x.note());
         formatNote.setName("format note");
         south.add(formatNote, BorderLayout.NORTH);
         formatBox.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e)
             {
-                d.format = formatBox.getSelectedIndex();
-                d.showFormat();
-                formatNote.setText("<html>" + (d.format == ARGEDITOR ? ARGEDITOR_NOTE : d.format == F1ED ? F1ED_NOTE : CFE_NOTE) + "</html>");
+                x.setFormat(formatBox.getSelectedIndex());
+                d.show(state);
+                formatNote.setText("<html>" + x.note() + "</html>");
                 d.pack();
             }
         });
-        south.add(d.buttons("Export..."), BorderLayout.SOUTH);
+        south.add(d.buttons(DatasetExport.OK, new java.util.concurrent.Callable<Message>() {
+            public Message call() { return x.problem(); }
+        }), BorderLayout.SOUTH);
         content.add(south, BorderLayout.SOUTH);
         d.showDialog(content);
         if (!d.accepted)
             return;
+        x.title = title.getText();
 
-        Set<DatasetGroup> groups = d.chosen();
-        if (d.format != CFE)
-        {
-            exportOtherEditor(main, game, data, groups, title.getText(), d.format);
-            return;
-        }
-        boolean zip = false;
-        for (DatasetGroup g : groups)
-            zip |= g.files;
         JFileChooser chooser = new JFileChooser(game.getFolder().getParentFile());
-        chooser.setDialogTitle("Export Dataset");
-        chooser.setFileFilter(zip ? new FileNameExtensionFilter("Dataset with pictures (*.zip)", "zip")
-                                  : new FileNameExtensionFilter("Dataset (*.cfe)", "cfe"));
-        String base = title.getText().trim().replaceAll("[^A-Za-z0-9 _-]", "").trim();
-        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), (base.isEmpty() ? "dataset" : base) + (zip ? ".zip" : Dataset.EXTENSION)));
-        if (chooser.showSaveDialog(main) != JFileChooser.APPROVE_OPTION)
-            return;
-        Dataset dataset = data.export(groups, title.getText());
-        File target = chooser.getSelectedFile();
-        File written = new File(target.getParentFile(), baseName(target) + (dataset.needsZip() ? ".zip" : Dataset.EXTENSION));
-        if (written.exists() && JOptionPane.showOptionDialog(main, written.getName() + " already exists. Replace it?",
-                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
-                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
-            return;
-        try
-        {
-            written = dataset.write(target);
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(main, written.getName() + " could not be saved.", "Export Dataset", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        JOptionPane.showMessageDialog(main, "The dataset was saved as " + written.getName() + ".", "Export Dataset",
-                                      JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    private static final String CFE_NOTE = "The dataset is a text file (.cfe) anyone can read. With pictures or circuits it is saved as a zip<br>"
-        + "holding the text file and folders of PNG pictures and circuit files.";
-    private static final String ARGEDITOR_NOTE = "For ArgEditor: the first 18 teams with their drivers, the colours and the points.<br>"
-        + "Drivers without a seat, teams 19 and 20, and anything else are left out.";
-    private static final String F1ED_NOTE = "For F1ED: all 20 teams and 40 drivers, the colours, and the game settings F1ED has.<br>"
-        + "F1ED has no points table; anything else is left out.";
-
-    private static void exportOtherEditor(MainGUI main, GameFolder game, GameDataset data, Set<DatasetGroup> groups, String title, int format)
-    {
-        String ext = format == ARGEDITOR ? ".arged" : ".1ED";
-        JFileChooser chooser = new JFileChooser(game.getFolder().getParentFile());
-        chooser.setDialogTitle("Export Dataset");
-        chooser.setFileFilter(new FileNameExtensionFilter(FORMATS[format].replace("(.", "(*."), ext.substring(1)));
-        String base = title.trim().replaceAll("[^A-Za-z0-9 _-]", "").trim();
-        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), (base.isEmpty() ? "carset" : base) + ext));
+        chooser.setDialogTitle(DatasetExport.TITLE);
+        chooser.setFileFilter(new FileNameExtensionFilter(x.filter(), x.extension().substring(1)));
+        chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), x.suggestedName()));
         if (chooser.showSaveDialog(main) != JFileChooser.APPROVE_OPTION)
             return;
         File target = chooser.getSelectedFile();
-        File written = new File(target.getParentFile(), baseName(target) + ext);
-        if (written.exists() && JOptionPane.showOptionDialog(main, written.getName() + " already exists. Replace it?",
-                "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
-                new String[] { "Replace", "Cancel" }, "Cancel") != 0)
+        File written = new File(target.getParentFile(), x.writtenName(target.getName()));
+        if (written.exists() && !replace(main, written.getName()))
             return;
-        Dataset dataset = data.export(groups, title);
         java.util.List<String> notes = new java.util.ArrayList<String>();
-        byte[] bytes = format == ARGEDITOR ? OtherEditorFiles.writeArgEditor(dataset, data.helmetPalette(), notes)
-                                           : OtherEditorFiles.writeF1Ed(dataset, data.getExecutable().getGameLiveries(), notes);
         try
         {
-            java.nio.file.Files.write(written.toPath(), bytes);
+            if (x.format() == DatasetExport.CFE)
+                written = x.writeDataset(target);
+            else
+                java.nio.file.Files.write(written.toPath(), x.carset(notes));
         }
         catch (IOException e)
         {
-            JOptionPane.showMessageDialog(main, written.getName() + " could not be saved.", "Export Dataset", JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(main, DatasetExport.notSaved(written.getName()));
             return;
         }
-        StringBuilder msg = new StringBuilder("The carset was saved as " + written.getName() + ".");
-        for (String n : notes)
-            msg.append("\n").append(n);
-        JOptionPane.showMessageDialog(main, msg.toString(), "Export Dataset", JOptionPane.INFORMATION_MESSAGE);
-    }
-
-    private static String baseName(File f)
-    {
-        String n = f.getName();
-        int dot = n.lastIndexOf('.');
-        return dot > 0 ? n.substring(0, dot) : n;
+        MessageBoxes.show(main, x.saved(written.getName(), notes));
     }
 
     // --- import -----------------------------------------------------------------
@@ -318,9 +233,8 @@ public class DatasetDialog extends JDialog
     public static void importDataset(MainGUI main, GameFolder game, Runnable afterwards)
     {
         JFileChooser chooser = new JFileChooser(game.getFolder().getParentFile());
-        chooser.setDialogTitle("Import Dataset");
-        chooser.setFileFilter(new FileNameExtensionFilter("Datasets and carsets (*.cfe, *.zip, F1ED *.1ed, ArgEditor *.arged)",
-                                                          "cfe", "zip", "1ed", "arged"));
+        chooser.setDialogTitle(DatasetImport.TITLE);
+        chooser.setFileFilter(new FileNameExtensionFilter(DatasetImport.FILTER, "cfe", "zip", "1ed", "arged"));
         if (chooser.showOpenDialog(main) != JFileChooser.APPROVE_OPTION)
             return;
         importDataset(main, game, chooser.getSelectedFile(), afterwards);
@@ -330,89 +244,58 @@ public class DatasetDialog extends JDialog
     {
         if (!main.releaseGameFiles(game, true))
             return;
-        GameDataset data;
-        Dataset dataset;
-        try
+        Message[] problem = new Message[1];
+        final DatasetImport x = DatasetImport.of(game, file, problem);
+        if (x == null)
         {
-            data = new GameDataset(game);
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(main, "GP.EXE could not be read, so nothing was imported.", "Import Dataset",
-                                          JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        try
-        {
-            dataset = OtherEditorFiles.read(file, data.helmetPalette());
-        }
-        catch (IOException | RuntimeException e)
-        {
-            JOptionPane.showMessageDialog(main, file.getName() + " could not be read as a dataset or carset.", "Import Dataset",
-                                          JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        Set<DatasetGroup> inFile = GameDataset.groupsIn(dataset);
-        if (inFile.isEmpty())
-        {
-            JOptionPane.showMessageDialog(main, file.getName() + " holds nothing the editor can import.", "Import Dataset",
-                                          JOptionPane.INFORMATION_MESSAGE);
+            MessageBoxes.show(main, problem[0]);
             return;
         }
 
-        final DatasetDialog d = new DatasetDialog(main, "Import Dataset");
+        final DatasetDialog d = new DatasetDialog(main, DatasetImport.TITLE);
         JPanel content = new JPanel(new BorderLayout(0, 10));
-        String madeBy = dataset.get("dataset", "made by"), title = dataset.get("dataset", "title");
-        content.add(note("<b>" + file.getName() + "</b>" + (title != null ? ": " + title : "")
-                         + (madeBy != null ? "<br>Made with " + madeBy + "." : "")), BorderLayout.NORTH);
+        content.add(note(x.heading(true)), BorderLayout.NORTH);
 
+        final GroupState state = new GroupState() {
+            public boolean possible(DatasetGroup g) { return x.possible(g); }
+            public boolean enabled(DatasetGroup g) { return x.enabled(g); }
+            public boolean ticked(DatasetGroup g) { return x.ticked(g); }
+            public void tick(DatasetGroup g, boolean on) { x.tick(g, on); }
+        };
         JPanel middle = new JPanel(new BorderLayout(0, 10));
-        middle.add(d.groupList(inFile, data.available()), BorderLayout.CENTER);
+        middle.add(d.groupList(x.groups(), state), BorderLayout.CENTER);
 
         // everything, or one team into a chosen slot
-        final JRadioButton all = new JRadioButton("Everything ticked", true);
-        final JRadioButton one = new JRadioButton("One team:");
+        final JRadioButton all = new JRadioButton(DatasetImport.EVERYTHING, true);
+        final JRadioButton one = new JRadioButton(DatasetImport.ONE_TEAM);
         all.setName("bring everything");
         one.setName("bring one team");
         ButtonGroup bring = new ButtonGroup();
         bring.add(all);
         bring.add(one);
-        final JComboBox<String> from = new JComboBox<String>(), to = new JComboBox<String>();
+        final JComboBox<String> from = new JComboBox<String>(x.fromTeams().toArray(new String[0]));
+        final JComboBox<String> to = new JComboBox<String>(x.toTeams().toArray(new String[0]));
         from.setName("from team");
         to.setName("to team");
-        final java.util.List<Integer> fromTeams = new java.util.ArrayList<Integer>();
-        for (int t = 1; t <= GameDataset.TEAMS; t++)
-            if (dataset.hasSection("team " + t))
-            {
-                String n = dataset.get("team " + t, "name");
-                fromTeams.add(t - 1);
-                from.addItem(t + "  " + (n == null || n.isEmpty() ? "Team " + t : n));
-            }
-        for (int t = 0; t < GameDataset.TEAMS; t++)
-        {
-            String n = data.getExecutable().getGameTeams().getTeamName(t);
-            to.addItem((t + 1) + "  " + (n.isEmpty() ? "Team " + (t + 1) : n));
-        }
         JPanel teamRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         teamRow.add(one);
         teamRow.add(from);
-        teamRow.add(new JLabel("in place of"));
+        teamRow.add(new JLabel(DatasetImport.IN_PLACE_OF));
         teamRow.add(to);
         JPanel bringPanel = new JPanel(new GridLayout(0, 1, 0, 2));
-        bringPanel.setBorder(BorderFactory.createTitledBorder("Bring in"));
+        bringPanel.setBorder(BorderFactory.createTitledBorder(DatasetImport.BRING_IN));
         bringPanel.add(all);
         bringPanel.add(teamRow);
-        bringPanel.add(note("A single team brings its name, colours and drivers; its drivers take the cars of the team it replaces."));
-        boolean teamsInFile = !fromTeams.isEmpty();
-        one.setEnabled(teamsInFile);
+        bringPanel.add(note(DatasetImport.ONE_TEAM_NOTE));
+        one.setEnabled(x.canBringOneTeam());
         final Runnable sync = new Runnable() {
             public void run()
             {
+                x.setOneTeam(one.isSelected());
                 from.setEnabled(one.isSelected());
                 to.setEnabled(one.isSelected());
                 for (Map.Entry<DatasetGroup, JCheckBox> e : d.boxes.entrySet())
-                    if (!e.getKey().team)
-                        e.getValue().setEnabled(!one.isSelected() && data.available().contains(e.getKey()));
+                    e.getValue().setEnabled(x.enabled(e.getKey()));
             }
         };
         ActionListener syncer = new ActionListener() { public void actionPerformed(ActionEvent e) { sync.run(); } };
@@ -421,16 +304,14 @@ public class DatasetDialog extends JDialog
         sync.run();
 
         // names: GP.EXE, a name file, or both
-        final JCheckBox intoGame = new JCheckBox("Write names into GP.EXE", true);
-        final JCheckBox intoFile = new JCheckBox("Also write all the names to a name file in GPSAVES:");
-        final JTextField nameFile = new JTextField(baseName(file).toUpperCase().replaceAll("[^A-Z0-9_-]", ""), 9);
+        final JCheckBox intoGame = new JCheckBox(DatasetImport.NAMES_INTO_GAME, true);
+        final JCheckBox intoFile = new JCheckBox(DatasetImport.NAMES_INTO_FILE);
+        final JTextField nameFile = new JTextField(x.nameFile, 9);
         intoGame.setName("names into game");
         intoFile.setName("names into file");
         nameFile.setName("name file");
-        if (nameFile.getText().length() > 8)
-            nameFile.setText(nameFile.getText().substring(0, 8));
         JPanel namePanel = new JPanel(new GridLayout(0, 1, 0, 2));
-        namePanel.setBorder(BorderFactory.createTitledBorder("Names"));
+        namePanel.setBorder(BorderFactory.createTitledBorder(DatasetImport.NAMES));
         namePanel.add(intoGame);
         JPanel fileRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         fileRow.add(intoFile);
@@ -445,44 +326,25 @@ public class DatasetDialog extends JDialog
         content.add(middle, BorderLayout.CENTER);
 
         JPanel south = new JPanel(new BorderLayout());
-        south.add(note("The game files that change are copied first to " + GameDataset.BACKUP_FOLDER + " in the game folder."), BorderLayout.NORTH);
-        south.add(d.buttons("Import"), BorderLayout.SOUTH);
+        south.add(note(DatasetImport.BACKUP_NOTE), BorderLayout.NORTH);
+        south.add(d.buttons(DatasetImport.OK, new java.util.concurrent.Callable<Message>() {
+            public Message call() { return x.problem(); }
+        }), BorderLayout.SOUTH);
         content.add(south, BorderLayout.SOUTH);
         d.showDialog(content);
         if (!d.accepted)
             return;
 
-        GameDataset.ImportChoice choice = new GameDataset.ImportChoice();
-        choice.groups = d.chosen();
-        if (one.isSelected() && from.getSelectedIndex() >= 0)
+        x.from = from.getSelectedIndex();
+        x.to = to.getSelectedIndex();
+        x.namesIntoGame = intoGame.isSelected();
+        x.namesIntoFile = intoFile.isSelected();
+        x.nameFile = nameFile.getText();
+        Message[] refused = new Message[1];
+        List<String> report = x.run(refused);
+        if (report == null)
         {
-            choice.fromTeam = fromTeams.get(from.getSelectedIndex());
-            choice.toTeam = to.getSelectedIndex();
-        }
-        choice.namesIntoGame = intoGame.isSelected();
-        if (intoFile.isSelected())
-        {
-            String n = nameFile.getText().trim().toUpperCase();
-            if (!n.matches("[A-Z0-9_-]{1,8}"))
-            {
-                JOptionPane.showMessageDialog(main, "The name file needs a name of 1 to 8 letters, digits, - or _. Nothing was imported.",
-                                              "Import Dataset", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            File saves = game.getSavesFolder();
-            if (saves == null)
-                saves = new File(game.getFolder(), "GPSAVES");
-            choice.nameFile = new File(saves, n + ".NAM");
-        }
-        List<String> report;
-        try
-        {
-            report = data.importDataset(dataset, choice);
-        }
-        catch (IOException e)
-        {
-            JOptionPane.showMessageDialog(main, "The import could not be finished: a game file could not be written. "
-                + "The files changed so far are in " + GameDataset.BACKUP_FOLDER + ".", "Import Dataset", JOptionPane.ERROR_MESSAGE);
+            MessageBoxes.show(main, refused[0]);
             return;
         }
         if (afterwards != null)
@@ -492,6 +354,6 @@ public class DatasetDialog extends JDialog
         text.setEditable(false);
         text.setLineWrap(true);
         text.setWrapStyleWord(true);
-        JOptionPane.showMessageDialog(main, new JScrollPane(text), "Import Dataset", JOptionPane.INFORMATION_MESSAGE);
+        JOptionPane.showMessageDialog(main, new JScrollPane(text), DatasetImport.TITLE, JOptionPane.INFORMATION_MESSAGE);
     }
 }

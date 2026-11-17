@@ -170,8 +170,8 @@ public class TrackWindow extends JPanel implements EditorTab
                 propertyEditor.setEditedNode(node);
                 commandEditor.editSegment(segment);
                 commands = true;
-                inspectorHeading.setText((kind == 1 ? "Track segment " : "Pit lane segment ") + segmentNo);
-                inspectorHint.setText(directionText(segment.getCurvature()) + " · " + segment.getTlu() + " TLU");
+                inspectorHeading.setText(cfevolution.edit.TrackOutline.heading(kind, segmentNo));
+                inspectorHint.setText(cfevolution.edit.TrackOutline.hint(currentTrack, kind, segmentNo));
                 break;
             }
             case 3:
@@ -180,32 +180,27 @@ public class TrackWindow extends JPanel implements EditorTab
                 propertyEditor.editBestLineSegment(lineSegment);
                 propertyEditor.setEditedNode(node);
                 commandEditor.editSegment(null);
-                inspectorHeading.setText("Best line segment " + segmentNo);
-                inspectorHint.setText(treeWindow.getBestLineDirection(lineSegment) + " · " + lineSegment.getTlu() + " TLU");
+                inspectorHeading.setText(cfevolution.edit.TrackOutline.heading(kind, segmentNo));
+                inspectorHint.setText(cfevolution.edit.TrackOutline.hint(currentTrack, kind, segmentNo));
                 break;
             }
             case 4:
                 propertyEditor.editDataHeaders(currentTrack.getTrackDataHeader());
                 propertyEditor.setEditedNode(null);
                 commandEditor.editSegment(null);
-                inspectorHeading.setText("Track data headers");
-                inspectorHint.setText("Settings that apply to the whole track");
+                inspectorHeading.setText(cfevolution.edit.TrackOutline.HEADERS_HEADING);
+                inspectorHint.setText(cfevolution.edit.TrackOutline.HEADERS_HINT);
                 break;
             default:
                 propertyEditor.showNothing();
                 commandEditor.editSegment(null);
-                inspectorHeading.setText("Nothing selected");
-                inspectorHint.setText("Pick a segment in the list or click the map");
+                inspectorHeading.setText(cfevolution.edit.TrackOutline.NOTHING_HEADING);
+                inspectorHint.setText(cfevolution.edit.TrackOutline.NOTHING_HINT);
                 break;
         }
         inspectorTabs.setEnabledAt(1, commands);
         if (!commands)
             inspectorTabs.setSelectedIndex(0);
-    }
-
-    private static String directionText(int curvature)
-    {
-        return curvature < 0 ? "Turns left" : curvature > 0 ? "Turns right" : "Straight";
     }
 
     // --- EditorTab ------------------------------------------------------
@@ -285,13 +280,13 @@ public class TrackWindow extends JPanel implements EditorTab
     private void editRaceStrategy()
     {
         applyPendingEdits();
-        if (!cfevolution.data.track.RaceStrategy.isAvailable(currentTrack.getFooter()))
+        cfevolution.edit.RaceStrategyForm form = cfevolution.edit.RaceStrategyForm.of(currentTrack.getFooter());
+        if (form == null)
         {
-            JOptionPane.showMessageDialog(this, "This track file does not have race settings to change.",
-                "Race Strategy", JOptionPane.WARNING_MESSAGE);
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.RaceStrategyForm.NOT_AVAILABLE);
             return;
         }
-        RaceStrategyDialog dialog = new RaceStrategyDialog(this, currentTrack.getFooter());
+        RaceStrategyDialog dialog = new RaceStrategyDialog(this, form);
         dialog.setVisible(true);
         if (dialog.wasChanged())
             setModified(true);
@@ -337,7 +332,7 @@ public class TrackWindow extends JPanel implements EditorTab
     private void editCarSettings()
     {
         applyPendingEdits();
-        CarSettingsDialog dialog = new CarSettingsDialog(this, currentTrack.getCCSetup());
+        CarSettingsDialog dialog = new CarSettingsDialog(this, new cfevolution.edit.CarSettingsForm(currentTrack.getCCSetup()));
         dialog.setVisible(true);
         if (dialog.wasChanged())
             setModified(true);
@@ -515,33 +510,24 @@ public class TrackWindow extends JPanel implements EditorTab
     private void removeAllLine(java.awt.event.ActionEvent evt) {
         // Handles line removal menu event
         
-        int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to remove all best line segments?", "Clear Best Line", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (selectionOption == JOptionPane.YES_OPTION)
-        {
+        if (MessageBoxes.ask(this, cfevolution.edit.TrackOutline.clearQuestion(cfevolution.edit.TrackOutline.LINE)))
             treeWindow.deleteAllSegments(2);
-        }
         
     }
 
     private void removeAllPit(java.awt.event.ActionEvent evt) {
         // Handles pit removal menu event
         
-        int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to remove all pit segments?", "Clear Pit Segments", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (selectionOption == JOptionPane.YES_OPTION)
-        {
+        if (MessageBoxes.ask(this, cfevolution.edit.TrackOutline.clearQuestion(cfevolution.edit.TrackOutline.PIT)))
             treeWindow.deleteAllSegments(1);
-        }
         
     }
 
     private void removeAllTrack(java.awt.event.ActionEvent evt) {
         // Handles track removal menu event
         
-        int selectionOption = JOptionPane.showConfirmDialog(this, "Are you sure you want to remove all track segments?", "Clear Track Segments", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (selectionOption == JOptionPane.YES_OPTION)
-        {
+        if (MessageBoxes.ask(this, cfevolution.edit.TrackOutline.clearQuestion(cfevolution.edit.TrackOutline.TRACK)))
             treeWindow.deleteAllSegments(0);
-        }
         
     }
 

@@ -21,8 +21,11 @@ package cfevolution.screens;
 
 import cfevolution.data.GameFolder;
 import cfevolution.data.executable.Executable;
+import cfevolution.edit.GameFilePage;
+import cfevolution.edit.GameFolderList;
 import cfevolution.edit.GameFolderOpening;
 import cfevolution.edit.Message;
+import cfevolution.edit.AllCircuitsCars;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,52 +46,114 @@ public final class FolderScreen
         this.game = game;
     }
 
-    /** One line of the list: a heading, or something that can be opened. */
-    public static final class Row
-    {
-        /** For a heading only the label is set. */
-        public final boolean heading;
-        public final String number, label, detail;
-        /** The file to open, or null when it is not in the folder. */
-        public final File file;
-        /** EXECUTABLE, or the circuit slot 1-16. */
-        public final int what;
-
-        Row(boolean heading, String number, String label, String detail, File file, int what)
-        {
-            this.heading = heading;
-            this.number = number;
-            this.label = label;
-            this.detail = detail;
-            this.file = file;
-            this.what = what;
-        }
-    }
-
-    public static final int EXECUTABLE = 0;
+    /** Row.what for GP.EXE (circuits are 1-16; GameFolderList.OPTIONS, GameFolderList.SAVED + n for the others). */
+    public static final int EXECUTABLE = GameFolderList.GAME;
 
     public String title()
     {
         return game.getFolder().getName();
     }
 
-    /** The rows, worded as the desktop's game folder tab words them. */
-    public List<Row> rows()
+    /** Every row, worded as the desktop's game folder tab words them. */
+    public List<GameFolderList.Row> rows()
     {
-        List<Row> rows = new ArrayList<Row>();
-        rows.add(new Row(true, "", "Game", "", null, -1));
-        rows.add(new Row(false, "", "Game settings",
-            "GP.EXE, version 1.05 " + game.getBuildName() + ": drivers, teams, points, liveries and rules",
-            game.getExecutable(), EXECUTABLE));
-        rows.add(new Row(true, "", "Circuits", "", null, -1));
-        for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
+        return GameFolderList.rows(game);
+    }
+
+    /** The game options, a name file, a setup file, a championship save or the sound effects; null after setting problem[0]. */
+    public GameFilePage openFile(File file, Message[] problem)
+    {
+        try
         {
-            File track = game.getTrack(slot);
-            rows.add(new Row(false, String.valueOf(slot), GameFolder.CIRCUIT_NAMES[slot - 1],
-                track != null ? track.getName() : GameFolder.trackFileName(slot) + " is not in this folder",
-                track, slot));
+            if (cfevolution.data.gamefiles.SoundEffectsFile.isSoundEffects(file))
+                return new cfevolution.edit.SoundEffectsPage(cfevolution.data.gamefiles.SoundEffectsFile.load(file),
+                                                             java.nio.file.Files.readAllBytes(file.toPath()));
+            return GameFilePage.open(file, game);
         }
-        return rows;
+        catch (java.io.IOException e)
+        {
+            problem[0] = GameFilePage.notOpened(file);
+            return null;
+        }
+    }
+
+    /**
+     * Save the Game's Names as a Name File, with the typed name: refused
+     * (BAD_NAME), or asked Replace? when the file is there (Replace, the
+     * first choice, writes it), then written. savedNames() is the file
+     * once written.
+     */
+    public Flow saveNames(String typed)
+    {
+        savedNames = null;
+        String name = GameFolderList.fileName(typed);
+        if (name == null)
+            return Flow.tell(GameFolderList.BAD_NAME);
+        final File target = GameFolderList.nameFileTarget(game, name);
+        if (!target.exists())
+            return Flow.tell(writeNames(target));
+        return new Flow() {
+            {
+                show(GameFolderList.replaceQuestion(target));
+            }
+            protected void next(Message asked, int choice)
+            {
+                if (asked.options != null && choice == 0)
+                {
+                    Message m = writeNames(target);
+                    if (m != null)
+                        show(m);
+                }
+            }
+        };
+    }
+
+    /** A picture file (menu helmets, flags, backgrounds, circuit pictures); null after setting problem[0]. */
+    public cfevolution.edit.PictureFilePage openPictures(File file, Message[] problem)
+    {
+        try
+        {
+            return new cfevolution.edit.PictureFilePage(cfevolution.data.gamefiles.MediaContainer.load(file),
+                                                         cfevolution.data.gamefiles.MediaContainer.load(file), file, game);
+        }
+        catch (IOException e)
+        {
+            problem[0] = GameFilePage.notOpened(file);
+            return null;
+        }
+    }
+
+    /** Export Dataset; null after setting problem[0]. */
+    public cfevolution.edit.DatasetExport exportDataset(Message[] problem)
+    {
+        return cfevolution.edit.DatasetExport.of(game, problem);
+    }
+
+    /** Import Dataset with a file to bring in; null after setting problem[0]. */
+    public cfevolution.edit.DatasetImport importDataset(File file, Message[] problem)
+    {
+        return cfevolution.edit.DatasetImport.of(game, file, problem);
+    }
+
+    private File savedNames;
+
+    public File savedNames()
+    {
+        return savedNames;
+    }
+
+    private Message writeNames(File target)
+    {
+        try
+        {
+            GameFolderList.writeNameFile(game, target);
+            savedNames = target;
+            return null;
+        }
+        catch (java.io.IOException e)
+        {
+            return GameFolderList.notSaved(target);
+        }
     }
 
     /** Opens GP.EXE; null after setting problem[0] if it cannot be opened. */
@@ -101,7 +166,13 @@ public final class FolderScreen
             problem[0] = m;
             return null;
         }
-        return new ExecutableScreen(exe);
+        return new ExecutableScreen(exe, game.getExecutable().getAbsoluteFile().getParentFile());
+    }
+
+    /** Game folder > Computer Cars at Every Circuit, read afresh from the circuit files. */
+    public AllCircuitsCars allCircuits()
+    {
+        return new AllCircuitsCars(game);
     }
 
     /** Opens circuit slot 1-16; null after setting problem[0] if it will not load. */
