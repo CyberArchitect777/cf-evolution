@@ -44,11 +44,12 @@ import java.util.Set;
  *
  * Copied in: GP.EXE, GPPACKED.EXE, the 16 circuits and the game's car, helmet
  * and pit crew pictures (F1GPDATA.DAT, F1GPDATB.DAT: read for the Liveries
- * page, never changed, so never written back); and, until the folder
- * has its first-open copy (CFE-BACKUP/original), the other files that copy
- * keeps (F1PREFS.DAT, the picture files, XSOUND.BIN, GPSAVES). When the copy
- * exists it is not copied in: an empty folder stands for it, so the core
- * leaves it alone and nothing in it is ever written back.
+ * page, never changed, so never written back); and the game folder's own
+ * files, which are edited too (F1PREFS.DAT, the picture files, XSOUND.BIN,
+ * GPSAVES; until 2026-11-18 only before the first-open copy existed, so a
+ * second open found them missing). The first-open copy (CFE-BACKUP/original)
+ * is not copied in: an empty folder stands for it, so the core leaves it
+ * alone and nothing in it is ever written back.
  *
  * Writing back: new files before changed ones, so a backup (GPPACKED.EXE, the
  * first-open copy) is in the folder before the file it keeps is replaced. A
@@ -140,17 +141,14 @@ public final class FolderMirror
         Set<String> wanted = new HashSet<String>(Arrays.asList("GP.EXE", GameFolder.BACKUP_NAME, "F1GPDATA.DAT", "F1GPDATB.DAT"));
         for (int slot = 1; slot <= GameFolder.CIRCUITS; slot++)
             wanted.add(GameFolder.trackFileName(slot));
-        if (!haveOriginals)
-        {
-            wanted.add("F1PREFS.DAT");
-            wanted.addAll(Arrays.asList(GameFolder.PICTURE_FILES));
-            wanted.add("XSOUND.BIN");
-        }
+        wanted.add("F1PREFS.DAT");                          // always: the game folder's own files are edited too
+        wanted.addAll(Arrays.asList(GameFolder.PICTURE_FILES));
+        wanted.add("XSOUND.BIN");
         for (String n : top)
             if (!n.endsWith("/") && wanted.contains(n.toUpperCase(java.util.Locale.ROOT)))
                 copyIn(n);
         String saves = find(top, "GPSAVES/");
-        if (!haveOriginals && saves != null)
+        if (saves != null)
             copyInFolder(strip(saves), 1);                  // as GameFolder reads it: GPSAVES and one level in
     }
 

@@ -75,17 +75,25 @@ class LiveryView extends View
         invalidate();
     }
 
-    protected void onMeasure(int w, int h)
-    {
-        int width = MeasureSpec.getSize(w);
-        int scale = Math.max(1, Math.min(LiveriesPage.scale(tab) * 2, (width - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
-        setMeasuredDimension(width, box[1] * scale + Ui.dp(getContext(), 24));
-    }
-
+    /**
+     * Square pixels, as large as fills a little over half the screen's height
+     * (2026-11-18: fitted to the width, the car was a low strip); a picture
+     * then wider than the screen scrolls sideways (the activity puts this in
+     * a HorizontalScrollView).
+     */
     private int scale()
     {
-        return Math.max(1, Math.min((getWidth() - Ui.dp(getContext(), 16)) / Math.max(1, box[0]),
-                                    (getHeight() - Ui.dp(getContext(), 24)) / Math.max(1, box[1])));
+        int tall = (int) (getResources().getDisplayMetrics().heightPixels * 0.55);
+        return Math.max(1, tall / Math.max(1, box[1]));
+    }
+
+    protected void onMeasure(int w, int h)
+    {
+        int across = MeasureSpec.getSize(w);
+        if (across == 0)
+            across = getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
+        setMeasuredDimension(Math.max(across, box[0] * scale() + Ui.dp(getContext(), 16)),
+                             box[1] * scale() + Ui.dp(getContext(), 24));
     }
 
     protected void onDraw(Canvas canvas)

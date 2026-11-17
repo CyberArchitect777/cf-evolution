@@ -536,7 +536,10 @@ public class ExecutableActivity extends Activity
             public void part(int part) { chooseColour(tab, row, part); }
         });
         view.show(tab, row, liveryPosition[tab]);
-        page.addView(view);
+        HorizontalScrollView sideways = new HorizontalScrollView(this);
+        sideways.setFillViewport(true);
+        sideways.addView(view);
+        page.addView(sideways);
         if (LiveriesPage.turns(tab))
         {
             LinearLayout turn = new LinearLayout(this);
