@@ -36,6 +36,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TableLayout;
 import android.widget.TableRow;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.TextView;
 import cfevolution.edit.GameSettingsPage;
 import cfevolution.edit.LapRecordsPage;
@@ -146,10 +148,30 @@ public class ExecutableActivity extends Activity
 
     private void form(String title, String[] labels, String[] values, boolean[] numbers, final Apply apply)
     {
+        form(title, labels, values, numbers, new String[labels.length][], apply);
+    }
+
+    /** As above; a field with choices is a drop-down, its value the chosen place in the list. */
+    private void form(String title, String[] labels, String[] values, boolean[] numbers, String[][] choices, final Apply apply)
+    {
         LinearLayout f = Ui.column(this);
         final EditText[] boxes = new EditText[labels.length];
+        final Spinner[] lists = new Spinner[labels.length];
         for (int i = 0; i < labels.length; i++)
-            boxes[i] = Ui.field(f, labels[i], values[i], numbers[i]);
+            if (choices[i] == null)
+                boxes[i] = Ui.field(f, labels[i], values[i], numbers[i]);
+            else
+            {
+                TextView label = Ui.text(this, labels[i], 14);
+                label.setTextColor(Color.GRAY);
+                f.addView(label);
+                lists[i] = new Spinner(this);
+                ArrayAdapter<String> a = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, choices[i]);
+                a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                lists[i].setAdapter(a);
+                lists[i].setSelection(Integer.parseInt(values[i]));
+                f.addView(lists[i]);
+            }
         ScrollView s = new ScrollView(this);
         s.addView(f);
         new AlertDialog.Builder(this).setTitle(title).setView(s)
@@ -158,7 +180,7 @@ public class ExecutableActivity extends Activity
                 {
                     String[] typed = new String[boxes.length];
                     for (int i = 0; i < boxes.length; i++)
-                        typed[i] = boxes[i].getText().toString();
+                        typed[i] = lists[i] != null ? String.valueOf(lists[i].getSelectedItemPosition()) : boxes[i].getText().toString();
                     Dialogs.show(ExecutableActivity.this, apply.apply(typed), null);
                     again();
                 }
@@ -206,10 +228,13 @@ public class ExecutableActivity extends Activity
                 new Runnable() {
                     public void run()
                     {
-                        form("Team " + (team + 1), new String[] { "Team", "Engine", "Engine power (BHP)", "First car (0 for none)", "Second car (0 for none)" },
+                        String[] cars = new String[41];             // as the desktop's list: None, then 1-40 with the driver
+                        for (int n = 0; n <= 40; n++)
+                            cars[n] = screen.carLabel(n);
+                        form("Team " + (team + 1), new String[] { "Team", "Engine", "Engine power (BHP)", "First car", "Second car" },
                             new String[] { screen.teamName(team), screen.engineName(team), String.valueOf(screen.power(team)),
                                            String.valueOf(screen.teamCar(team, 0)), String.valueOf(screen.teamCar(team, 1)) },
-                            new boolean[] { false, false, true, true, true }, new Apply() {
+                            new boolean[] { false, false, true, true, true }, new String[][] { null, null, null, cars, cars }, new Apply() {
                                 public Message apply(String[] v)
                                 {
                                     Message m = screen.setTeamName(team, v[0]);
@@ -536,10 +561,7 @@ public class ExecutableActivity extends Activity
             public void part(int part) { chooseColour(tab, row, part); }
         });
         view.show(tab, row, liveryPosition[tab]);
-        HorizontalScrollView sideways = new HorizontalScrollView(this);
-        sideways.setFillViewport(true);
-        sideways.addView(view);
-        page.addView(sideways);
+        page.addView(view);
         if (LiveriesPage.turns(tab))
         {
             LinearLayout turn = new LinearLayout(this);

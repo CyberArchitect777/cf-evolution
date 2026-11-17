@@ -44,7 +44,7 @@ class LiveryView extends View
     private final GameSprites sprites;
     private final Tapped tapped;
     private int tab, row, position;
-    private int[] box = { 1, 1 };
+    private int[] box;             // the tab's largest picture; null until the first show
     private Bitmap bitmap;
     private GameSprites.Sprite sprite;
     private final Paint pixels = new Paint();
@@ -76,15 +76,15 @@ class LiveryView extends View
     }
 
     /**
-     * Square pixels, as large as fills a little over half the screen's height
-     * (2026-11-18: fitted to the width, the car was a low strip); a picture
-     * then wider than the screen scrolls sideways (the activity puts this in
-     * a HorizontalScrollView).
+     * Square pixels, as large as fits the width, at most twice the desktop's
+     * enlargement. (2026-11-18: the box started as 1 x 1 and was worked out
+     * only on a change of tab, so the first tab, the cars, drew one pixel's
+     * worth: a low strip, and enormous once sized by height.)
      */
     private int scale()
     {
-        int tall = (int) (getResources().getDisplayMetrics().heightPixels * 0.55);
-        return Math.max(1, tall / Math.max(1, box[1]));
+        int across = getWidth() > 0 ? getWidth() : getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
+        return Math.max(1, Math.min(LiveriesPage.scale(tab) * 2, (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
     }
 
     protected void onMeasure(int w, int h)
@@ -92,8 +92,8 @@ class LiveryView extends View
         int across = MeasureSpec.getSize(w);
         if (across == 0)
             across = getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
-        setMeasuredDimension(Math.max(across, box[0] * scale() + Ui.dp(getContext(), 16)),
-                             box[1] * scale() + Ui.dp(getContext(), 24));
+        int s = Math.max(1, Math.min(LiveriesPage.scale(tab) * 2, (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
+        setMeasuredDimension(across, box[1] * s + Ui.dp(getContext(), 24));
     }
 
     protected void onDraw(Canvas canvas)

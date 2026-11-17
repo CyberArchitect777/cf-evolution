@@ -179,7 +179,7 @@ public class HorizonActivity extends Activity
     /** The picture, each pixel 4 by 24 density-independent pixels. */
     private class HorizonView extends View
     {
-        private final int cellW = Ui.dp(HorizonActivity.this, 4), cellH = Ui.dp(HorizonActivity.this, 24);
+        private final int cellW = Ui.dp(HorizonActivity.this, 16), cellH = cellW;     // square pixels, as the picture is (2026-11-18; was 4 by 24, six times too tall)
         private final Paint paint = new Paint();
         private final GestureDetector gestures;
 
