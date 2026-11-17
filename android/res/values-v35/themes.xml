@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 15 and later draw apps under the status and navigation bars ("edge to edge"), which hid
+     the track screen's buttons behind the navigation bar and the top of each list under the title bar
+     (owner's phone, Android 16, 2026-11-17). The screens are laid out for the classic window, so they
+     keep it. Honoured while the app targets API 35; targeting 36 or later needs the screens to
+     handle the bars themselves instead. -->
+<resources>
+    <style name="Theme.CFE" parent="@android:style/Theme.Material.Light.DarkActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

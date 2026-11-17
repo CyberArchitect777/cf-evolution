@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- CF Evolution for Android (first version, 2026-11-17). Built without Gradle by
-     build-android.sh; the screens are made in code, and the only resources are the icon (res/). -->
+     build-android.sh; the screens are made in code, and the only resources are the icon and the theme (res/). -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cfevolution.android">
 
@@ -14,7 +14,7 @@
         android:label="CF Evolution"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light.DarkActionBar"
+        android:theme="@style/Theme.CFE"
         android:allowBackup="false">
 
         <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">

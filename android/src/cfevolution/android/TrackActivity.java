@@ -110,6 +110,8 @@ public class TrackActivity extends Activity
     private void refresh()
     {
         setTitle(screen.title() + (screen.isModified() ? " *" : ""));
+        if (getActionBar() != null)
+            getActionBar().setSubtitle(screen.circuit != null ? screen.file.getName() : null);
         mapView.refresh();
         banners.removeAllViews();
         for (final TrackTools.Banner b : screen.banners())

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's theme: Android's own light Material theme with the dark title bar. -->
+<resources>
+    <style name="Theme.CFE" parent="@android:style/Theme.Material.Light.DarkActionBar" />
+</resources>

@@ -72,9 +72,13 @@ public final class TrackScreen
         return new TrackScreen(file, t);
     }
 
+    /** The circuit's name when opened from a game folder ("Monaco"), else null. */
+    public String circuit;
+
+    /** The circuit's name, or the file's when it has none. */
     public String title()
     {
-        return file.getName();
+        return circuit != null ? circuit : file.getName();
     }
 
     public boolean isModified()

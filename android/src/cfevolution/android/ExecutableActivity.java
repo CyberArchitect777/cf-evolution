@@ -145,7 +145,7 @@ public class ExecutableActivity extends Activity
         for (int i = 0; i < 40; i++)
         {
             final int car = i;
-            row((car + 1) + "  " + screen.driverName(car) + "    qualifying " + screen.skill(car, false)
+            row((car + 1) + "  " + (screen.driverName(car).trim().length() > 0 ? screen.driverName(car) : "(no name)") + "    qualifying " + screen.skill(car, false)
                 + ", race " + screen.skill(car, true), new Runnable() {
                 public void run()
                 {

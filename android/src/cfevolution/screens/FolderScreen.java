@@ -107,7 +107,10 @@ public final class FolderScreen
     /** Opens circuit slot 1-16; null after setting problem[0] if it will not load. */
     public TrackScreen openTrack(int slot, Message[] problem)
     {
-        return TrackScreen.open(game.getTrack(slot), problem);
+        TrackScreen t = TrackScreen.open(game.getTrack(slot), problem);
+        if (t != null)
+            t.circuit = GameFolder.CIRCUIT_NAMES[slot - 1];
+        return t;
     }
 
     // ------------------------------------------------------------------

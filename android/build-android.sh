@@ -47,7 +47,7 @@ javac -source 8 -target 8 -nowarn -Xlint:-options -bootclasspath "$PLATFORM" -cp
 # Android bytecode for the app and the core together
 "$TOOLS/d8" --release --min-api $MIN_SDK --lib "$PLATFORM" --output build/dex build/app-classes.jar "$CORE"
 
-# Package: the manifest and the icon (the only resources: the screens are made in code), then the code
+# Package: the manifest, the icon and the theme (the only resources: the screens are made in code), then the code
 "$TOOLS/aapt2" compile --dir res -o build/res.zip
 "$TOOLS/aapt2" link -o build/unsigned.apk --manifest AndroidManifest.xml -I "$PLATFORM" build/res.zip \
       --min-sdk-version $MIN_SDK --target-sdk-version $TARGET_SDK \
