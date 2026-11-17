@@ -4,19 +4,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cfevolution.android">
 
-    <!-- The core reads and writes game files by path, so the app needs access to
-         the folder the game files are in: "All files access" from Android 11, the
-         storage permissions before that. -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- No storage permissions: the game folder is chosen in Android's folder picker, which
+         gives access to that folder only; its files are copied in for the core and changes
+         written back (screens/FolderMirror). -->
 
     <!-- Turning the phone does not restart a screen (a generation keeps running and its
          dialogs stay): the screens are made in code and lay themselves out again. -->
     <application
         android:label="CF Evolution"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar"
-        android:requestLegacyExternalStorage="true"
         android:allowBackup="false">
 
         <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">

@@ -22,6 +22,8 @@ TOOLS="$SDK/build-tools/37.0.0"
 CORE=../dist/cf-evolution-core.jar
 MIN_SDK=26          # Android 8.0: the core uses java.nio.file
 TARGET_SDK=35
+# Rises with every build (minutes since 2020), so a phone always takes a new APK as an update
+VERSION_CODE=$(( ( $(date -u +%s) - 1577836800 ) / 60 ))
 VERSION_NAME="$(sed -n 's/.*versionText.setText("Version \(.*\)");.*/\1/p' ../src/cfevolution/gui/AboutGUI.java)"
 
 for f in "$PLATFORM" "$TOOLS/d8" "$TOOLS/aapt2" "$CORE"; do
@@ -48,7 +50,7 @@ javac -source 8 -target 8 -nowarn -Xlint:-options -bootclasspath "$PLATFORM" -cp
 # Package: the manifest (no resources: the screens are made in code), then the code
 "$TOOLS/aapt2" link -o build/unsigned.apk --manifest AndroidManifest.xml -I "$PLATFORM" \
       --min-sdk-version $MIN_SDK --target-sdk-version $TARGET_SDK \
-      --version-code 1 --version-name "$VERSION_NAME"
+      --version-code $VERSION_CODE --version-name "$VERSION_NAME"
 (cd build/dex && zip -q ../unsigned.apk classes.dex)
 "$TOOLS/zipalign" -f 4 build/unsigned.apk build/aligned.apk
 
@@ -63,4 +65,4 @@ if [ ! -f "$KEYSTORE" ]; then
 fi
 "$TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
       --out ../dist/cf-evolution-android.apk build/aligned.apk
-echo "Build complete: dist/cf-evolution-android.apk (version $VERSION_NAME, Android 8.0 and later)"
+echo "Build complete: dist/cf-evolution-android.apk (version $VERSION_NAME, build $VERSION_CODE, Android 8.0 and later)"

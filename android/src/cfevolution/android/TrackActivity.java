@@ -320,10 +320,15 @@ public class TrackActivity extends Activity
 
     private void save(final Runnable after)
     {
-        Message warning = screen.save();
+        final Message warning = screen.save();
         refresh();
-        status.setText("Saved " + screen.title() + ".");
-        Dialogs.show(this, warning, after);
+        Session.writeBack(this, new Runnable() {
+            public void run()
+            {
+                status.setText("Saved " + screen.title() + ".");
+                Dialogs.show(TrackActivity.this, warning, after);
+            }
+        });
     }
 
     public void onBackPressed()

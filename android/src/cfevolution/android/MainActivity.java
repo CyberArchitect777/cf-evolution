@@ -19,39 +19,34 @@
 
 package cfevolution.android;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
+import android.content.UriPermission;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.Settings;
 import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.TextView;
+import cfevolution.edit.Message;
+import cfevolution.screens.FolderMirror;
 import cfevolution.screens.FolderScreen;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The start screen: where the game folder is, and opening it. The core reads
- * and writes the game's files by path, so the app needs access to the folder
- * they are in.
+ * The start screen: choosing the game folder in Android's folder picker, and
+ * opening it. The app can reach the folders chosen there and nothing else; the
+ * game's files are copied in for the core and changes written back
+ * (FolderMirror, owner's choice 2026-11-17, replacing "All files access").
  */
 public class MainActivity extends Activity
 {
-    private static final String PREFS = "cfevolution", LAST_FOLDER = "last game folder";
+    private static final int CHOOSE = 1;
 
-    private EditText folderField;
-    private LinearLayout found;
-    private Button access;
+    static final Message NOT_READ = Message.error("Game Folder Not Opened",
+        "The game folder could not be read. Choose it again with Choose Game Folder.");
+
+    private LinearLayout before;
 
     protected void onCreate(Bundle state)
     {
@@ -62,29 +57,17 @@ public class MainActivity extends Activity
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(pad, pad, pad, pad);
 
-        col.addView(Ui.text(this, "Open the folder your copy of Formula One Grand Prix (or World Circuit) is in: "
+        col.addView(Ui.text(this, "Choose the folder your copy of Formula One Grand Prix (or World Circuit) is in: "
             + "the one with GP.EXE and the circuit files F1CT01.DAT to F1CT16.DAT. Copy it onto this device first, "
-            + "for example into Documents.", 15));
-
-        access = Ui.button(this, "Allow Access to Files", new View.OnClickListener() {
-            public void onClick(View v) { askForAccess(); }
-        });
-        col.addView(access);
-
-        col.addView(Ui.heading(this, "Game folder"));
-        folderField = new EditText(this);
-        folderField.setSingleLine(true);
-        folderField.setText(getSharedPreferences(PREFS, MODE_PRIVATE).getString(LAST_FOLDER,
-            new File(Environment.getExternalStorageDirectory(), "Documents").getPath()));
-        col.addView(folderField);
-        col.addView(Ui.button(this, "Open Game Folder", new View.OnClickListener() {
-            public void onClick(View v) { open(new File(folderField.getText().toString().trim())); }
+            + "for example into Documents. CF Evolution can then use that folder and no other.", 15));
+        col.addView(Ui.button(this, "Choose Game Folder", new View.OnClickListener() {
+            public void onClick(View v) { choose(); }
         }));
 
-        col.addView(Ui.heading(this, "Game folders found on this device"));
-        found = new LinearLayout(this);
-        found.setOrientation(LinearLayout.VERTICAL);
-        col.addView(found);
+        col.addView(Ui.heading(this, "Game folders opened before"));
+        before = new LinearLayout(this);
+        before.setOrientation(LinearLayout.VERTICAL);
+        col.addView(before);
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(col);
@@ -94,84 +77,91 @@ public class MainActivity extends Activity
     protected void onResume()
     {
         super.onResume();
-        access.setVisibility(hasAccess() ? View.GONE : View.VISIBLE);
-        listFound();
+        listBefore();
     }
 
-    private boolean hasAccess()
+    private void choose()
     {
-        if (Build.VERSION.SDK_INT >= 30)
-            return Environment.isExternalStorageManager();
-        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                   | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        startActivityForResult(i, CHOOSE);
     }
 
-    private void askForAccess()
+    protected void onActivityResult(int code, int result, Intent data)
     {
-        if (Build.VERSION.SDK_INT >= 30)
-        {
-            Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                                  Uri.parse("package:" + getPackageName()));
-            startActivity(i);
-        }
-        else
-            requestPermissions(new String[] { Manifest.permission.READ_EXTERNAL_STORAGE,
-                                              Manifest.permission.WRITE_EXTERNAL_STORAGE }, 1);
-    }
-
-    public void onRequestPermissionsResult(int code, String[] permissions, int[] results)
-    {
-        onResume();
-    }
-
-    /** Folders with a GP.EXE, up to three levels below the device's shared storage. */
-    private void listFound()
-    {
-        found.removeAllViews();
-        if (!hasAccess())
-        {
-            found.addView(Ui.text(this, "Allow access to files to look for game folders.", 14));
+        if (code != CHOOSE || result != RESULT_OK || data == null || data.getData() == null)
             return;
+        Uri tree = data.getData();
+        try
+        {
+            getContentResolver().takePersistableUriPermission(tree,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         }
-        List<File> folders = new ArrayList<File>();
-        look(Environment.getExternalStorageDirectory(), 0, folders);
-        if (folders.isEmpty())
-            found.addView(Ui.text(this, "None found. Type the folder's path above.", 14));
-        for (final File f : folders)
-            found.addView(Ui.button(this, f.getPath(), new View.OnClickListener() {
-                public void onClick(View v) { folderField.setText(f.getPath()); open(f); }
+        catch (SecurityException e)
+        {
+            // still usable now; it will not be offered next time
+        }
+        open(tree);
+    }
+
+    /** The folders the picker has given lasting access to. */
+    private void listBefore()
+    {
+        before.removeAllViews();
+        List<UriPermission> kept = getContentResolver().getPersistedUriPermissions();
+        int shown = 0;
+        for (final UriPermission p : kept)
+        {
+            if (!p.isReadPermission() || !p.isWritePermission())
+                continue;
+            String name = PickedFolder.displayName(this, p.getUri());
+            if (name == null)
+                continue;                                   // gone, or no longer allowed
+            before.addView(Ui.button(this, name, new View.OnClickListener() {
+                public void onClick(View v) { open(p.getUri()); }
             }));
+            shown++;
+        }
+        if (shown == 0)
+            before.addView(Ui.text(this, "None yet.", 14));
     }
 
-    private static void look(File dir, int depth, List<File> out)
+    private void open(Uri tree)
     {
-        File[] list = dir.listFiles();
-        if (list == null || out.size() >= 20)
-            return;
-        for (File f : list)
-            if (f.isFile() && f.getName().equalsIgnoreCase("GP.EXE"))
+        final PickedFolder store = new PickedFolder(this, tree);
+        final FolderMirror[] mirror = new FolderMirror[1];
+        Session.slowly(this, "Reading the game folder...", new Session.Work() {
+            public void run() throws Exception { mirror[0] = FolderMirror.copyIn(store, new File(getFilesDir(), "game")); }
+        }, new Session.Done() {
+            public void done(Exception failed)
             {
-                out.add(dir);
-                break;
+                if (failed != null)
+                    Dialogs.show(MainActivity.this, NOT_READ, null);
+                else
+                    opened(mirror[0]);
             }
-        if (depth >= 3)
-            return;
-        for (File f : list)
-            if (f.isDirectory() && !f.getName().startsWith(".") && !f.getName().equals("Android")
-                && !f.getName().equals("CFE-BACKUP"))
-                look(f, depth + 1, out);
+        });
     }
 
-    private void open(final File folder)
+    /** The files are in: open the folder as the desktop does, then write back what opening changed. */
+    private void opened(final FolderMirror mirror)
     {
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(LAST_FOLDER, folder.getPath()).apply();
-        final FolderScreen.Opening opening = FolderScreen.open(folder);
+        Session.mirror = mirror;
+        final FolderScreen.Opening opening = FolderScreen.open(mirror.folder());
         Dialogs.run(this, opening, new Runnable() {
             public void run()
             {
-                if (opening.opened() == null)
-                    return;
-                Session.folder = opening.opened();
-                startActivity(new Intent(MainActivity.this, FolderActivity.class));
+                // the first-open copy, an unpacked GP.EXE and its backup, even when not opened in the end
+                Session.writeBack(MainActivity.this, new Runnable() {
+                    public void run()
+                    {
+                        if (opening.opened() == null)
+                            return;
+                        Session.folder = opening.opened();
+                        startActivity(new Intent(MainActivity.this, FolderActivity.class));
+                    }
+                });
             }
         });
     }

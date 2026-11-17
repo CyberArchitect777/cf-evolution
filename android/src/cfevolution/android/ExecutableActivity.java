@@ -280,13 +280,23 @@ public class ExecutableActivity extends Activity
 
     // --- Saving -------------------------------------------------------------
 
-    private void save(Runnable after)
+    private void save(final Runnable after)
     {
         Message m = screen.save();
         again();
-        if (m == null)
-            android.widget.Toast.makeText(this, "Saved GP.EXE.", android.widget.Toast.LENGTH_SHORT).show();
-        Dialogs.show(this, m, m == null ? after : null);
+        if (m != null)
+        {
+            Dialogs.show(this, m, null);
+            return;
+        }
+        Session.writeBack(this, new Runnable() {
+            public void run()
+            {
+                android.widget.Toast.makeText(ExecutableActivity.this, "Saved GP.EXE.", android.widget.Toast.LENGTH_SHORT).show();
+                if (after != null)
+                    after.run();
+            }
+        });
     }
 
     public void onBackPressed()
