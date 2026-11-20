@@ -20,6 +20,7 @@ package cfevolution.gui.gamefiles;
 
 import cfevolution.data.gamefiles.SoundEffectsFile;
 import cfevolution.edit.SoundEffectsPage;
+import cfevolution.edit.SoundPreview;
 import cfevolution.gui.MainGUI;
 import java.awt.*;
 import java.awt.event.*;
@@ -42,6 +43,9 @@ public class SoundEffectsTab extends GameFileTab
     private final JList<String> list = new JList<String>(SoundEffectsPage.SOUNDS);
     private final JPanel form = new JPanel(new GridBagLayout());
     private int row;
+    private final JButton play = new JButton(SoundPreview.PLAY);
+    private javax.sound.sampled.Clip clip;
+    private int playing;            // counts plays, so a finished one does not reset a newer one
 
     public SoundEffectsTab(SoundEffectsFile file, String fileName, MainGUI mainWindow) throws IOException
     {
@@ -68,7 +72,12 @@ public class SoundEffectsTab extends GameFileTab
                 fillForm();
             }
         });
+        play.setName("play sound");
+        play.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) { playOrStop(); }
+        });
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        buttons.add(play);
         buttons.add(revert);
         JLabel hint = new JLabel(SoundEffectsPage.HINT);
         hint.setForeground(new Color(0x6A7380));
@@ -87,6 +96,81 @@ public class SoundEffectsTab extends GameFileTab
         list.setSelectedIndex(0);
     }
 
+    /**
+     * Play: the chosen sound as the game plays it, from the file as it now
+     * stands (the core's SoundPreview: the file's own code on an emulated
+     * AdLib chip); made on a worker thread, then played. Stop ends it.
+     */
+    private void playOrStop()
+    {
+        if (clip != null)
+        {
+            stopSound();
+            return;
+        }
+        final int s = Math.max(0, list.getSelectedIndex());
+        final byte[] file = sounds.sounds.getBytes();
+        final int mine = ++playing;
+        play.setText(SoundPreview.STOP);
+        new Thread(new Runnable() {
+            public void run()
+            {
+                try
+                {
+                    byte[] wav = SoundPreview.wav(SoundPreview.play(file, s));
+                    final javax.sound.sampled.AudioInputStream in = javax.sound.sampled.AudioSystem.getAudioInputStream(
+                        new java.io.ByteArrayInputStream(wav));
+                    final javax.sound.sampled.Clip c = javax.sound.sampled.AudioSystem.getClip();
+                    c.open(in);
+                    SwingUtilities.invokeLater(new Runnable() {
+                        public void run()
+                        {
+                            if (mine != playing)
+                            {
+                                c.close();          // stopped while it was being made
+                                return;
+                            }
+                            clip = c;
+                            c.addLineListener(new javax.sound.sampled.LineListener() {
+                                public void update(javax.sound.sampled.LineEvent ev)
+                                {
+                                    if (ev.getType() == javax.sound.sampled.LineEvent.Type.STOP)
+                                        SwingUtilities.invokeLater(new Runnable() { public void run() { if (clip == c) stopSound(); } });
+                                }
+                            });
+                            c.start();
+                        }
+                    });
+                }
+                catch (Exception | LinkageError x)
+                {
+                    SwingUtilities.invokeLater(new Runnable() {
+                        public void run()
+                        {
+                            if (mine != playing)
+                                return;
+                            play.setText(SoundPreview.PLAY);
+                            cfevolution.gui.MessageBoxes.show(SoundEffectsTab.this, SoundPreview.NOT_PLAYED);
+                        }
+                    });
+                }
+            }
+        }, "sound preview").start();
+    }
+
+    private void stopSound()
+    {
+        playing++;
+        if (clip != null)
+        {
+            javax.sound.sampled.Clip c = clip;
+            clip = null;
+            c.stop();
+            c.close();
+        }
+        play.setText(SoundPreview.PLAY);
+    }
+
     private void changed()
     {
         if (sounds.changed())
@@ -96,6 +180,9 @@ public class SoundEffectsTab extends GameFileTab
     /** Builds the page for the chosen sound from the file as it now stands. */
     private void fillForm()
     {
+        if (clip != null || !play.getText().equals(SoundPreview.PLAY))
+            stopSound();
+        play.setToolTipText(SoundPreview.about(Math.max(0, list.getSelectedIndex())));
         form.removeAll();
         row = 0;
         for (SoundEffectsPage.Row r : sounds.rows(Math.max(0, list.getSelectedIndex())))

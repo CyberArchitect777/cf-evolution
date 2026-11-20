@@ -361,14 +361,99 @@ public class GameFileActivity extends Activity
 
     // --- the sound effects ------------------------------------------------------------
 
+    private android.widget.Button playButton;
+    private android.media.AudioTrack track;
+    private int playing;            // counts plays, so a late one is dropped once stopped
+
+    /** Play: the sound as the game plays it, from the file as it now stands (the core's SoundPreview); Stop ends it. */
+    private void playOrStop(final cfevolution.edit.SoundEffectsPage p)
+    {
+        if (track != null || playButton.getText().toString().equals(cfevolution.edit.SoundPreview.STOP))
+        {
+            stopSound();
+            return;
+        }
+        final int s = sound, mine = ++playing;
+        final byte[] file = p.sounds.getBytes();
+        playButton.setText(cfevolution.edit.SoundPreview.STOP);
+        new Thread(new Runnable() {
+            public void run()
+            {
+                final short[] samples = cfevolution.edit.SoundPreview.play(file, s);
+                runOnUiThread(new Runnable() {
+                    public void run()
+                    {
+                        if (mine != playing || isFinishing())
+                            return;
+                        try
+                        {
+                            android.media.AudioTrack t = new android.media.AudioTrack.Builder()
+                                .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                                .setAudioFormat(new android.media.AudioFormat.Builder()
+                                    .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                                    .setSampleRate(cfevolution.edit.SoundPreview.RATE)
+                                    .setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
+                                .setTransferMode(android.media.AudioTrack.MODE_STATIC)
+                                .setBufferSizeInBytes(samples.length * 2)
+                                .build();
+                            t.write(samples, 0, samples.length);
+                            t.setNotificationMarkerPosition(samples.length - 1);
+                            t.setPlaybackPositionUpdateListener(new android.media.AudioTrack.OnPlaybackPositionUpdateListener() {
+                                public void onMarkerReached(android.media.AudioTrack a) { if (a == track) stopSound(); }
+                                public void onPeriodicNotification(android.media.AudioTrack a) { }
+                            });
+                            track = t;
+                            t.play();
+                        }
+                        catch (RuntimeException e)
+                        {
+                            stopSound();
+                            Dialogs.show(GameFileActivity.this, cfevolution.edit.SoundPreview.NOT_PLAYED, null);
+                        }
+                    }
+                });
+            }
+        }, "sound preview").start();
+    }
+
+    private void stopSound()
+    {
+        playing++;
+        if (track != null)
+        {
+            android.media.AudioTrack t = track;
+            track = null;
+            try { t.stop(); } catch (IllegalStateException e) { }
+            t.release();
+        }
+        if (playButton != null)
+            playButton.setText(cfevolution.edit.SoundPreview.PLAY);
+    }
+
+    protected void onPause()
+    {
+        super.onPause();
+        stopSound();
+    }
+
     private void sounds(final cfevolution.edit.SoundEffectsPage p)
     {
         col.addView(spinner(cfevolution.edit.SoundEffectsPage.SOUNDS, sound, new Picked() {
             public void picked(int index) { sound = index; build(); }
         }));
-        col.addView(Ui.button(this, cfevolution.edit.SoundEffectsPage.REVERT, click(new Runnable() {
+        stopSound();
+        LinearLayout bar = new LinearLayout(this);
+        playButton = Ui.button(this, cfevolution.edit.SoundPreview.PLAY, click(new Runnable() {
+            public void run() { playOrStop(p); }
+        }));
+        bar.addView(playButton);
+        bar.addView(Ui.button(this, cfevolution.edit.SoundEffectsPage.REVERT, click(new Runnable() {
             public void run() { p.revert(); changed(); build(); }
         })));
+        col.addView(bar);
+        col.addView(hint(cfevolution.edit.SoundPreview.about(sound)));
         col.addView(hint(cfevolution.edit.SoundEffectsPage.HINT));
         for (cfevolution.edit.SoundEffectsPage.Row r : p.rows(sound))
         {
