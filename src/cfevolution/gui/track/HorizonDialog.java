@@ -30,11 +30,16 @@ import javax.swing.*;
  * along the horizon. Shown enlarged; click to paint in the chosen colour,
  * right-click to pick up a colour, and export or import it as a PNG or as
  * ArgTrack's .arghoriz, or take another track's. Changes
- * reach the track only with OK.
+ * reach the track only with OK. Underneath, the whole picture as the game
+ * draws it (2026-11-20); clicking it brings that part into the close-up.
  */
 public class HorizonDialog extends JDialog
 {
-    private static final int SCALE_X = 2, SCALE_Y = 10;
+    /** Each picture pixel 10 by 12, the shape the game shows it (5 wide to 6 tall on a 4:3 screen;
+        HorizonPage.previewHeight); 0.4.1 drew it 2 by 10, four times too tall (owner, 2026-11-20). */
+    private static final int SCALE_X = 10, SCALE_Y = 12;
+    /** The preview: two screen pixels per picture column, so the whole picture is 1024 across. */
+    private static final int PREVIEW_WIDTH = TrackHorizon.WIDTH * 2;
     private static final String PREF_FOLDER = "HorizonGameFolder";
 
     private final Track track;
@@ -43,6 +48,8 @@ public class HorizonDialog extends JDialog
     private final byte[] work;          // the page's picture (the capture reads it)
     private boolean changed;
     private final JPanel canvas;
+    private final JComponent preview;
+    private JScrollPane scroll;
     private final JButton colourButton;
 
     /** Opens the dialog, finding the game's palette first (asking for the game
@@ -115,10 +122,15 @@ public class HorizonDialog extends JDialog
                 }
                 page.paint(x, y);
                 canvas.repaint();
+                preview.repaint();
             }
         };
         canvas.addMouseListener(paint);
         canvas.addMouseMotionListener(paint);
+
+        preview = new Preview();
+        preview.setName("horizonPreview");
+        preview.setToolTipText(cfevolution.edit.HorizonPage.PREVIEW_TIP);
 
         colourButton = new JButton(cfevolution.edit.HorizonPage.COLOUR);
         colourButton.setName("horizonColour");
@@ -171,11 +183,20 @@ public class HorizonDialog extends JDialog
 
         JPanel centre = new JPanel(new BorderLayout());
         centre.add(tools, BorderLayout.NORTH);
-        JScrollPane scroll = new JScrollPane(canvas, JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+        scroll = new JScrollPane(canvas, JScrollPane.VERTICAL_SCROLLBAR_NEVER,
                                              JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         scroll.setPreferredSize(new Dimension(Math.min(1040, TrackHorizon.WIDTH * SCALE_X + 4),
                                               TrackHorizon.HEIGHT * SCALE_Y + 24));
-        centre.add(scroll, BorderLayout.CENTER);
+        scroll.getViewport().addChangeListener(new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) { preview.repaint(); }
+        });
+        JPanel pictures = new JPanel(new BorderLayout());
+        pictures.add(scroll, BorderLayout.CENTER);
+        JPanel previewRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        previewRow.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        previewRow.add(preview);
+        pictures.add(previewRow, BorderLayout.SOUTH);
+        centre.add(pictures, BorderLayout.CENTER);
         centre.add(about, BorderLayout.SOUTH);
 
         getContentPane().add(centre, BorderLayout.CENTER);
@@ -264,5 +285,57 @@ public class HorizonDialog extends JDialog
         if (cfevolution.gui.MessageBoxes.showRefusal(this, page.importFile(f.getName(), bytes)))
             return;
         canvas.repaint();
+        preview.repaint();
+    }
+
+    /** The whole picture at the game's shape, under a line saying so (drawn here, not a label),
+        with a frame round the part the close-up shows; a click or drag brings that part into view. */
+    private class Preview extends JComponent
+    {
+        private static final int CAPTION = 18;
+        private final int high = cfevolution.edit.HorizonPage.previewHeight(PREVIEW_WIDTH);
+
+        Preview()
+        {
+            setPreferredSize(new Dimension(PREVIEW_WIDTH + 2, CAPTION + high + 2));
+            MouseAdapter go = new MouseAdapter() {
+                public void mousePressed(MouseEvent e) { centreOn(e.getX()); }
+                public void mouseDragged(MouseEvent e) { centreOn(e.getX()); }
+            };
+            addMouseListener(go);
+            addMouseMotionListener(go);
+        }
+
+        private void centreOn(int x)
+        {
+            JViewport v = scroll.getViewport();
+            int column = cfevolution.edit.HorizonPage.previewColumn(x - 1, PREVIEW_WIDTH);
+            int left = column * SCALE_X - v.getExtentSize().width / 2;
+            left = Math.max(0, Math.min(canvas.getWidth() - v.getExtentSize().width, left));
+            v.setViewPosition(new Point(left, 0));
+        }
+
+        protected void paintComponent(Graphics g)
+        {
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setColor(new Color(0x4A525C));
+            g2.setFont(getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 12) : getFont());
+            g2.drawString(cfevolution.edit.HorizonPage.PREVIEW, 1, CAPTION - 5);
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(TrackHorizon.WIDTH, TrackHorizon.HEIGHT,
+                                                                               java.awt.image.BufferedImage.TYPE_INT_RGB);
+            img.setRGB(0, 0, TrackHorizon.WIDTH, TrackHorizon.HEIGHT, page.rgb(), 0, TrackHorizon.WIDTH);
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            g2.drawImage(img, 1, CAPTION + 1, PREVIEW_WIDTH, high, null);
+            if (scroll == null)
+                return;
+            Rectangle seen = scroll.getViewport().getViewRect();
+            int x0 = 1 + seen.x / SCALE_X * PREVIEW_WIDTH / TrackHorizon.WIDTH;
+            int x1 = 1 + Math.min(TrackHorizon.WIDTH, (seen.x + seen.width + SCALE_X - 1) / SCALE_X) * PREVIEW_WIDTH / TrackHorizon.WIDTH;
+            g2.setColor(Color.BLACK);
+            g2.drawRect(x0 - 1, CAPTION, x1 - x0 + 1, high + 1);
+            g2.setColor(Color.YELLOW);
+            g2.drawRect(x0, CAPTION + 1, x1 - x0 - 1, high - 1);
+        }
     }
 }

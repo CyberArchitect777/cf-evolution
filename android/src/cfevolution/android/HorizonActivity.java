@@ -44,13 +44,17 @@ import cfevolution.edit.LiveriesPage;
  * Edit > Horizon on a phone (2026-11-17): the picture enlarged; tap to paint
  * in the chosen colour, press and hold to pick up a colour; Colour opens the
  * palette; export as PNG or .arghoriz, import either or another track's
- * horizon. OK puts the picture into the circuit; Back drops it.
+ * horizon. OK puts the picture into the circuit; Back drops it. Underneath,
+ * the whole picture as the game draws it (2026-11-20); tapping it brings that
+ * part into the close-up.
  */
 public class HorizonActivity extends Activity
 {
     private static final int IMPORT = 1, EXPORT_PNG = 2, EXPORT_RAW = 3;
     private HorizonPage page;
     private HorizonView view;
+    private PreviewView preview;
+    private HorizontalScrollView across;
     private TextView colour;
 
     protected void onCreate(Bundle state)
@@ -66,9 +70,17 @@ public class HorizonActivity extends Activity
         setTitle(HorizonPage.TITLE);
         LinearLayout col = Ui.column(this);
         view = new HorizonView();
-        HorizontalScrollView across = new HorizontalScrollView(this);
+        across = new HorizontalScrollView(this);
         across.addView(view);
         col.addView(across);
+        TextView caption = Ui.text(this, HorizonPage.PREVIEW, 13);
+        caption.setTextColor(Color.GRAY);
+        col.addView(caption);
+        preview = new PreviewView();
+        col.addView(preview);
+        across.getViewTreeObserver().addOnScrollChangedListener(new android.view.ViewTreeObserver.OnScrollChangedListener() {
+            public void onScrollChanged() { preview.invalidate(); }
+        });
         colour = Ui.text(this, "", 14);
         col.addView(colour);
         LinearLayout buttons = new LinearLayout(this);
@@ -111,6 +123,7 @@ public class HorizonActivity extends Activity
         colour.setText("Colour " + page.current() + "  ■");
         colour.setTextColor(0xFF000000 | page.colours.getPaletteRgb(page.current()));
         view.invalidate();
+        preview.invalidate();
     }
 
     private void chooseColour()
@@ -163,6 +176,7 @@ public class HorizonActivity extends Activity
             }
             Dialogs.show(this, page.importFile(name, bytes), null);
             view.invalidate();
+            preview.invalidate();
             return;
         }
         try
@@ -176,10 +190,70 @@ public class HorizonActivity extends Activity
         }
     }
 
-    /** The picture, each pixel 4 by 24 density-independent pixels. */
+    private Bitmap picture()
+    {
+        int[] rgb = page.rgb();
+        for (int i = 0; i < rgb.length; i++)
+            rgb[i] |= 0xFF000000;
+        return Bitmap.createBitmap(rgb, TrackHorizon.WIDTH, TrackHorizon.HEIGHT, Bitmap.Config.ARGB_8888);
+    }
+
+    /** The whole picture across the screen at the shape the game draws it, with a frame round
+        the part the close-up shows; a tap or drag brings that part into the close-up. */
+    private class PreviewView extends View
+    {
+        private final Paint paint = new Paint(), frame = new Paint();
+        private final int edge = Ui.dp(HorizonActivity.this, 2);
+
+        PreviewView()
+        {
+            super(HorizonActivity.this);
+            paint.setFilterBitmap(false);
+            frame.setStyle(Paint.Style.STROKE);
+            frame.setStrokeWidth(edge);
+        }
+
+        protected void onMeasure(int w, int h)
+        {
+            int width = MeasureSpec.getSize(w);
+            if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED || width == 0)
+                width = getResources().getDisplayMetrics().widthPixels;
+            setMeasuredDimension(width, HorizonPage.previewHeight(width - 2 * edge) + 2 * edge);
+        }
+
+        protected void onDraw(Canvas canvas)
+        {
+            int width = getWidth() - 2 * edge, high = getHeight() - 2 * edge;
+            canvas.drawBitmap(picture(), null, new Rect(edge, edge, edge + width, edge + high), paint);
+            int whole = view.getWidth();
+            if (whole <= 0)
+                return;
+            float x0 = edge + (float) across.getScrollX() * width / whole;
+            float x1 = edge + (float) Math.min(whole, across.getScrollX() + across.getWidth()) * width / whole;
+            frame.setColor(Color.BLACK);
+            canvas.drawRect(x0 - edge / 2f, edge / 2f, x1 + edge / 2f, getHeight() - edge / 2f, frame);
+            frame.setColor(Color.YELLOW);
+            canvas.drawRect(x0 + edge / 2f, edge * 1.5f, x1 - edge / 2f, getHeight() - edge * 1.5f, frame);
+        }
+
+        public boolean onTouchEvent(MotionEvent e)
+        {
+            int action = e.getActionMasked();
+            if (action != MotionEvent.ACTION_DOWN && action != MotionEvent.ACTION_MOVE)
+                return action == MotionEvent.ACTION_UP;
+            getParent().requestDisallowInterceptTouchEvent(true);
+            int column = HorizonPage.previewColumn((int) e.getX() - edge, getWidth() - 2 * edge);
+            across.scrollTo(column * view.getWidth() / TrackHorizon.WIDTH - across.getWidth() / 2, 0);
+            return true;
+        }
+    }
+
+    /** The picture, each pixel 15 by 18 density-independent pixels. */
     private class HorizonView extends View
     {
-        private final int cellW = Ui.dp(HorizonActivity.this, 16), cellH = cellW;     // square pixels, as the picture is (2026-11-18; was 4 by 24, six times too tall)
+        // 5 wide to 6 tall, as the game shows a pixel on a 4:3 screen (owner, 2026-11-20; square from
+        // 2026-11-18, 4 by 24 before that)
+        private final int cellW = Ui.dp(HorizonActivity.this, 15), cellH = Ui.dp(HorizonActivity.this, 18);
         private final Paint paint = new Paint();
         private final GestureDetector gestures;
 
@@ -193,6 +267,7 @@ public class HorizonActivity extends Activity
                 {
                     page.paint((int) (e.getX() / cellW), (int) (e.getY() / cellH));
                     invalidate();
+                    preview.invalidate();
                     return true;
                 }
                 public void onLongPress(MotionEvent e)
@@ -210,11 +285,7 @@ public class HorizonActivity extends Activity
 
         protected void onDraw(Canvas canvas)
         {
-            int[] rgb = page.rgb();
-            for (int i = 0; i < rgb.length; i++)
-                rgb[i] |= 0xFF000000;
-            Bitmap b = Bitmap.createBitmap(rgb, TrackHorizon.WIDTH, TrackHorizon.HEIGHT, Bitmap.Config.ARGB_8888);
-            canvas.drawBitmap(b, null, new Rect(0, 0, getWidth(), getHeight()), paint);
+            canvas.drawBitmap(picture(), null, new Rect(0, 0, getWidth(), getHeight()), paint);
         }
 
         public boolean onTouchEvent(MotionEvent e)

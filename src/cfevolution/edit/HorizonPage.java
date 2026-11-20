@@ -42,6 +42,9 @@ public final class HorizonPage
         + "lap. Nothing in it is see-through: the sky is painted in the game's sky colour (the one every "
         + "original uses), which changes with the weather. Colours marked in the colour chooser change "
         + "with the circuit or the weather, and in the rain the game greys the whole picture.";
+    public static final String PREVIEW = "As seen in the game: the whole picture. Click a part to see it close up.";
+    public static final String PREVIEW_TIP = "The whole horizon at the shape the game draws it; a screen shows about 320 of its 512 columns "
+        + "at once. The frame marks the part shown close up above.";
     public static final String CANVAS_TIP = "Click to paint in the chosen colour; right-click to pick up a colour";
     public static final String COLOUR = "Colour...", EXPORT = "Export...", IMPORT = "Import...", CHOOSER_TITLE = "Horizon colour";
     public static final String EXPORT_TITLE = "Export the horizon", IMPORT_TITLE = "Import a horizon";
@@ -88,6 +91,23 @@ public final class HorizonPage
         for (int i = 0; i < out.length; i++)
             out[i] = colours.getPaletteRgb(work[i] & 0xFF);
         return out;
+    }
+
+    /** The height of a preview showing the whole picture across width pixels, at the shape the
+        game draws it: one screen pixel per picture pixel each way, on a 320 by 200 screen shown
+        4:3, so a picture pixel is 5 wide to 6 tall (2026-11-20). */
+    public static int previewHeight(int width)
+    {
+        int across = TrackHorizon.WIDTH * 5;
+        return Math.max(1, (width * TrackHorizon.HEIGHT * 6 + across / 2) / across);
+    }
+
+    /** The picture's column under x in a preview width pixels across. */
+    public static int previewColumn(int x, int width)
+    {
+        if (width <= 0)
+            return 0;
+        return Math.max(0, Math.min(TrackHorizon.WIDTH - 1, (int) ((long) x * TrackHorizon.WIDTH / width)));
     }
 
     public int current()
