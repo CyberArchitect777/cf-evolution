@@ -460,6 +460,10 @@ public class ExecutableActivity extends Activity
     private int liveryTab;
     private final int[] liveryRow = new int[3];
     private final int[] liveryPosition = { LiveriesPage.startPosition(0), LiveriesPage.startPosition(1), LiveriesPage.startPosition(2) };
+    /** The part last tapped on each tab, shown highlighted; helmets by team; unused teams hidden (Hrvoje, 2026-11-15/16). */
+    private final int[] liveryPart = { -1, -1, -1 };
+    private boolean helmetsByTeam;
+    private final boolean[] hideUnusedTeams = new boolean[3];
     private int fileTab, fileRow;
     private static final int IMPORT_FILE = 41, EXPORT_FILE = 42;
 
@@ -502,11 +506,16 @@ public class ExecutableActivity extends Activity
             int pad = Ui.dp(this, 6);
             line.setPadding(0, pad, 0, pad);
             line.setBackgroundResource(android.R.drawable.list_selector_background);
+            if (part == liveryPart[tab])
+                line.setBackgroundColor(0x3326A6FF);     // the part last tapped, here or on the picture
             line.addView(swatch(p.liveries().getPaletteRgb(p.get(tab, row, part)), 28));
             TextView name = Ui.text(this, "  " + LiveriesPage.parts(tab)[part] + "  (colour " + p.get(tab, row, part) + ")", 15);
             line.addView(name);
             line.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) { chooseColour(tab, row, part); }
+            });
+            line.setOnLongClickListener(new View.OnLongClickListener() {
+                public boolean onLongClick(View v) { colourMenu(tab, row, part); return true; }
             });
             page.addView(line);
         }
@@ -514,20 +523,34 @@ public class ExecutableActivity extends Activity
         String copied = screen.copiedText(tab);
         TextView how = Ui.text(this, "Tap a " + LiveriesPage.rowWord(tab) + " below to show it above. Touch and hold one to copy its "
             + LiveriesPage.what(tab) + ", paste copied ones" + (LiveriesPage.hasFile(tab) ? ", or use ArgEditor's ." + LiveriesPage.kind(tab) + " file" : "")
-            + "." + (copied != null ? " " + copied + "." : ""), 13);
+            + ". Touch and hold a part above to copy or paste one colour." + (copied != null ? " " + copied + "." : ""), 13);
         how.setTextColor(Color.GRAY);
         how.setPadding(0, Ui.dp(this, 14), 0, Ui.dp(this, 4));
         page.addView(how);
 
-        for (int i = 0; i < p.rows(tab); i++)
+        // the helmets' order, or hiding the teams with no drivers
+        if (tab == LiveriesPage.HELMETS)
+            page.addView(Ui.button(this, "Order: " + LiveriesPage.ORDERS[helmetsByTeam ? 1 : 0], new View.OnClickListener() {
+                public void onClick(View v) { helmetsByTeam = !helmetsByTeam; again(); }
+            }));
+        else
+            page.addView(Ui.button(this, hideUnusedTeams[tab] ? "Show All Teams" : LiveriesPage.HIDE_UNUSED, new View.OnClickListener() {
+                public void onClick(View v)
+                {
+                    if (hideUnusedTeams[tab] || p.order(tab, false, true).length > 0)
+                        hideUnusedTeams[tab] = !hideUnusedTeams[tab];
+                    again();
+                }
+            }));
+
+        for (final int r : p.order(tab, helmetsByTeam, hideUnusedTeams[tab]))
         {
-            final int r = i;
             LinearLayout line = new LinearLayout(this);
             line.setOrientation(LinearLayout.VERTICAL);
             int pad = Ui.dp(this, 6);
             line.setPadding(0, pad, 0, pad);
             line.setBackgroundResource(android.R.drawable.list_selector_background);
-            TextView name = Ui.text(this, p.rowName(tab, r), 15);
+            TextView name = Ui.text(this, p.rowName(tab, r, helmetsByTeam), 15);
             if (r == row)
                 name.setTypeface(Typeface.DEFAULT_BOLD);
             line.addView(name);
@@ -567,7 +590,7 @@ public class ExecutableActivity extends Activity
             LinearLayout turn = new LinearLayout(this);
             turn.setGravity(Gravity.CENTER_VERTICAL);
             turn.addView(Ui.text(this, LiveriesPage.TURN + "  ", 14));
-            android.widget.SeekBar bar = new android.widget.SeekBar(this);
+            final android.widget.SeekBar bar = new android.widget.SeekBar(this);
             bar.setMax(LiveriesPage.positions(tab) - 1);
             bar.setProgress(liveryPosition[tab]);
             bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
@@ -581,6 +604,16 @@ public class ExecutableActivity extends Activity
             });
             turn.addView(bar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
             page.addView(turn);
+            LinearLayout views = new LinearLayout(this);      // the usual views (Hrvoje, 2026-11-16)
+            String[] names = LiveriesPage.views(tab);
+            for (int i = 0; i < names.length; i++)
+            {
+                final int which = i;
+                views.addView(Ui.button(this, names[i], new View.OnClickListener() {
+                    public void onClick(View v) { bar.setProgress(LiveriesPage.viewPosition(tab, which)); }
+                }));
+            }
+            page.addView(views);
         }
         else
         {
@@ -614,6 +647,7 @@ public class ExecutableActivity extends Activity
     private void chooseColour(final int tab, final int row, final int part)
     {
         final LiveriesPage p = screen.liveries();
+        liveryPart[tab] = part;
         LinearLayout box = Ui.column(this);
         TextView hint = Ui.text(this, "Tap a colour, then OK. A filled corner mark: the game changes that colour in a race, so avoid it. "
             + "An open mark: worth knowing. In the rain, colours 0 to 207 all turn greyer.", 13);
@@ -647,6 +681,27 @@ public class ExecutableActivity extends Activity
             .show();
     }
 
+    /** Touch and hold a part: Copy Colour, or Paste Colour (Hrvoje, 2026-11-16). */
+    private void colourMenu(final int tab, final int row, final int part)
+    {
+        liveryPart[tab] = part;
+        final String[] list = screen.copiedColour() >= 0
+            ? new String[] { LiveriesPage.COPY_COLOUR, LiveriesPage.PASTE_COLOUR + " (colour " + screen.copiedColour() + ")" }
+            : new String[] { LiveriesPage.COPY_COLOUR };
+        new AlertDialog.Builder(this).setTitle(screen.liveries().chooserTitle(tab, row, part))
+            .setItems(list, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    if (which == 0)
+                        screen.copyColour(tab, row, part);
+                    else
+                        screen.pasteColour(tab, row, part);
+                    again();
+                }
+            })
+            .show();
+    }
+
     private void liveryMenu(final int tab, final int r)
     {
         final LiveriesPage p = screen.liveries();
@@ -654,6 +709,7 @@ public class ExecutableActivity extends Activity
         items.add("Copy");
         if (screen.copiedText(tab) != null)
             items.add("Paste");
+        items.add(LiveriesPage.CLEAR);
         if (LiveriesPage.hasFile(tab))
         {
             items.add(LiveriesPage.importLabel(tab));
@@ -671,6 +727,8 @@ public class ExecutableActivity extends Activity
                         screen.copyDesign(tab, r);
                     else if (chosen.equals("Paste"))
                         screen.pasteDesign(tab, new int[] { r });
+                    else if (chosen.equals(LiveriesPage.CLEAR))
+                        screen.clearDesign(tab, new int[] { r });
                     else if (chosen.equals(LiveriesPage.importLabel(tab)))
                     {
                         android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);

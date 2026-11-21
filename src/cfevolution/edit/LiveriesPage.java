@@ -202,6 +202,102 @@ public final class LiveriesPage
         return changed;
     }
 
+    // --- Clearing, one colour at a time, and the rows' order (Hrvoje, 2026-11-15/16) ---
+
+    /** White: the colour the game's own liveries use for white (187 times; 46 is a shade greyer). */
+    public static final int WHITE = 47;
+    public static final String CLEAR = "Clear Design";
+    public static final String COPY_COLOUR = "Copy Colour", PASTE_COLOUR = "Paste Colour";
+    public static final String HIDE_UNUSED = "Hide Unused Teams";
+    public static final String HIDE_UNUSED_TIP = "Leave out teams with no drivers: the game does not show them";
+    public static final String[] ORDERS = { "By car number", "By team" };
+    public static final String ORDER_TIP = "List the helmets by car number, or team by team (each team's first driver, then its second)";
+
+    public static String clearTip(int tab)
+    {
+        return "Make every part of the selected " + rowWord(tab) + "s' " + what(tab) + " white";
+    }
+
+    /** Every offered part of these rows white; returns whether anything changed. */
+    public boolean clear(int tab, int[] rows)
+    {
+        boolean changed = false;
+        for (int r : rows)
+            for (int p = 0; p < parts(tab).length; p++)
+                changed |= set(tab, r, p, WHITE);
+        return changed;
+    }
+
+    /** Paste Colour: one part of these rows in a colour; returns whether anything changed. */
+    public boolean paint(int tab, int[] rows, int part, int colour)
+    {
+        boolean changed = false;
+        for (int r : rows)
+            changed |= set(tab, r, part, colour);
+        return changed;
+    }
+
+    /** Whether a team has a driver, so the game shows it. */
+    public boolean used(int team)
+    {
+        return teams.getTeamCar(team, 0) != 0 || teams.getTeamCar(team, 1) != 0;
+    }
+
+    /** The team a car number drives for, or -1. */
+    public int teamOf(int driver)
+    {
+        for (int t = 0; t < GameLiveries.TEAMS; t++)
+            for (int seat = 0; seat < 2; seat++)
+                if (teams.getTeamCar(t, seat) == driver + 1)
+                    return t;
+        return -1;
+    }
+
+    /**
+     * The rows in the order a tab lists them. Helmets by team: each team's
+     * first driver then its second, team by team, then the drivers in no team
+     * by car number. Cars and pit crews may leave out the teams with no drivers.
+     */
+    public int[] order(int tab, boolean byTeam, boolean hideUnused)
+    {
+        java.util.List<Integer> rows = new java.util.ArrayList<Integer>();
+        if (tab == HELMETS)
+        {
+            boolean[] listed = new boolean[GameLiveries.DRIVERS];
+            if (byTeam)
+                for (int t = 0; t < GameLiveries.TEAMS; t++)
+                    for (int seat = 0; seat < 2; seat++)
+                    {
+                        int car = teams.getTeamCar(t, seat);
+                        if (car >= 1 && car <= GameLiveries.DRIVERS && !listed[car - 1])
+                        {
+                            listed[car - 1] = true;
+                            rows.add(car - 1);
+                        }
+                    }
+            for (int d = 0; d < GameLiveries.DRIVERS; d++)
+                if (!listed[d])
+                    rows.add(d);
+        }
+        else
+            for (int t = 0; t < GameLiveries.TEAMS; t++)
+                if (!hideUnused || used(t))
+                    rows.add(t);
+        int[] out = new int[rows.size()];
+        for (int i = 0; i < out.length; i++)
+            out[i] = rows.get(i);
+        return out;
+    }
+
+    /** A row's label in a list ordered by team: the helmet's team after the driver. */
+    public String rowName(int tab, int r, boolean byTeam)
+    {
+        if (tab != HELMETS || !byTeam)
+            return rowName(tab, r);
+        int t = teamOf(r);
+        return rowName(tab, r) + (t < 0 ? "  (no team)" : "  (" + teams.getTeamName(t) + ")");
+    }
+
     // --- ArgEditor's files ------------------------------------------------
 
     /** Whether the tab has a file of ArgEditor's (cars and helmets do). */
@@ -352,6 +448,20 @@ public final class LiveriesPage
     public static boolean mirroredAt(int tab, int position)
     {
         return turns(tab) && position >= last(tab) - first(tab) + 1;
+    }
+
+    /** The views a tab's turning picture can jump to (Hrvoje, 2026-11-16); none for the pit crews. */
+    public static String[] views(int tab)
+    {
+        return tab == CARS ? new String[] { "Front", "Side", "Rear" }
+             : tab == HELMETS ? new String[] { "Front", "Left Side", "Right Side" } : new String[0];
+    }
+
+    /** The position of a view. Cars: in front 44, the side 36 (the widest picture, nose to the right),
+        behind 0. Helmets: in front 8; facing left (12) shows the driver's left side, facing right (4) his right. */
+    public static int viewPosition(int tab, int view)
+    {
+        return tab == CARS ? new int[] { 44, 36, 0 }[view] : new int[] { 8, 12, 4 }[view];
     }
 
     /** What stepped pictures say under the picture. */

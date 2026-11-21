@@ -102,6 +102,10 @@ public class PictureActivity extends Activity
         buttons.addView(Ui.button(this, PictureFilePage.REVERT, click(new Runnable() {
             public void run() { changed(page.revert(picture)); }
         })));
+        if (page.canClear())        // the menu helmets and flags (Hrvoje, 2026-11-15)
+            buttons.addView(Ui.button(this, PictureFilePage.CLEAR, click(new Runnable() {
+                public void run() { page.clear(picture); changed(null); }
+            })));
         HorizontalScrollView bar = new HorizontalScrollView(this);
         bar.addView(buttons);
         col.addView(bar);

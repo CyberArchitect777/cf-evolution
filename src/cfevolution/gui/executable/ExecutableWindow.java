@@ -586,12 +586,39 @@ public class ExecutableWindow extends JPanel implements EditorTab
         return page(LiveriesPage.TITLE, LiveriesPage.DESCRIPTION, tabs);
     }
 
+    /** Which team or driver each table row shows (Hrvoje, 2026-11-15: helmets by team, unused teams hidden). */
+    private static final class LiveryRows
+    {
+        int[] order;
+        boolean byTeam, hideUnused;
+        int at(int viewRow) { return order[Math.max(0, Math.min(order.length - 1, viewRow))]; }
+        int[] at(int[] viewRows)
+        {
+            int[] out = new int[viewRows.length];
+            for (int i = 0; i < out.length; i++)
+                out[i] = at(viewRows[i]);
+            return out;
+        }
+        int viewOf(int row)
+        {
+            for (int i = 0; i < order.length; i++)
+                if (order[i] == row)
+                    return i;
+            return -1;
+        }
+    }
+
+    /** The colour last copied with Copy Colour (shared by every tab and executable), or -1. */
+    private static int copiedColour = -1;
+
     private JComponent colourTable(final LiveriesPage page, final int tab)
     {
         final GameLiveries liveries = page.liveries();
         final String[] parts = LiveriesPage.parts(tab);
+        final LiveryRows rows = new LiveryRows();
+        rows.order = page.order(tab, false, false);
         final AbstractTableModel model = new AbstractTableModel() {
-            public int getRowCount() { return page.rows(tab); }
+            public int getRowCount() { return rows.order.length; }
             public int getColumnCount() { return parts.length + 1; }
             public String getColumnName(int c) {
                 if (c == 0) return "";
@@ -602,7 +629,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
             public Class<?> getColumnClass(int c) { return c == 0 ? String.class : Integer.class; }
             public boolean isCellEditable(int r, int c) { return false; }
-            public Object getValueAt(int r, int c) { return c == 0 ? page.rowName(tab, r) : (Object) page.get(tab, r, c - 1); }
+            public Object getValueAt(int r, int c) { return c == 0 ? page.rowName(tab, rows.at(r), rows.byTeam) : (Object) page.get(tab, rows.at(r), c - 1); }
         };
         final JTable table = table(model, new int[0]);
         // Room for part names of up to three lines
@@ -632,7 +659,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
                                                            boolean focus, int row, int column) {
                 super.getTableCellRendererComponent(t, "", selected, focus, row, column);
                 setBackground(new java.awt.Color(liveries.getPaletteRgb((Integer) value)));
-                setBorder(focus ? BorderFactory.createLineBorder(Color.BLACK, 2)
+                // the selected cell framed even when the table does not have the focus, so a part clicked on
+                // the picture shows in the table (Hrvoje, 2026-11-16)
+                setBorder(focus || selected ? BorderFactory.createLineBorder(Color.BLACK, 2)
                                 : BorderFactory.createMatteBorder(2, 2, 2, 2, row % 2 == 0 ? Color.WHITE : new Color(0xF6F7F9)));
                 setToolTipText(parts[column - 1] + ": click to change");
                 return this;
@@ -657,8 +686,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 int r = table.getSelectedRow(), c = table.getSelectedColumn();
                 if (r < 0 || c < 1)
                     return;
-                int colour = PaletteChooser.choose(table, page.chooserTitle(tab, r, c - 1), liveries, page.get(tab, r, c - 1));
-                if (page.set(tab, r, c - 1, colour))
+                int colour = PaletteChooser.choose(table, page.chooserTitle(tab, rows.at(r), c - 1), liveries, page.get(tab, rows.at(r), c - 1));
+                if (page.set(tab, rows.at(r), c - 1, colour))
                     model.fireTableCellUpdated(r, c);
             }
         };
@@ -666,6 +695,36 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public void mouseClicked(java.awt.event.MouseEvent e) {
                 if (SwingUtilities.isLeftMouseButton(e) && table.columnAtPoint(e.getPoint()) > 0)
                     choose.run();
+            }
+            public void mousePressed(java.awt.event.MouseEvent e) { colourMenu(e); }
+            public void mouseReleased(java.awt.event.MouseEvent e) { colourMenu(e); }
+            /** Copy Colour / Paste Colour on a right-click (Hrvoje, 2026-11-16); pasting covers every selected row. */
+            private void colourMenu(java.awt.event.MouseEvent e) {
+                if (!e.isPopupTrigger())
+                    return;
+                final int r = table.rowAtPoint(e.getPoint()), c = table.columnAtPoint(e.getPoint());
+                if (r < 0 || c < 1)
+                    return;
+                if (!table.isCellSelected(r, c))
+                    table.changeSelection(r, c, false, false);
+                JPopupMenu menu = new JPopupMenu();
+                JMenuItem copy = new JMenuItem(LiveriesPage.COPY_COLOUR);
+                copy.addActionListener(new java.awt.event.ActionListener() {
+                    public void actionPerformed(java.awt.event.ActionEvent a) { copiedColour = page.get(tab, rows.at(r), c - 1); }
+                });
+                JMenuItem paste = new JMenuItem(LiveriesPage.PASTE_COLOUR);
+                paste.setEnabled(copiedColour >= 0);
+                paste.addActionListener(new java.awt.event.ActionListener() {
+                    public void actionPerformed(java.awt.event.ActionEvent a) {
+                        int col = table.getSelectedColumn() > 0 ? table.getSelectedColumn() : c;
+                        if (page.paint(tab, rows.at(table.getSelectedRows()), col - 1, copiedColour))
+                            model.fireTableDataChanged();
+                        table.changeSelection(r, col, false, false);
+                    }
+                });
+                menu.add(copy);
+                menu.add(paste);
+                menu.show(table, e.getX(), e.getY());
             }
         });
         Action chooseAction = new AbstractAction() {
@@ -692,14 +751,68 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
         });
         panel.add(tableScroll, BorderLayout.CENTER);
-        panel.add(picturePanel(page, tab, table, model, choose), BorderLayout.EAST);
+        panel.add(rowOrder(page, tab, table, model, rows), BorderLayout.NORTH);
+        panel.add(picturePanel(page, tab, table, model, choose, rows), BorderLayout.EAST);
         JPanel south = new JPanel();
         south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
-        south.add(copyPasteButtons(page, tab, table, model));
+        south.add(copyPasteButtons(page, tab, table, model, rows));
         if (LiveriesPage.hasFile(tab))
-            south.add(colourFileButtons(page, tab, table, model));
+            south.add(colourFileButtons(page, tab, table, model, rows));
         panel.add(south, BorderLayout.SOUTH);
         return panel;
+    }
+
+    /** Above the table: the helmets' order (by car number or by team), or Hide Unused Teams on the
+        cars and pit crews (Hrvoje, 2026-11-15). The same row stays selected. */
+    private JComponent rowOrder(final LiveriesPage page, final int tab, final JTable table,
+                                final AbstractTableModel model, final LiveryRows rows)
+    {
+        final Runnable reorder = new Runnable() {
+            public void run() {
+                int selected = table.getSelectedRow() < 0 ? -1 : rows.at(table.getSelectedRow());
+                int column = Math.max(1, table.getSelectedColumn());
+                rows.order = page.order(tab, rows.byTeam, rows.hideUnused);
+                model.fireTableDataChanged();
+                int v = selected < 0 ? -1 : rows.viewOf(selected);
+                if (v >= 0)
+                    table.changeSelection(v, column, false, false);
+                else
+                    table.clearSelection();
+            }
+        };
+        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        if (tab == LiveriesPage.HELMETS)
+        {
+            final JComboBox<String> order = new JComboBox<String>(LiveriesPage.ORDERS);
+            order.setName("helmet order");
+            order.setToolTipText(LiveriesPage.ORDER_TIP);
+            order.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    rows.byTeam = order.getSelectedIndex() == 1;
+                    reorder.run();
+                }
+            });
+            p.add(order);
+        }
+        else
+        {
+            final JToggleButton hide = new JToggleButton(LiveriesPage.HIDE_UNUSED);
+            hide.setName("hide unused " + LiveriesPage.kind(tab));
+            hide.setToolTipText(LiveriesPage.HIDE_UNUSED_TIP);
+            hide.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    if (hide.isSelected() && page.order(tab, false, true).length == 0)
+                    {
+                        hide.setSelected(false);     // every team is unused: nothing would be left to show
+                        return;
+                    }
+                    rows.hideUnused = hide.isSelected();
+                    reorder.run();
+                }
+            });
+            p.add(hide);
+        }
+        return p;
     }
 
     /** The design last copied on each tab (car, hel, crew), as the offered parts' colours.
@@ -712,7 +825,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
      * extremely useful"). Only the parts the page offers are copied; the bytes it
      * keeps as the game has them stay with each row. Ctrl+C / Ctrl+V do the same.
      */
-    private JComponent copyPasteButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model)
+    private JComponent copyPasteButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model,
+                                        final LiveryRows rows)
     {
         final String kind = LiveriesPage.kind(tab);
         final JButton paste = new JButton("Paste");
@@ -726,20 +840,20 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 int r = table.getSelectedRow();
                 if (r < 0)
                     return;
-                copiedDesigns.put(kind, page.design(tab, r));
+                copiedDesigns.put(kind, page.design(tab, rows.at(r)));
                 paste.setEnabled(true);
-                copied.setText(page.copiedText(tab, r));
+                copied.setText(page.copiedText(tab, rows.at(r)));
             }
         };
         final Runnable pasteRun = new Runnable() {
             public void run() {
                 int[] design = copiedDesigns.get(kind);
-                int[] rows = table.getSelectedRows();
-                if (design == null || rows.length == 0)
+                int[] selected = table.getSelectedRows();
+                if (design == null || selected.length == 0)
                     return;
-                for (int r : rows)
+                for (int r : selected)
                 {
-                    page.paste(tab, new int[] { r }, design);
+                    page.paste(tab, new int[] { rows.at(r) }, design);
                     model.fireTableRowsUpdated(r, r);
                 }
             }
@@ -763,7 +877,22 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public void actionPerformed(java.awt.event.ActionEvent e) { pasteRun.run(); }
         });
 
+        // Clear Design: every part white (Hrvoje, 2026-11-15)
+        JButton clear = new JButton(LiveriesPage.CLEAR);
+        clear.setName("clear " + kind);
+        clear.setToolTipText(LiveriesPage.clearTip(tab));
+        clear.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                int[] selected = table.getSelectedRows();
+                if (selected.length > 0 && page.clear(tab, rows.at(selected)))
+                    model.fireTableDataChanged();
+                for (int i = 0; i < selected.length; i++)
+                    table.addRowSelectionInterval(selected[i], selected[i]);
+            }
+        });
+
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+        p.add(clear);
         p.add(copyButton);
         p.add(paste);
         p.add(new JLabel("<html><font color='#6A7380'>" + LiveriesPage.copyPasteNote(tab) + "</font></html>"));
@@ -772,7 +901,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
     }
 
     /** Import and export of the selected row's colours as ArgEditor's .car or .hel file. */
-    private JComponent colourFileButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model)
+    private JComponent colourFileButtons(final LiveriesPage page, final int tab, final JTable table, final AbstractTableModel model,
+                                         final LiveryRows rows)
     {
         final String kind = LiveriesPage.kind(tab);
         final javax.swing.filechooser.FileNameExtensionFilter filter =
@@ -782,7 +912,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         in.setToolTipText(LiveriesPage.importTip(tab));
         in.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                int r = Math.max(0, table.getSelectedRow());
+                int v = Math.max(0, table.getSelectedRow()), r = rows.at(v);
                 JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
                 chooser.setDialogTitle(page.importTitle(tab, r));
                 chooser.setFileFilter(filter);
@@ -800,7 +930,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     cfevolution.gui.MessageBoxes.show(table, refused);
                     return;
                 }
-                model.fireTableRowsUpdated(r, r);
+                model.fireTableRowsUpdated(v, v);
             }
         });
         JButton out = new JButton(LiveriesPage.exportLabel(tab));
@@ -808,7 +938,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         out.setToolTipText(LiveriesPage.exportTip(tab));
         out.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) {
-                int r = Math.max(0, table.getSelectedRow());
+                int r = rows.at(Math.max(0, table.getSelectedRow()));
                 JFileChooser chooser = new JFileChooser(new File(fileName).getAbsoluteFile().getParentFile());
                 chooser.setDialogTitle(page.exportTitle(tab, r));
                 chooser.setFileFilter(filter);
@@ -841,7 +971,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
      * the cell does.
      */
     private JComponent picturePanel(final LiveriesPage page, final int tab, final JTable table,
-                                    final AbstractTableModel model, final Runnable choose)
+                                    final AbstractTableModel model, final Runnable choose, final LiveryRows rows)
     {
         final JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createCompoundBorder(
@@ -854,7 +984,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
         final java.util.List<LiveryPicture> shown = new java.util.ArrayList<LiveryPicture>();
 
         final LiveryPicture.Colours colours = new LiveryPicture.Colours() {
-            int row() { return Math.max(0, table.getSelectedRow()); }
+            int viewRow() { return Math.max(0, table.getSelectedRow()); }
+            int row() { return rows.at(viewRow()); }
             public Color colour(int slot) { return new java.awt.Color(page.liveries().getPaletteRgb(page.setColour(tab, row(), slot))); }
             public String part(int slot) {
                 int p = LiveriesPage.partOfSlot(tab, slot);
@@ -864,14 +995,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 int p = LiveriesPage.partOfSlot(tab, slot);
                 if (p < 0)
                     return;
-                table.changeSelection(row(), p + 1, false, false);
+                table.changeSelection(viewRow(), p + 1, false, false);
                 choose.run();
             }
         };
 
         final Runnable refresh = new Runnable() {
             public void run() {
-                title.setText(page.rowName(tab, Math.max(0, table.getSelectedRow())));
+                title.setText(page.rowName(tab, rows.at(Math.max(0, table.getSelectedRow()))));
                 for (LiveryPicture p : shown)
                     p.repaint();
             }
@@ -934,6 +1065,27 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public void stateChanged(javax.swing.event.ChangeEvent e) { show.run(); }
         });
         show.run();
+        // the mouse wheel over the picture turns it too (Hrvoje, 2026-11-13)
+        picture.addMouseWheelListener(new java.awt.event.MouseWheelListener() {
+            public void mouseWheelMoved(java.awt.event.MouseWheelEvent e) {
+                int n = LiveriesPage.positions(tab);
+                turn.setValue((turn.getValue() + e.getWheelRotation() + n) % n);
+            }
+        });
+        // jump to the usual views (Hrvoje, 2026-11-16)
+        JPanel views = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        String[] viewNames = LiveriesPage.views(tab);
+        for (int i = 0; i < viewNames.length; i++)
+        {
+            final int view = i;
+            JButton b = new JButton(viewNames[i]);
+            b.setName("liveryView " + viewNames[i]);
+            b.setMargin(new Insets(2, 8, 2, 8));
+            b.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) { turn.setValue(LiveriesPage.viewPosition(tab, view)); }
+            });
+            views.add(b);
+        }
 
         JPanel stage = new JPanel(new BorderLayout());
         stage.setBackground(PICTURE_BACKGROUND);
@@ -943,7 +1095,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel below = new JPanel(new BorderLayout());
         below.add(new JLabel(LiveriesPage.TURN), BorderLayout.WEST);
         below.add(turn, BorderLayout.CENTER);
-        below.add(pictureHint(LiveriesPage.PICTURE_HINT), BorderLayout.SOUTH);
+        JPanel under = new JPanel(new BorderLayout());
+        under.add(views, BorderLayout.NORTH);
+        under.add(pictureHint(LiveriesPage.PICTURE_HINT), BorderLayout.SOUTH);
+        below.add(under, BorderLayout.SOUTH);
 
         JPanel holder = new JPanel(new BorderLayout());
         holder.add(pictureBox(stage, below), BorderLayout.NORTH);
@@ -997,6 +1152,12 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
         });
         show.run();
+        picture.addMouseWheelListener(new java.awt.event.MouseWheelListener() {     // the wheel steps too (Hrvoje, 2026-11-13)
+            public void mouseWheelMoved(java.awt.event.MouseWheelEvent e) {
+                index[0] = (index[0] + e.getWheelRotation() % count + count) % count;
+                show.run();
+            }
+        });
 
         JPanel stage = new JPanel(new BorderLayout());
         stage.setBackground(PICTURE_BACKGROUND);

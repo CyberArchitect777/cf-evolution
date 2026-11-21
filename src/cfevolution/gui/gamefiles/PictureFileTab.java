@@ -68,6 +68,12 @@ public class PictureFileTab extends JPanel implements EditorTab
         buttons.add(button(PictureFilePage.EXPORT, "export", new Runnable() { public void run() { exportPicture(); } }));
         buttons.add(button(PictureFilePage.IMPORT, "import", new Runnable() { public void run() { importPicture(); } }));
         buttons.add(button(PictureFilePage.REVERT, "revert", new Runnable() { public void run() { revertPicture(); } }));
+        if (page.canClear())       // the menu helmets and flags (Hrvoje, 2026-11-15)
+        {
+            JButton clear = button(PictureFilePage.CLEAR, "clear", new Runnable() { public void run() { clearPicture(); } });
+            clear.setToolTipText(PictureFilePage.CLEAR_TIP);
+            buttons.add(clear);
+        }
 
         JPanel centre = new JPanel(new BorderLayout(0, 8));
         centre.add(buttons, BorderLayout.NORTH);
@@ -218,6 +224,15 @@ public class PictureFileTab extends JPanel implements EditorTab
         int picture = list.getSelectedIndex();
         if (picture >= 0)
             changed(page.revert(picture));
+    }
+
+    private void clearPicture()
+    {
+        int picture = list.getSelectedIndex();
+        if (picture < 0)
+            return;
+        page.clear(picture);
+        changed(null);
     }
 
     // --- PNG ------------------------------------------------------------------

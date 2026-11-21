@@ -301,6 +301,33 @@ public final class ExecutableScreen
             modified = true;
     }
 
+    /** Clear Design: every part of these rows white (Hrvoje, 2026-11-15). */
+    public void clearDesign(int tab, int[] rows)
+    {
+        if (liveries().clear(tab, rows))
+            modified = true;
+    }
+
+    /** The colour last copied with Copy Colour (shared by every tab, as on the desktop), or -1. */
+    private static int copiedColour = -1;
+
+    public void copyColour(int tab, int row, int part)
+    {
+        copiedColour = liveries().get(tab, row, part);
+    }
+
+    public int copiedColour()
+    {
+        return copiedColour;
+    }
+
+    /** Paste Colour: the copied colour on one part of row r. */
+    public void pasteColour(int tab, int row, int part)
+    {
+        if (copiedColour >= 0 && liveries().paint(tab, new int[] { row }, part, copiedColour))
+            modified = true;
+    }
+
     /** One of ArgEditor's files for row r; the message when refused, else null. */
     public Message importLivery(int tab, int row, String name, byte[] file)
     {

@@ -56,6 +56,7 @@ public final class PictureFilePage
     static final int DRIVER_SELECTION_PICTURE = 5, TITLE_PICTURE = 3;
 
     public static final String EXPORT = "Export PNG...", IMPORT = "Import PNG...", REVERT = "Revert Picture";
+    public static final String CLEAR = "Clear Picture", CLEAR_TIP = "Fill the picture with its background colour, to draw a new one";
     public static final String DRAW = "Draw", REPLACE = "Replace a colour", COLOURS_TIP = "Choose a colour";
     public static final String HINT = "Click to use the chosen colour; right-click a pixel to pick up its colour.";
     public static final Message TOO_DETAILED = Message.warning("Picture Not Changed", "This picture is too detailed for the game to load. Try a simpler one.");
@@ -285,6 +286,33 @@ public final class PictureFilePage
             return TOO_DETAILED;
         changed = true;
         return null;
+    }
+
+    /** Whether Clear Picture is offered: for the small pictures (the menu helmets and the flags), whose
+        background is one colour (Hrvoje, 2026-11-15: helmets blue, flags black). The full-screen pictures
+        have no single background. */
+    public boolean canClear()
+    {
+        return small;
+    }
+
+    /** The background colour Clear Picture uses: the picture's top-left pixel as the file was opened
+        (blue on the stock helmets, black on the flags), so drawing over that corner does not change it. */
+    public int background(int picture)
+    {
+        return original.getSmallPicture(item(picture))[0] & 0xFF;
+    }
+
+    /** Clear Picture: every pixel in the background colour (Revert Picture brings it back). */
+    public void clear(int picture)
+    {
+        changed = false;
+        if (!small)
+            return;
+        int item = item(picture);
+        byte[] px = pixels(item);
+        java.util.Arrays.fill(px, (byte) background(picture));
+        setPixels(item, px);
     }
 
     /** Revert Picture: as it was when the file was opened; the refusal, or null. */
