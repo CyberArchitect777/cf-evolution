@@ -35,7 +35,7 @@ CF-Evolution edits a whole F1GP/WC game folder: the circuits, the game program a
 ### The game's other files
 
 * Game options (F1PREFS.DAT), including the frame rate, saved setups, name files (from any folder) and championship saves, saved with the game's checksums.
-* The game's pictures (export and import as PNG) and its sound effects.
+* The game's pictures (export and import as PNG) and its sound effects, each of which can be played as the game plays it.
 
 ## Getting Started
 
@@ -105,6 +105,7 @@ Thanks also to the following people:
 
 * Fredrik Meyer for his excellent work on the ArgTools project which is aiding further development here.
 * Hrvoje Stimac for his excellent testing and suggestions as well as his F1GP community leadership.
+* Nuke.YKT for Nuked OPL3, which was translated into Java for CF-Evolution (under the GNU LGPL 2.1 or later) to play the game's sound effects.
 
 ## License
 

@@ -1,5 +1,13 @@
 # Changelog
 
+0.4.5 (internal version, not released)
+
+- The editing code has been separated from the desktop interface, for future versions on other platforms. This is the main purpose of this internal release.
+- The Sound Effects page has a Play button, which plays the chosen sound as the game plays it, including any unsaved changes.
+- The horizon is now shown at the shape the game draws it, with a scaled width version shown underneath the close-up for the user to see. Clicking a part of the whole picture brings it into the close-up.
+- Typing something other than a whole number into a track property no longer applies only part of the change; nothing is changed and a message names the property.
+- Opening a file that is not a track now says it cannot be loaded, instead of the editor running out of memory.
+
 0.4.1
 
 - The Pit Lane page shows the game's 18 pit boxes from the pit lane entrance, with Move Up, Move Down and Reset to 1991 Order. It warns when a team is missing or listed twice, and will not save such an order.
