@@ -20,6 +20,7 @@
 package cfevolution.edit;
 
 import cfevolution.data.dataset.OtherEditorFiles;
+import cfevolution.data.executable.CarModel;
 import cfevolution.data.executable.GameDrivers;
 import cfevolution.data.executable.GameLiveries;
 import cfevolution.data.executable.GameSprites;
@@ -464,6 +465,77 @@ public final class LiveriesPage
         return tab == CARS ? new int[] { 44, 36, 0 }[view] : new int[] { 8, 12, 4 }[view];
     }
 
+    // --- The close-up car: the game's 3D model (Hrvoje, 2026-11-21) ---------
+
+    public static final String CLOSE_UP = "Close-up", DISTANT = "Distant", TILT = "Tilt";
+    public static final String CLOSE_UP_TIP = "The car as the game draws it near the camera, with the first driver's helmet";
+    public static final String DISTANT_TIP = "The game's pictures for cars further away";
+    /** Shown on the Cars tab while team slot 1 is selected. */
+    public static final String TEAM_ONE_NOTE = "Team slot 1 has its own car close up: its nose has no Nose angle part, "
+        + "so that colour is not seen there. Further away it looks like every other team's car (Distant).";
+    public static final String[] CLOSE_UP_VIEWS = { "Front", "Side", "Rear", "Angled" };
+    /** Each close-up view's heading (0 behind, 90 the right side with the nose to the right, 180 in front) and tilt. */
+    private static final int[][] CLOSE_UP_VIEW_ANGLES = { { 180, 10 }, { 90, 10 }, { 0, 10 }, { 140, 30 } };
+    /** The close-up car turns in steps of this many degrees. */
+    public static final int HEADING_STEP = 5;
+    public static final int HEADINGS = 360 / HEADING_STEP;
+    public static final int MAX_TILT = CarModel.MAX_TILT;
+    /** The view shown first: the angle where every part of the car shows at once. */
+    public static final int CLOSE_UP_START_VIEW = 3;
+    /** The model's units per pixel of the drawing: the car fits the desktop's side panel at any angle. */
+    public static final double UNITS_PER_PIXEL = 4.0;
+
+    /** Heading step (0 to HEADINGS - 1) of a close-up view. */
+    public static int closeUpHeading(int view)
+    {
+        return CLOSE_UP_VIEW_ANGLES[view][0] / HEADING_STEP;
+    }
+
+    public static int closeUpTilt(int view)
+    {
+        return CLOSE_UP_VIEW_ANGLES[view][1];
+    }
+
+    /** Whose helmet the close-up car wears: the team's first driver, else its second, else -1 (a plain helmet). */
+    public int helmetDriver(int team)
+    {
+        for (int seat = 0; seat < 2; seat++)
+        {
+            int car = teams.getTeamCar(team, seat);
+            if (car >= 1 && car <= GameLiveries.DRIVERS)
+                return car - 1;
+        }
+        return -1;
+    }
+
+    /** The close-up car of a team, drawn by the game's 3D model; team slot 1 with its own nose, as the game does. */
+    public static GameSprites.Sprite closeUp(CarModel model, GameSprites sprites, int team, int headingStep, int tilt)
+    {
+        return model.draw(sprites, headingStep * HEADING_STEP, tilt, team == 0, true, UNITS_PER_PIXEL);
+    }
+
+    /** The size of every close-up drawing, {width, height}. */
+    public static int[] closeUpBox()
+    {
+        return CarModel.box(UNITS_PER_PIXEL);
+    }
+
+    /**
+     * The palette colour of a picture's slot: 0-15 from the row's own set;
+     * on the Cars tab 16-31 are the close-up car's helmet, from its driver's
+     * set (a plain white helmet with a dark visor when the team has no driver).
+     */
+    public int pictureColour(int tab, int r, int slot)
+    {
+        if (slot < CarModel.HELMET_SLOTS)
+            return setColour(tab, r, slot);
+        int driver = tab == CARS ? helmetDriver(r) : -1;
+        int s = slot - CarModel.HELMET_SLOTS;
+        if (driver < 0)
+            return s == 0 ? 0 : WHITE;
+        return liveries.getHelmetSetColour(driver, s);
+    }
+
     /** What stepped pictures say under the picture. */
     public static String pictureNumber(int tab, int position)
     {
@@ -498,9 +570,9 @@ public final class LiveriesPage
     /** The picture in row r's colours as 0xAARRGGBB pixels, a row at a time; transparent where the game draws nothing. */
     public int[] pixels(int tab, int r, GameSprites.Sprite sprite, boolean mirrored)
     {
-        int[] set = new int[16];
-        for (int s = 0; s < 16; s++)
-            set[s] = 0xFF000000 | liveries.getPaletteRgb(setColour(tab, r, s));
+        int[] set = new int[32];
+        for (int s = 0; s < set.length; s++)
+            set[s] = 0xFF000000 | liveries.getPaletteRgb(pictureColour(tab, r, s));
         int[] out = new int[sprite.width * sprite.height];
         for (int y = 0; y < sprite.height; y++)
             for (int x = 0; x < sprite.width; x++)

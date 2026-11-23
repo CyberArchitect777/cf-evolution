@@ -253,6 +253,37 @@ public final class ExecutableScreen
         return liveries;
     }
 
+    /** Save Names into the Executable (Hrvoje, 2026-11-21): off, saving leaves GP.EXE's own names. */
+    public boolean saveNames()
+    {
+        return exe.getSaveNames();
+    }
+
+    public void setSaveNames(boolean on)
+    {
+        exe.setSaveNames(on);
+        if (on && exe.namesNotInFile())     // saving now writes names GP.EXE lacks (2026-11-22)
+            modified = true;
+    }
+
+    /** Names shown that leaving would lose: Save Names into the Executable is off and they are not in GP.EXE. */
+    public boolean namesOnlyShown()
+    {
+        return !exe.getSaveNames() && exe.namesNotInFile();
+    }
+
+    /** The game's 3D car for the close-up picture (read from GP.EXE), or null. */
+    public cfevolution.data.executable.CarModel carModel()
+    {
+        return exe.getCarModel();
+    }
+
+    /** The close-up car of a team at a heading step and tilt (null without the game's pictures or the model). */
+    public GameSprites.Sprite closeUp(int team, int headingStep, int tilt)
+    {
+        return carModel() == null || sprites() == null ? null : LiveriesPage.closeUp(carModel(), sprites(), team, headingStep, tilt);
+    }
+
     /** The game's pictures (F1GPDATA.DAT and F1GPDATB.DAT beside GP.EXE), or null if the folder lacks them. */
     public GameSprites sprites()
     {

@@ -43,6 +43,14 @@ public final class ExecutableSaving
             return Message.warning("Not Saved",
                 "The executable was not saved: the pit lane order has a team missing or listed twice.\n"
               + "On the Pit Lane page, choose a team for each box or use Reset to 1991 Order.");
+        // At least 26 cars in the first 18 teams, checked on saving so line-ups can be rearranged
+        // freely (2026-11-22). A file that arrived with fewer is saved as it was if its line-ups were not touched.
+        int entered = ExecutableEdits.enteredCars(exe.getGameTeams());
+        if (exe.lineUpChanged() && entered < ExecutableEdits.MIN_ENTERED_CARS)
+            return Message.warning("Not Saved",
+                "The executable was not saved: the first " + ExecutableEdits.RACED_TEAMS + " teams have " + entered
+              + " cars between them, and the game needs at least " + ExecutableEdits.MIN_ENTERED_CARS + " to fill a race.\n"
+              + "On the Teams page, put more cars in those teams.");
         if (!exe.saveData())
             return Message.error("Save Failed", "The executable could not be saved.");
         return null;

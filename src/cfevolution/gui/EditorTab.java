@@ -41,6 +41,14 @@ public interface EditorTab
     /** True when there are changes that have not been saved. */
     boolean isModified();
 
+    /** Asked after any unsaved-changes question, just before the tab closes: false keeps
+        it open. For anything that saving does not keep (2026-11-22: names shown with Save
+        Names into the Executable off). */
+    default boolean readyToClose()
+    {
+        return true;
+    }
+
     /** Saves to the file it was opened from. Returns true on success. */
     boolean save();
 

@@ -96,6 +96,25 @@ public class ExecutableActivity extends Activity
 
     private void show(int n)
     {
+        CrashReport.install(this);
+        try
+        {
+            build(n);
+        }
+        catch (RuntimeException e)
+        {
+            // a page that cannot be built says why, rather than stopping the app (2026-11-21)
+            page.removeAllViews();
+            page.addView(Ui.heading(this, ExecutableScreen.PAGES[n]));
+            TextView t = Ui.text(this, "This page could not be shown. Please send this to the developer:\n\n"
+                + CrashReport.describe(this, e), 12);
+            t.setTextIsSelectable(true);
+            page.addView(t);
+        }
+    }
+
+    private void build(int n)
+    {
         current = n;
         setTitle(screen.title() + (screen.isModified() ? " *" : ""));
         page.removeAllViews();
@@ -191,8 +210,25 @@ public class ExecutableActivity extends Activity
 
     // --- Drivers ------------------------------------------------------------
 
+    /** Save Names into the Executable, shared by the Drivers and Teams pages. */
+    private void saveNamesBox()
+    {
+        final android.widget.CheckBox box = new android.widget.CheckBox(this);
+        box.setText(cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE);
+        box.setChecked(screen.saveNames());
+        box.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(android.widget.CompoundButton b, boolean on) { screen.setSaveNames(on); }
+        });
+        page.addView(box);
+        TextView tip = Ui.text(this, cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE_TIP, 13);
+        tip.setTextColor(Color.GRAY);
+        tip.setPadding(0, 0, 0, Ui.dp(this, 8));
+        page.addView(tip);
+    }
+
     private void drivers()
     {
+        saveNamesBox();
         for (int i = 0; i < 40; i++)
         {
             final int car = i;
@@ -220,6 +256,7 @@ public class ExecutableActivity extends Activity
 
     private void teams()
     {
+        saveNamesBox();
         for (int i = 0; i < 20; i++)
         {
             final int team = i;
@@ -495,9 +532,33 @@ public class ExecutableActivity extends Activity
             page.addView(none);
         }
         else
-            liveryPicture(p, tab, row);
+            try
+            {
+                liveryPicture(p, tab, row);
+            }
+            catch (RuntimeException e)
+            {
+                // the picture alone fails: the colours below still work, and the error can be sent on
+                TextView t = Ui.text(this, "The picture could not be shown. Please send this to the developer:\n\n"
+                    + CrashReport.describe(this, e), 12);
+                t.setTextIsSelectable(true);
+                page.addView(t);
+            }
 
-        // the selected row's parts: tap one to change it
+        // the palette, always shown (Hrvoje, 2026-11-21): it colours the part selected below or on the picture
+        // (-1 until a part is tapped: the first part is then the one selected, 2026-11-22; -1 used as a part stopped the page)
+        if (liveryPart[tab] < 0 || liveryPart[tab] >= LiveriesPage.parts(tab).length)
+            liveryPart[tab] = 0;
+        final int selectedPart = liveryPart[tab];
+        TextView selected = Ui.text(this, LiveriesPage.parts(tab)[selectedPart] + ": " + LiveriesPage.about(p.get(tab, row, selectedPart))
+            + "\nTap a colour to give it to this part.", 13);
+        selected.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 4));
+        page.addView(selected);
+        page.addView(new PaletteView(this, p.liveries(), p.get(tab, row, selectedPart), new PaletteView.Picked() {
+            public void colour(int index) { screen.setLiveryColour(tab, row, selectedPart, index); again(); }
+        }));
+
+        // the selected row's parts: tap one to select it for the palette
         for (int i = 0; i < LiveriesPage.parts(tab).length; i++)
         {
             final int part = i;
@@ -512,7 +573,7 @@ public class ExecutableActivity extends Activity
             TextView name = Ui.text(this, "  " + LiveriesPage.parts(tab)[part] + "  (colour " + p.get(tab, row, part) + ")", 15);
             line.addView(name);
             line.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) { chooseColour(tab, row, part); }
+                public void onClick(View v) { liveryPart[tab] = part; again(); }
             });
             line.setOnLongClickListener(new View.OnLongClickListener() {
                 public boolean onLongClick(View v) { colourMenu(tab, row, part); return true; }
@@ -523,7 +584,7 @@ public class ExecutableActivity extends Activity
         String copied = screen.copiedText(tab);
         TextView how = Ui.text(this, "Tap a " + LiveriesPage.rowWord(tab) + " below to show it above. Touch and hold one to copy its "
             + LiveriesPage.what(tab) + ", paste copied ones" + (LiveriesPage.hasFile(tab) ? ", or use ArgEditor's ." + LiveriesPage.kind(tab) + " file" : "")
-            + ". Touch and hold a part above to copy or paste one colour." + (copied != null ? " " + copied + "." : ""), 13);
+            + ". Touch and hold a part above to copy or paste one colour, or for the large chooser." + (copied != null ? " " + copied + "." : ""), 13);
         how.setTextColor(Color.GRAY);
         how.setPadding(0, Ui.dp(this, 14), 0, Ui.dp(this, 4));
         page.addView(how);
@@ -578,10 +639,43 @@ public class ExecutableActivity extends Activity
         return v;
     }
 
+    /** The Cars tab's close-up car (Hrvoje, 2026-11-21): whether it is shown rather than the distant pictures, and its view. */
+    private boolean carCloseUp = true;
+    private int closeUpHeading = LiveriesPage.closeUpHeading(LiveriesPage.CLOSE_UP_START_VIEW),
+                closeUpTilt = LiveriesPage.closeUpTilt(LiveriesPage.CLOSE_UP_START_VIEW);
+
     private void liveryPicture(final LiveriesPage p, final int tab, final int row)
     {
+        if (tab == LiveriesPage.CARS && screen.carModel() != null)
+        {
+            LinearLayout modes = new LinearLayout(this);
+            for (final boolean closeUp : new boolean[] { true, false })
+            {
+                Button b = Ui.button(this, closeUp ? LiveriesPage.CLOSE_UP : LiveriesPage.DISTANT, new View.OnClickListener() {
+                    public void onClick(View v) { carCloseUp = closeUp; again(); }
+                });
+                if (closeUp == carCloseUp)
+                    b.setTypeface(Typeface.DEFAULT_BOLD);
+                modes.addView(b);
+            }
+            page.addView(modes);
+            TextView about = Ui.text(this, carCloseUp ? LiveriesPage.CLOSE_UP_TIP + "." : LiveriesPage.DISTANT_TIP + ".", 13);
+            about.setTextColor(Color.GRAY);
+            page.addView(about);
+            if (row == 0)
+            {
+                TextView note = Ui.text(this, LiveriesPage.TEAM_ONE_NOTE, 13);
+                note.setTextColor(0xFF8A5A00);
+                page.addView(note);
+            }
+            if (carCloseUp)
+            {
+                closeUpPicture(p, row);
+                return;
+            }
+        }
         final LiveryView view = new LiveryView(this, p, screen.sprites(), new LiveryView.Tapped() {
-            public void part(int part) { chooseColour(tab, row, part); }
+            public void part(int part) { liveryPart[tab] = part; again(); }
         });
         view.show(tab, row, liveryPosition[tab]);
         page.addView(view);
@@ -638,7 +732,60 @@ public class ExecutableActivity extends Activity
             }
             page.addView(step);
         }
-        TextView hint = Ui.text(this, "Tap part of the picture to change its colour.", 13);
+        TextView hint = Ui.text(this, "Tap part of the picture to select it, then a colour below.", 13);
+        hint.setTextColor(Color.GRAY);
+        page.addView(hint);
+    }
+
+    /** The close-up car with Turn and Tilt bars and the usual views. */
+    private void closeUpPicture(final LiveriesPage p, final int row)
+    {
+        final int tab = LiveriesPage.CARS;
+        final LiveryView view = new LiveryView(this, p, screen.sprites(), new LiveryView.Tapped() {
+            public void part(int part) { liveryPart[tab] = part; again(); }
+        });
+        view.showCloseUp(row, screen.closeUp(row, closeUpHeading, closeUpTilt));
+        page.addView(view);
+        final android.widget.SeekBar[] bars = new android.widget.SeekBar[2];
+        for (int i = 0; i < 2; i++)
+        {
+            final boolean turning = i == 0;
+            LinearLayout line = new LinearLayout(this);
+            line.setGravity(Gravity.CENTER_VERTICAL);
+            line.addView(Ui.text(this, (turning ? LiveriesPage.TURN : LiveriesPage.TILT) + "  ", 14));
+            android.widget.SeekBar bar = new android.widget.SeekBar(this);
+            bar.setMax(turning ? LiveriesPage.HEADINGS - 1 : LiveriesPage.MAX_TILT);
+            bar.setProgress(turning ? closeUpHeading : closeUpTilt);
+            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                public void onProgressChanged(android.widget.SeekBar s, int v, boolean user)
+                {
+                    if (turning)
+                        closeUpHeading = v;
+                    else
+                        closeUpTilt = v;
+                    view.showCloseUp(row, screen.closeUp(row, closeUpHeading, closeUpTilt));
+                }
+                public void onStartTrackingTouch(android.widget.SeekBar s) { }
+                public void onStopTrackingTouch(android.widget.SeekBar s) { }
+            });
+            bars[i] = bar;
+            line.addView(bar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+            page.addView(line);
+        }
+        LinearLayout views = new LinearLayout(this);
+        for (int i = 0; i < LiveriesPage.CLOSE_UP_VIEWS.length; i++)
+        {
+            final int which = i;
+            views.addView(Ui.button(this, LiveriesPage.CLOSE_UP_VIEWS[i], new View.OnClickListener() {
+                public void onClick(View v)
+                {
+                    bars[0].setProgress(LiveriesPage.closeUpHeading(which));
+                    bars[1].setProgress(LiveriesPage.closeUpTilt(which));
+                }
+            }));
+        }
+        page.addView(views);
+        TextView hint = Ui.text(this, "Tap part of the picture to select it, then a colour below.", 13);
         hint.setTextColor(Color.GRAY);
         page.addView(hint);
     }
@@ -681,17 +828,25 @@ public class ExecutableActivity extends Activity
             .show();
     }
 
-    /** Touch and hold a part: Copy Colour, or Paste Colour (Hrvoje, 2026-11-16). */
+    /** The large chooser with its notes, from the menu of a held part. */
+    private static final String CHOOSE_COLOUR = "Choose Colour...";
+
+    /** Touch and hold a part: Copy Colour, Paste Colour (Hrvoje, 2026-11-16), or the large chooser. */
     private void colourMenu(final int tab, final int row, final int part)
     {
         liveryPart[tab] = part;
         final String[] list = screen.copiedColour() >= 0
-            ? new String[] { LiveriesPage.COPY_COLOUR, LiveriesPage.PASTE_COLOUR + " (colour " + screen.copiedColour() + ")" }
-            : new String[] { LiveriesPage.COPY_COLOUR };
+            ? new String[] { LiveriesPage.COPY_COLOUR, LiveriesPage.PASTE_COLOUR + " (colour " + screen.copiedColour() + ")", CHOOSE_COLOUR }
+            : new String[] { LiveriesPage.COPY_COLOUR, CHOOSE_COLOUR };
         new AlertDialog.Builder(this).setTitle(screen.liveries().chooserTitle(tab, row, part))
             .setItems(list, new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which)
                 {
+                    if (list[which].equals(CHOOSE_COLOUR))
+                    {
+                        chooseColour(tab, row, part);
+                        return;
+                    }
                     if (which == 0)
                         screen.copyColour(tab, row, part);
                     else
@@ -1006,7 +1161,7 @@ public class ExecutableActivity extends Activity
     {
         if (!screen.isModified())
         {
-            super.onBackPressed();
+            leave();
             return;
         }
         new AlertDialog.Builder(this).setTitle("Unsaved Changes")
@@ -1014,10 +1169,35 @@ public class ExecutableActivity extends Activity
             .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which)
                 {
-                    save(new Runnable() { public void run() { finish(); } });
+                    save(new Runnable() { public void run() { leave(); } });
                 }
             })
             .setNeutralButton("Don't Save", new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { finish(); }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    /** Closes, unless names shown with Save Names into the Executable off would be lost (2026-11-22). */
+    private void leave()
+    {
+        if (!screen.namesOnlyShown())
+        {
+            finish();
+            return;
+        }
+        final String write = "Write Them into GP.EXE", without = "Close Without Them";
+        cfevolution.edit.Message m = cfevolution.edit.ExecutableEdits.namesNotInExe(write, without, "Cancel");
+        new AlertDialog.Builder(this).setTitle(m.title).setMessage(m.text)
+            .setPositiveButton(write, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    screen.setSaveNames(true);
+                    save(new Runnable() { public void run() { finish(); } });
+                }
+            })
+            .setNeutralButton(without, new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which) { finish(); }
             })
             .setNegativeButton("Cancel", null)

@@ -70,6 +70,12 @@ public class GameSprites
             this.slots = slots;
         }
 
+        /** A picture made elsewhere, such as a drawing of the 3D car ({@link CarModel}). */
+        public static Sprite of(int width, int height, byte[] slots)
+        {
+            return new Sprite(width, height, slots);
+        }
+
         public int slotAt(int x, int y)
         {
             if (x < 0 || y < 0 || x >= width || y >= height)

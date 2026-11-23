@@ -62,8 +62,9 @@ class LiveryView extends View
 
     void show(int tab, int row, int position)
     {
-        if (tab != this.tab || box == null)
+        if (tab != this.tab || box == null || closeUpShown)
             box = LiveriesPage.box(tab, sprites);
+        closeUpShown = false;
         this.tab = tab;
         this.row = row;
         this.position = position;
@@ -75,6 +76,28 @@ class LiveryView extends View
         invalidate();
     }
 
+    /** A picture made elsewhere: the close-up car, in a box of its own (Hrvoje, 2026-11-21). */
+    void showCloseUp(int row, GameSprites.Sprite closeUp)
+    {
+        box = LiveriesPage.closeUpBox();
+        tab = LiveriesPage.CARS;
+        this.row = row;
+        closeUpShown = true;
+        sprite = closeUp;
+        bitmap = sprite == null ? null
+            : Bitmap.createBitmap(page.pixels(tab, row, sprite, false), sprite.width, sprite.height, Bitmap.Config.ARGB_8888);
+        requestLayout();
+        invalidate();
+    }
+
+    private boolean closeUpShown;
+
+    /** The most the picture is enlarged: twice the desktop's for the game's pictures, three times for the close-up car. */
+    private int maxScale()
+    {
+        return closeUpShown ? 3 : LiveriesPage.scale(tab) * 2;
+    }
+
     /**
      * Square pixels, as large as fits the width, at most twice the desktop's
      * enlargement. (2026-11-18: the box started as 1 x 1 and was worked out
@@ -84,7 +107,7 @@ class LiveryView extends View
     private int scale()
     {
         int across = getWidth() > 0 ? getWidth() : getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
-        return Math.max(1, Math.min(LiveriesPage.scale(tab) * 2, (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
+        return Math.max(1, Math.min(maxScale(), (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
     }
 
     protected void onMeasure(int w, int h)
@@ -92,7 +115,7 @@ class LiveryView extends View
         int across = MeasureSpec.getSize(w);
         if (across == 0)
             across = getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
-        int s = Math.max(1, Math.min(LiveriesPage.scale(tab) * 2, (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
+        int s = Math.max(1, Math.min(maxScale(), (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
         setMeasuredDimension(across, box[1] * s + Ui.dp(getContext(), 24));
     }
 
@@ -114,7 +137,7 @@ class LiveryView extends View
             int s = scale();
             int left = (getWidth() - sprite.width * s) / 2, top = (getHeight() - sprite.height * s) / 2;
             int x = (int) Math.floor((e.getX() - left) / s), y = (int) Math.floor((e.getY() - top) / s);
-            int part = LiveriesPage.partAt(tab, sprite, LiveriesPage.mirroredAt(tab, position), x, y);
+            int part = LiveriesPage.partAt(tab, sprite, !closeUpShown && LiveriesPage.mirroredAt(tab, position), x, y);
             if (part >= 0)
                 tapped.part(part);
         }

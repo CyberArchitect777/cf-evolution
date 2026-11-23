@@ -42,6 +42,7 @@ public class Executable
     private GameDrivers gameDrivers;
     private GameTeams gameTeams;
     private GameLiveries gameLiveries;
+    private CarModel carModel;
     private GameTables gameTables;
     
     /** Creates a new instance of Executable */
@@ -185,6 +186,12 @@ public class Executable
         return gameLiveries;
     }
 
+    /** The game's 3D car (read only), or null if it could not be read. */
+    public CarModel getCarModel()
+    {
+        return carModel;
+    }
+
     public GameTables getGameTables()
     {
         return gameTables;
@@ -196,6 +203,12 @@ public class Executable
         // Code True - Success, False - Failure
         
         String filePath = gameFile.getPath();
+        String[][] shown = null;
+        if (!saveNames && namesInFile != null)
+        {
+            shown = names();        // the executable keeps its own names; those shown stay in the editor
+            putNames(namesInFile);
+        }
         try
         {
             RandomAccessFile binaryAccess = new RandomAccessFile(filePath, "rw");
@@ -210,6 +223,8 @@ public class Executable
             binaryAccess.close();
             if (operationSuccess == 0)
             {
+                namesInFile = names();
+                lineUpInFile = lineUp();
                 return true;
             }
             else
@@ -222,9 +237,84 @@ public class Executable
             exceptionError.printStackTrace();
             return false;
         }            
-        
+        finally
+        {
+            if (shown != null)
+                putNames(shown);
+        }
     }
-    
+
+    // --- Save Names into the Executable (Hrvoje, 2026-11-16/21) -----------
+
+    private boolean saveNames = true;
+    /** The driver, team and engine names in the file as last loaded or saved. */
+    private String[][] namesInFile;
+
+    /** Whether saving writes the names shown into the executable (on unless the user turns it off). */
+    public boolean getSaveNames()
+    {
+        return saveNames;
+    }
+
+    /** Off: saving leaves the executable's own names as they are, whatever names the editor shows (e.g. from a name file). */
+    public void setSaveNames(boolean saveNames)
+    {
+        this.saveNames = saveNames;
+    }
+
+    /** True when the names shown differ from those in the file (as loaded or last saved): with
+        Save Names into the Executable off, they are only in the editor until written or kept in a name file. */
+    public boolean namesNotInFile()
+    {
+        return namesInFile != null && !java.util.Arrays.deepEquals(names(), namesInFile);
+    }
+
+    // --- The line-ups as in the file, for the 26-car rule on saving (2026-11-22) ---
+
+    private int[] lineUpInFile;
+
+    /** True when a team's line-up differs from the file as loaded or last saved. */
+    public boolean lineUpChanged()
+    {
+        return lineUpInFile != null && !java.util.Arrays.equals(lineUp(), lineUpInFile);
+    }
+
+    private int[] lineUp()
+    {
+        int teams = gameTeams.getAllTeamNames().size();
+        int[] l = new int[teams * 2];
+        for (int t = 0; t < teams; t++)
+            for (int s = 0; s < 2; s++)
+                l[2 * t + s] = gameTeams.getTeamCar(t, s);
+        return l;
+    }
+
+    /** {drivers, teams, engines} as shown now. */
+    private String[][] names()
+    {
+        int teams = gameTeams.getAllTeamNames().size();
+        String[][] n = { new String[gameDrivers.getAllDriverNames().size()], new String[teams], new String[teams] };
+        for (int i = 0; i < n[0].length; i++)
+            n[0][i] = gameDrivers.getDriverName(i);
+        for (int i = 0; i < teams; i++)
+        {
+            n[1][i] = gameTeams.getTeamName(i);
+            n[2][i] = gameTeams.getEngineName(i);
+        }
+        return n;
+    }
+
+    private void putNames(String[][] n)
+    {
+        for (int i = 0; i < n[0].length; i++)
+            gameDrivers.setDriverName(i, n[0][i]);
+        for (int i = 0; i < n[1].length; i++)
+        {
+            gameTeams.setTeamName(i, n[1][i]);
+            gameTeams.setEngineName(i, n[2][i]);
+        }
+    }
+
     public int loadData()
     {
         // Loads an F1GP/WC executable file. Returns a code to indicate the completed loading status
@@ -254,7 +344,10 @@ public class Executable
                     operationSuccess = operationSuccess + gameTeams.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameLiveries.loadData(binaryAccess, gameVersion);
                     operationSuccess = operationSuccess + gameTables.loadData(binaryAccess, gameVersion);
+                    carModel = CarModel.read(binaryAccess, gameVersion);   // only for showing the liveries, so not needed to open
                     binaryAccess.close();
+                    namesInFile = names();
+                    lineUpInFile = lineUp();
                     if (operationSuccess == 0)
                     {
                         return 0;

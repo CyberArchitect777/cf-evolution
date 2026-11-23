@@ -42,6 +42,35 @@ public final class ExecutableEdits
 
     public static final String NOT_CHANGED = "Value Not Changed", LINE_UP_NOT_CHANGED = "Line-up Not Changed";
 
+    /** The cars in the first 18 teams, the ones the game races. */
+    public static int enteredCars(GameTeams teams)
+    {
+        int entered = 0;
+        for (int t = 0; t < RACED_TEAMS; t++)
+            for (int s = 0; s < 2; s++)
+                if (teams.getTeamCar(t, s) != 0)
+                    entered++;
+        return entered;
+    }
+
+    /**
+     * Asked before closing GP.EXE when Save Names into the Executable is off and
+     * the names shown are not the ones in GP.EXE (2026-11-22): they would be lost.
+     * The options are the platform's own, the first keeping the names.
+     */
+    public static Message namesNotInExe(String... options)
+    {
+        return Message.choose(Message.Kind.WARNING, "Names Not Saved",
+            "The driver, team or engine names shown here are not in GP.EXE, because Save Names into the "
+          + "Executable is off. They will be lost when GP.EXE is closed.", options);
+    }
+
+    /** On the Drivers and Teams pages, one setting for both (Hrvoje, 2026-11-16/21). */
+    public static final String SAVE_NAMES_INTO_EXE = "Save Names into the Executable";
+    public static final String SAVE_NAMES_INTO_EXE_TIP = "On: saving writes the driver, team and engine names shown here into GP.EXE. "
+        + "Off: GP.EXE keeps its own names, and names typed here or loaded from a name file are only shown in the editor "
+        + "(save them as a name file to keep them).";
+
     private ExecutableEdits()
     {
     }
@@ -154,7 +183,9 @@ public final class ExecutableEdits
     }
 
     /** Puts a car (1-40, or 0 for none) in a team's first (0) or second (1) seat,
-        if no other team has it and the first 18 teams still enter enough cars. */
+        if no other team has it. Since 2026-11-22 (Hrvoje, the owner) the first 18 teams
+        may fall below 26 cars while line-ups are rearranged: saving checks it
+        ({@link ExecutableSaving#save}), not each edit. */
     public static Message setTeamCar(GameTeams teams, int team, int slot, int car)
     {
         if (car < 0 || car == teams.getTeamCar(team, slot))
@@ -168,13 +199,8 @@ public final class ExecutableEdits
                 if (car != 0 && existing == car && !(t == team && s == slot))
                     return Message.warning(LINE_UP_NOT_CHANGED, "Car " + car + " already drives for "
                         + teams.getTeamName(t) + ". Take it out of that team first.");
-                if (t < RACED_TEAMS && existing != 0)
-                    entered++;
             }
         }
-        if (entered < MIN_ENTERED_CARS)
-            return Message.warning(LINE_UP_NOT_CHANGED, "The game needs at least " + MIN_ENTERED_CARS
-                + " cars in the first " + RACED_TEAMS + " teams to fill a race.");
         teams.setTeamCar(team, slot, car);
         return null;
     }

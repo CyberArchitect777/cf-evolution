@@ -40,7 +40,8 @@ public class LiveryPicture extends JComponent
         Color colour(int slot);
         /** The part name for a slot, or null if that colour cannot be edited here. */
         String part(int slot);
-        void clicked(int slot);
+        /** A click on a part: once selects it, twice opens the colour chooser. */
+        void clicked(int slot, int clicks);
     }
 
     private GameSprites.Sprite sprite;
@@ -62,7 +63,7 @@ public class LiveryPicture extends JComponent
             public void mouseClicked(MouseEvent e) {
                 int slot = slotAt(e.getPoint());
                 if (SwingUtilities.isLeftMouseButton(e) && slot >= 0 && LiveryPicture.this.colours.part(slot) != null)
-                    LiveryPicture.this.colours.clicked(slot);
+                    LiveryPicture.this.colours.clicked(slot, e.getClickCount());
             }
         });
         addMouseMotionListener(new MouseMotionAdapter() {
@@ -152,7 +153,7 @@ public class LiveryPicture extends JComponent
         if (slot < 0)
             return null;
         String part = colours.part(slot);
-        return part == null ? null : part + ": click to change";
+        return part == null ? null : part + ": click to select, then pick its colour (double-click for the chooser)";
     }
 
     protected void paintComponent(Graphics g)
@@ -161,8 +162,8 @@ public class LiveryPicture extends JComponent
             return;
         Point o = origin();
         int scale = scale();
-        Color[] set = new Color[16];
-        for (int s = 0; s < 16; s++)
+        Color[] set = new Color[32];   // 16-31: the close-up car's helmet (CarModel.HELMET_SLOTS)
+        for (int s = 0; s < set.length; s++)
             set[s] = colours.colour(s);
         for (int y = 0; y < sprite.height; y++)
             for (int x = 0; x < sprite.width; x++)

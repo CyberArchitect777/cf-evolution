@@ -401,6 +401,8 @@ public class MainGUI extends JFrame
             else if (choice != 1)
                 return false;
         }
+        if (!tab.readyToClose())
+            return false;
         tabs.remove(index);
         tabPane.removeTabAt(index);
         activeTabChanged();

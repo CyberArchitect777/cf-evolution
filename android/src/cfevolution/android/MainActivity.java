@@ -51,6 +51,7 @@ public class MainActivity extends Activity
     protected void onCreate(Bundle state)
     {
         super.onCreate(state);
+        CrashReport.install(this);
         Session.pictures();
         setTitle("CF Evolution");
         int pad = Ui.dp(this, 16);
@@ -73,6 +74,7 @@ public class MainActivity extends Activity
         ScrollView scroll = new ScrollView(this);
         scroll.addView(col);
         setContentView(scroll);
+        CrashReport.showLast(this);     // what stopped the app last time, if anything
     }
 
     protected void onResume()

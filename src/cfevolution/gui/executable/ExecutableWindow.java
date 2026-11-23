@@ -396,6 +396,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
     /** The Drivers and Teams tables, refreshed when names come in from a name file. */
     private final java.util.List<AbstractTableModel> nameModels = new java.util.ArrayList<AbstractTableModel>();
 
+    /** Save Names into the Executable, on the Drivers and Teams pages alike. */
+    private final java.util.List<JCheckBox> saveNamesBoxes = new java.util.ArrayList<JCheckBox>();
+
     /** A page's table with the name file buttons beneath it. */
     private JComponent withNameFileButtons(JComponent table, String page)
     {
@@ -411,11 +414,27 @@ public class ExecutableWindow extends JPanel implements EditorTab
         save.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { saveNamesToFile(); }
         });
+        final JCheckBox intoExe = new JCheckBox(cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE, currentExecutable.getSaveNames());
+        intoExe.setName("save-names-into-exe " + page);
+        intoExe.setToolTipText("<html><div style='width:320px'>" + cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE_TIP + "</div></html>");
+        saveNamesBoxes.add(intoExe);
+        intoExe.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                currentExecutable.setSaveNames(intoExe.isSelected());
+                for (JCheckBox b : saveNamesBoxes)      // the Drivers and Teams pages share it
+                    b.setSelected(intoExe.isSelected());
+                // ticked with names not yet in GP.EXE: saving now writes them, so there is something to save (2026-11-22)
+                if (intoExe.isSelected() && currentExecutable.namesNotInFile())
+                    setModified(true);
+            }
+        });
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
         buttons.add(load);
         buttons.add(Box.createHorizontalStrut(8));
         buttons.add(save);
+        buttons.add(Box.createHorizontalStrut(12));
+        buttons.add(intoExe);
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(table, BorderLayout.CENTER);
         panel.add(buttons, BorderLayout.SOUTH);
@@ -470,7 +489,10 @@ public class ExecutableWindow extends JPanel implements EditorTab
         ask.add(teams);
         ask.add(engines);
         ask.add(Box.createVerticalStrut(6));
-        ask.add(new JLabel("<html><font color='#6A7380'>They replace the names here. Save GP.EXE to keep them.</font></html>"));
+        ask.add(new JLabel(currentExecutable.getSaveNames()
+            ? "<html><font color='#6A7380'>They replace the names here. Save GP.EXE to keep them.</font></html>"
+            : "<html><font color='#6A7380'>They replace the names here. Save Names into the Executable is off, "
+              + "so GP.EXE keeps its own names when saved.</font></html>"));
         if (JOptionPane.showOptionDialog(this, ask, "Load Names", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, new String[] { "Load", "Cancel" }, "Load") != 0)
             return;
@@ -493,28 +515,28 @@ public class ExecutableWindow extends JPanel implements EditorTab
         repaint();                          // the Liveries page names its rows by team and driver
     }
 
-    /** Writes the names shown here (saved or not) to a name file. */
-    private void saveNamesToFile()
+    /** Writes the names shown here (saved or not) to a name file; true if it was written. */
+    private boolean saveNamesToFile()
     {
         JFileChooser chooser = new JFileChooser(nameFileFolder());
         chooser.setDialogTitle("Save Names as a Name File");
         chooser.setFileFilter(NAME_FILES);
         chooser.setSelectedFile(new File(chooser.getCurrentDirectory(), "NAMES.NAM"));
         if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
-            return;
+            return false;
         File f = chooser.getSelectedFile();
         String base = f.getName().replaceAll("(?i)\\.nam$", "");
         if (!base.matches("[A-Za-z0-9_-]{1,8}"))
         {
             JOptionPane.showMessageDialog(this, "The game only lists files whose names are 1 to 8 letters, digits, - or _. "
                 + "Choose a shorter name.", "Name File Not Saved", JOptionPane.WARNING_MESSAGE);
-            return;
+            return false;
         }
         f = new File(f.getParentFile(), base.toUpperCase() + ".NAM");
         if (f.exists() && JOptionPane.showOptionDialog(this, f.getName() + " already exists. Replace it?",
                 "Replace File", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
                 new String[] { "Replace", "Cancel" }, "Cancel") != 0)
-            return;
+            return false;
         cfevolution.data.gamefiles.NameFile names = new cfevolution.data.gamefiles.NameFile();
         for (int i = 0; i < cfevolution.data.gamefiles.NameFile.DRIVERS; i++)
             names.setDriver(i, currentExecutable.getGameDrivers().getDriverName(i));
@@ -526,11 +548,31 @@ public class ExecutableWindow extends JPanel implements EditorTab
         try
         {
             names.save(f);
+            return true;
         }
         catch (java.io.IOException ex)
         {
             JOptionPane.showMessageDialog(this, f.getName() + " could not be saved.", "Name File Not Saved",
                 JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+    }
+
+    /** Names shown with Save Names into the Executable off, not in GP.EXE: offer a name file before they are lost (2026-11-22). */
+    public boolean readyToClose()
+    {
+        if (currentExecutable.getSaveNames() || !currentExecutable.namesNotInFile())
+            return true;
+        while (true)
+        {
+            int choice = cfevolution.gui.MessageBoxes.choose(this, cfevolution.edit.ExecutableEdits.namesNotInExe(
+                "Save Names as a Name File...", "Close Without Them", "Cancel"));
+            if (choice == 1)
+                return true;
+            if (choice != 0)
+                return false;
+            if (saveNamesToFile())
+                return true;
         }
     }
 
@@ -663,7 +705,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 // the picture shows in the table (Hrvoje, 2026-11-16)
                 setBorder(focus || selected ? BorderFactory.createLineBorder(Color.BLACK, 2)
                                 : BorderFactory.createMatteBorder(2, 2, 2, 2, row % 2 == 0 ? Color.WHITE : new Color(0xF6F7F9)));
-                setToolTipText(parts[column - 1] + ": click to change");
+                setToolTipText(parts[column - 1] + ": click, then pick a colour beside the picture (double-click for the chooser)");
                 return this;
             }
         };
@@ -693,7 +735,8 @@ public class ExecutableWindow extends JPanel implements EditorTab
         };
         table.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent e) {
-                if (SwingUtilities.isLeftMouseButton(e) && table.columnAtPoint(e.getPoint()) > 0)
+                // once selects (the palette beside the picture then colours it), twice opens the chooser (Hrvoje, 2026-11-21)
+                if (SwingUtilities.isLeftMouseButton(e) && table.columnAtPoint(e.getPoint()) > 0 && e.getClickCount() >= 2)
                     choose.run();
             }
             public void mousePressed(java.awt.event.MouseEvent e) { colourMenu(e); }
@@ -750,9 +793,15 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     table.setAutoResizeMode(mode);
             }
         });
-        panel.add(tableScroll, BorderLayout.CENTER);
+        // the table and the picture with its palette, with a divider to give either more room
+        tableScroll.setPreferredSize(new Dimension(440, 200));     // the divider starts with the picture side at its own width
+        tableScroll.setMinimumSize(new Dimension(200, 100));
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, tableScroll, picturePanel(page, tab, table, model, choose, rows));
+        split.setResizeWeight(1);
+        split.setBorder(BorderFactory.createEmptyBorder());
+        split.setContinuousLayout(true);
+        panel.add(split, BorderLayout.CENTER);
         panel.add(rowOrder(page, tab, table, model, rows), BorderLayout.NORTH);
-        panel.add(picturePanel(page, tab, table, model, choose, rows), BorderLayout.EAST);
         JPanel south = new JPanel();
         south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
         south.add(copyPasteButtons(page, tab, table, model, rows));
@@ -967,17 +1016,14 @@ public class ExecutableWindow extends JPanel implements EditorTab
 
     /**
      * The game's own pictures in the colours of the selected row. Clicking a
-     * part selects its cell and opens the colour chooser, exactly as clicking
-     * the cell does.
+     * part selects its cell, as clicking the cell does; twice opens the
+     * colour chooser. The palette below colours the selected part.
      */
     private JComponent picturePanel(final LiveriesPage page, final int tab, final JTable table,
                                     final AbstractTableModel model, final Runnable choose, final LiveryRows rows)
     {
-        final JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(0xD5D9DF)),
-            BorderFactory.createEmptyBorder(10, 12, 10, 12)));
-        panel.setPreferredSize(new Dimension(360, 100));
+        final JPanel panel = new WidthTrackingPanel();
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
 
         final JLabel title = new JLabel(" ");
         title.setFont(title.getFont().deriveFont(Font.BOLD, 14f));
@@ -986,28 +1032,36 @@ public class ExecutableWindow extends JPanel implements EditorTab
         final LiveryPicture.Colours colours = new LiveryPicture.Colours() {
             int viewRow() { return Math.max(0, table.getSelectedRow()); }
             int row() { return rows.at(viewRow()); }
-            public Color colour(int slot) { return new java.awt.Color(page.liveries().getPaletteRgb(page.setColour(tab, row(), slot))); }
+            public Color colour(int slot) { return new java.awt.Color(page.liveries().getPaletteRgb(page.pictureColour(tab, row(), slot))); }
             public String part(int slot) {
                 int p = LiveriesPage.partOfSlot(tab, slot);
                 return p < 0 ? null : LiveriesPage.parts(tab)[p];
             }
-            public void clicked(int slot) {
+            public void clicked(int slot, int clicks) {
                 int p = LiveriesPage.partOfSlot(tab, slot);
                 if (p < 0)
                     return;
                 table.changeSelection(viewRow(), p + 1, false, false);
-                choose.run();
+                if (clicks >= 2)
+                    choose.run();
             }
         };
 
+        final java.util.List<Runnable> rowChanged = new java.util.ArrayList<Runnable>();
+        final JComponent palette = dockedPalette(page, tab, table, model, rows, rowChanged);
         final Runnable refresh = new Runnable() {
             public void run() {
                 title.setText(page.rowName(tab, rows.at(Math.max(0, table.getSelectedRow()))));
+                for (Runnable r : rowChanged)
+                    r.run();
                 for (LiveryPicture p : shown)
                     p.repaint();
             }
         };
         table.getSelectionModel().addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent e) { refresh.run(); }
+        });
+        table.getColumnModel().getSelectionModel().addListSelectionListener(new javax.swing.event.ListSelectionListener() {
             public void valueChanged(javax.swing.event.ListSelectionEvent e) { refresh.run(); }
         });
         model.addTableModelListener(new javax.swing.event.TableModelListener() {
@@ -1018,13 +1072,22 @@ public class ExecutableWindow extends JPanel implements EditorTab
             public void run() {
                 panel.removeAll();
                 shown.clear();
+                rowChanged.clear();
+                rowChanged.add(paletteRefresh(palette));
                 panel.add(title, BorderLayout.NORTH);
+                JComponent picture;
                 if (sprites == null)
-                    panel.add(missingPictures(panel), BorderLayout.CENTER);
+                    picture = missingPictures(panel);
+                else if (tab == LiveriesPage.CARS && currentExecutable.getCarModel() != null)
+                    picture = closeUpOrDistant(page, table, rows, colours, shown, rowChanged);
                 else if (LiveriesPage.turns(tab))
-                    panel.add(turningPicture(tab, colours, shown), BorderLayout.CENTER);
+                    picture = turningPicture(tab, colours, shown);
                 else
-                    panel.add(steppedPicture(tab, colours, shown), BorderLayout.CENTER);
+                    picture = steppedPicture(tab, colours, shown);
+                JPanel body = new JPanel(new BorderLayout(16, 0));       // the palette beside the picture
+                body.add(picture, BorderLayout.CENTER);
+                body.add(palette, BorderLayout.EAST);
+                panel.add(body, BorderLayout.CENTER);
                 refresh.run();
                 panel.revalidate();
                 panel.repaint();
@@ -1032,7 +1095,112 @@ public class ExecutableWindow extends JPanel implements EditorTab
         };
         spriteListeners.add(build);
         build.run();
-        return panel;
+        // the picture, its controls and the palette can be taller than the window: scroll them
+        final JScrollPane scroll = new JScrollPane(panel, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                                             ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, new Color(0xD5D9DF)));
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setPreferredSize(new Dimension(700, 100));
+        scroll.setMinimumSize(new Dimension(420, 100));
+        scroll.getViewport().setViewPosition(new Point(0, 0));
+        // opens at the top: the title and the picture first, whatever got the focus while it was laid out
+        scroll.addHierarchyListener(new java.awt.event.HierarchyListener() {
+            public void hierarchyChanged(java.awt.event.HierarchyEvent e) {
+                if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing())
+                    SwingUtilities.invokeLater(new Runnable() {
+                        public void run() { scroll.getViewport().setViewPosition(new Point(0, 0)); }
+                    });
+            }
+        });
+        return scroll;
+    }
+
+    /** A panel in a scroll pane that is as wide as the pane, so text in it wraps rather than widening it. */
+    private static final class WidthTrackingPanel extends JPanel implements Scrollable
+    {
+        WidthTrackingPanel() { super(new BorderLayout()); }
+        public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        public int getScrollableUnitIncrement(Rectangle r, int o, int d) { return 16; }
+        public int getScrollableBlockIncrement(Rectangle r, int o, int d) { return Math.max(16, r.height - 32); }
+        public boolean getScrollableTracksViewportWidth() { return true; }
+        public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    /** Re-runs the docked palette's refresh, which is kept on the palette itself. */
+    private static Runnable paletteRefresh(final JComponent palette)
+    {
+        return (Runnable) palette.getClientProperty("refresh");
+    }
+
+    /**
+     * The palette beside the picture (Hrvoje, 2026-11-21): the selected part's
+     * colour is framed; clicking a colour gives it to that part of every
+     * selected row. Below it, what the selected and the pointed-at colours are.
+     */
+    private JComponent dockedPalette(final LiveriesPage page, final int tab, final JTable table,
+                                     final AbstractTableModel model, final LiveryRows rows,
+                                     java.util.List<Runnable> rowChanged)
+    {
+        final JTextArea info = noteText(" ", new Color(0x3C4450));
+        info.setName("paletteInfo");
+        final int[] pointing = { -1 };
+        final Runnable[] describe = new Runnable[1];
+        final PaletteGrid grid = new PaletteGrid(page.liveries(), 17, new PaletteGrid.Listener() {
+            public void picked(int index) {
+                int c = table.getSelectedColumn();
+                int[] selected = table.getSelectedRows();
+                if (c < 1 || selected.length == 0)
+                {
+                    java.awt.Toolkit.getDefaultToolkit().beep();
+                    return;
+                }
+                int lead = table.getSelectionModel().getLeadSelectionIndex();
+                if (page.paint(tab, rows.at(selected), c - 1, index))
+                {
+                    model.fireTableDataChanged();
+                    for (int r : selected)
+                        table.getSelectionModel().addSelectionInterval(r, r);
+                    table.getColumnModel().getSelectionModel().setSelectionInterval(c, c);
+                    if (lead >= 0)
+                        table.getSelectionModel().addSelectionInterval(lead, lead);
+                }
+            }
+            public void pointing(int index) {
+                pointing[0] = index;
+                describe[0].run();
+            }
+        });
+        grid.setName("dockedPalette");
+        describe[0] = new Runnable() {
+            public void run() {
+                int c = table.getSelectedColumn(), r = table.getSelectedRow();
+                String selected = c < 1 || r < 0 ? "Select a part, in the table or the picture, then click a colour."
+                    : LiveriesPage.parts(tab)[c - 1] + ": " + LiveriesPage.about(page.get(tab, rows.at(r), c - 1));
+                info.setText(selected + (pointing[0] >= 0 ? "\nPointing at " + LiveriesPage.about(pointing[0]) : ""));
+            }
+        };
+        Runnable refresh = new Runnable() {
+            public void run() {
+                int c = table.getSelectedColumn(), r = table.getSelectedRow();
+                grid.setSelected(c < 1 || r < 0 ? -1 : page.get(tab, rows.at(r), c - 1));
+                describe[0].run();
+            }
+        };
+        JPanel box = new JPanel(new BorderLayout());
+        box.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
+        JPanel gridHolder = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        gridHolder.add(grid);
+        box.add(gridHolder, BorderLayout.NORTH);
+        box.add(info, BorderLayout.CENTER);
+        JPanel holder = new JPanel(new BorderLayout()) {
+            public Dimension getPreferredSize() {     // as wide as the grid, so the text under it wraps there
+                Dimension d = super.getPreferredSize();
+                return new Dimension(grid.getPreferredSize().width, d.height);
+            }
+        };
+        holder.add(box, BorderLayout.NORTH);
+        holder.putClientProperty("refresh", refresh);
+        return holder;
     }
 
     private static final Color PICTURE_BACKGROUND = new Color(0x9AA3AD);
@@ -1103,6 +1271,167 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JPanel holder = new JPanel(new BorderLayout());
         holder.add(pictureBox(stage, below), BorderLayout.NORTH);
         return holder;
+    }
+
+    /**
+     * The Cars tab's picture (Hrvoje, 2026-11-21): the close-up car, drawn
+     * from the game's 3D model so it can be turned and tilted and wears the
+     * driver's helmet, or the game's pictures for cars further away.
+     */
+    private JComponent closeUpOrDistant(final LiveriesPage page, final JTable table, final LiveryRows rows,
+                                        LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown,
+                                        java.util.List<Runnable> rowChanged)
+    {
+        final CardLayout cards = new CardLayout();
+        final JPanel views = new JPanel(cards);
+        views.add(closeUpPicture(page, table, rows, colours, shown, rowChanged), LiveriesPage.CLOSE_UP);
+        views.add(turningPicture(LiveriesPage.CARS, colours, shown), LiveriesPage.DISTANT);
+
+        JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        ButtonGroup group = new ButtonGroup();
+        for (final String mode : new String[] { LiveriesPage.CLOSE_UP, LiveriesPage.DISTANT })
+        {
+            JToggleButton b = new JToggleButton(mode, mode.equals(LiveriesPage.CLOSE_UP));
+            b.setName("livery " + mode);
+            b.setToolTipText(mode.equals(LiveriesPage.CLOSE_UP) ? LiveriesPage.CLOSE_UP_TIP : LiveriesPage.DISTANT_TIP);
+            b.setMargin(new Insets(2, 10, 2, 10));
+            b.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) { cards.show(views, mode); }
+            });
+            group.add(b);
+            modes.add(b);
+        }
+
+        // team slot 1's own car close up (a text area, which reads like a note and wraps)
+        final JTextArea note = noteText(LiveriesPage.TEAM_ONE_NOTE, new Color(0x8A5A00));
+        note.setName("teamOneNote");
+        rowChanged.add(new Runnable() {
+            public void run() { note.setVisible(rows.at(Math.max(0, table.getSelectedRow())) == 0); }
+        });
+
+        JPanel top = new JPanel(new BorderLayout());
+        top.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        top.add(modes, BorderLayout.NORTH);
+        top.add(note, BorderLayout.CENTER);
+        JPanel holder = new JPanel(new BorderLayout());
+        holder.add(top, BorderLayout.NORTH);
+        holder.add(views, BorderLayout.CENTER);
+        return holder;
+    }
+
+    /** The close-up car with Turn and Tilt sliders and the usual views. */
+    private JComponent closeUpPicture(final LiveriesPage page, final JTable table, final LiveryRows rows,
+                                      LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown,
+                                      java.util.List<Runnable> rowChanged)
+    {
+        final cfevolution.data.executable.CarModel model = currentExecutable.getCarModel();
+        final LiveryPicture picture = new LiveryPicture(1, colours);   // drawn at the size it is made
+        picture.setName("liveryCloseUp");
+        shown.add(picture);
+        int[] box = LiveriesPage.closeUpBox();
+        picture.setBox(box[0], box[1]);
+        int start = LiveriesPage.CLOSE_UP_START_VIEW;
+        final JSlider turn = new JSlider(0, LiveriesPage.HEADINGS - 1, LiveriesPage.closeUpHeading(start));
+        turn.setName("liveryCloseUpTurn");
+        final JSlider tilt = new JSlider(0, LiveriesPage.MAX_TILT, LiveriesPage.closeUpTilt(start));
+        tilt.setName("liveryCloseUpTilt");
+        final Runnable show = new Runnable() {
+            public void run() {
+                int team = rows.at(Math.max(0, table.getSelectedRow()));
+                picture.setSprite(LiveriesPage.closeUp(model, sprites, team, turn.getValue(), tilt.getValue()), false);
+            }
+        };
+        javax.swing.event.ChangeListener changed = new javax.swing.event.ChangeListener() {
+            public void stateChanged(javax.swing.event.ChangeEvent e) { show.run(); }
+        };
+        turn.addChangeListener(changed);
+        tilt.addChangeListener(changed);
+        rowChanged.add(show);
+        show.run();
+        picture.addMouseWheelListener(new java.awt.event.MouseWheelListener() {
+            public void mouseWheelMoved(java.awt.event.MouseWheelEvent e) {
+                int n = LiveriesPage.HEADINGS;
+                turn.setValue((turn.getValue() + e.getWheelRotation() + n) % n);
+            }
+        });
+        JPanel views = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        for (int i = 0; i < LiveriesPage.CLOSE_UP_VIEWS.length; i++)
+        {
+            final int view = i;
+            JButton b = new JButton(LiveriesPage.CLOSE_UP_VIEWS[i]);
+            b.setName("liveryCloseUpView " + LiveriesPage.CLOSE_UP_VIEWS[i]);
+            b.setMargin(new Insets(2, 8, 2, 8));
+            b.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    turn.setValue(LiveriesPage.closeUpHeading(view));
+                    tilt.setValue(LiveriesPage.closeUpTilt(view));
+                }
+            });
+            views.add(b);
+        }
+
+        JPanel stage = new JPanel(new BorderLayout());
+        stage.setBackground(PICTURE_BACKGROUND);
+        stage.setBorder(BorderFactory.createEmptyBorder(8, 4, 8, 4));
+        stage.add(picture, BorderLayout.CENTER);
+
+        JPanel sliders = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridy = 0;
+        c.anchor = GridBagConstraints.WEST;
+        c.gridx = 0;
+        sliders.add(sliderName(LiveriesPage.TURN), c);
+        c.gridx = 1;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        sliders.add(turn, c);
+        c.gridy = 1;
+        c.gridx = 0;
+        c.weightx = 0;
+        c.fill = GridBagConstraints.NONE;
+        sliders.add(sliderName(LiveriesPage.TILT), c);
+        c.gridx = 1;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        sliders.add(tilt, c);
+
+        JPanel below = new JPanel(new BorderLayout());
+        below.add(sliders, BorderLayout.NORTH);
+        JPanel under = new JPanel(new BorderLayout());
+        under.add(views, BorderLayout.NORTH);
+        under.add(noteText(LiveriesPage.PICTURE_HINT, new Color(0x6A7380)), BorderLayout.SOUTH);
+        below.add(under, BorderLayout.SOUTH);
+
+        JPanel holder = new JPanel(new BorderLayout());
+        holder.add(pictureBox(stage, below), BorderLayout.NORTH);
+        return holder;
+    }
+
+    /** Wrapped text that reads like a label (not a JLabel, which the 0.4.1 comparison reads). */
+    private static JTextArea noteText(String text, Color colour)
+    {
+        JTextArea note = new JTextArea(text);
+        ((javax.swing.text.DefaultCaret) note.getCaret()).setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);  // never scrolls its pane
+        note.setEditable(false);
+        note.setFocusable(false);
+        note.setLineWrap(true);
+        note.setWrapStyleWord(true);
+        note.setOpaque(false);
+        note.setFont(UIManager.getFont("Label.font"));
+        note.setForeground(colour);
+        note.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        return note;
+    }
+
+    /** A slider's name beside it: a plain label would add to what the 0.4.1 comparison reads, so a flat button. */
+    private static JComponent sliderName(String text)
+    {
+        JButton name = new JButton(text);
+        name.setFocusable(false);
+        name.setBorderPainted(false);
+        name.setContentAreaFilled(false);
+        name.setMargin(new Insets(0, 0, 0, 6));
+        return name;
     }
 
     private static JPanel pictureBox(JComponent stage, JComponent below)
