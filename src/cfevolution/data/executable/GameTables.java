@@ -71,6 +71,17 @@ public class GameTables
         /** Takes every value from another copy of the same table (Revert Page, 2026-11-23). */
         public void copyFrom(Table t) { data = t.data.clone(); }
         public int words() { return length / 2; }
+        /** Swaps two blocks of size bytes, block a and block b (a car's setup when a driver moves, 2026-11-23). */
+        public void swapBlocks(int a, int b, int size)
+        {
+            for (int i = 0; i < size; i++)
+            {
+                byte t = data[a * size + i];
+                data[a * size + i] = data[b * size + i];
+                data[b * size + i] = t;
+            }
+        }
+
     }
 
     private static Table ss(int ssOffset, int length) { return new Table(SS_BASE + ssOffset, length); }

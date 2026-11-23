@@ -32,9 +32,14 @@ import java.util.List;
 /**
  * Revert Page for GP.EXE (Hrvoje, 2026-11-15; the owner, 2026-11-23): one page,
  * or one Liveries tab, goes back to how it was when GP.EXE was opened, through
- * the same values the page edits; the other pages keep their changes. (When the
- * Drivers/Teams redesign links pages, e.g. team order and liveries, the linked
- * pages will have to be reverted together.)
+ * the same values the page edits; the other pages keep their changes.
+ *
+ * Drivers and teams moved to other numbers (LineUpMoves, 2026-11-23) carry values
+ * shown on other pages: helmets, Quick Race setups, car and pit crew colours, pit
+ * boxes, skills. So a page linked to them is put back with the moves undone and
+ * then made again: its values return to the drivers and teams they belonged to,
+ * wherever those are now. Reverting Drivers undoes the driver moves for good,
+ * reverting Teams the team moves.
  */
 public final class ExecutableRevert
 {
@@ -80,7 +85,18 @@ public final class ExecutableRevert
     }
 
     /** Puts one page's values (on Liveries, one tab's) back from old into exe. */
-    public static void page(Executable exe, Executable old, int page, int liveriesTab)
+    public static void page(final Executable exe, final Executable old, final int page, final int liveriesTab)
+    {
+        if (page == DRIVERS || page == TEAMS || page == LIVERIES || page == PIT_LANE || page == SETUPS)
+            LineUpMoves.withMovesUndone(exe, page != DRIVERS, page != TEAMS, new Runnable() {
+                public void run() { byPosition(exe, old, page, liveriesTab); }
+            });
+        else
+            byPosition(exe, old, page, liveriesTab);
+    }
+
+    /** The page's values back from old, position for position. */
+    private static void byPosition(Executable exe, Executable old, int page, int liveriesTab)
     {
         GameTables t = exe.getGameTables(), o = old.getGameTables();
         switch (page)
@@ -88,12 +104,8 @@ public final class ExecutableRevert
             case DRIVERS:
             {
                 GameDrivers d = exe.getGameDrivers(), od = old.getGameDrivers();
-                for (int i = 0; i < ExecutableEdits.DRIVERS; i++)
-                {
+                for (int i = 0; i < ExecutableEdits.DRIVERS; i++)      // skill is on the Teams page since 2026-11-23
                     d.setDriverName(i, od.getDriverName(i));
-                    d.setQualifyingGrip(i, od.getQualifyingGrip(i));
-                    d.setRaceGrip(i, od.getRaceGrip(i));
-                }
                 break;
             }
             case TEAMS:
@@ -106,6 +118,12 @@ public final class ExecutableRevert
                     m.setBHPSetting(i, om.getBHPSetting(i));
                     for (int s = 0; s < 2; s++)
                         m.setTeamCar(i, s, om.getTeamCar(i, s));
+                }
+                GameDrivers d = exe.getGameDrivers(), od = old.getGameDrivers();
+                for (int i = 0; i < ExecutableEdits.DRIVERS; i++)
+                {
+                    d.setQualifyingGrip(i, od.getQualifyingGrip(i));
+                    d.setRaceGrip(i, od.getRaceGrip(i));
                 }
                 break;
             }

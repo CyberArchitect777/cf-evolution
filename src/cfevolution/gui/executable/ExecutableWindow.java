@@ -202,6 +202,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         model.addTableModelListener(new javax.swing.event.TableModelListener() {
             public void tableChanged(javax.swing.event.TableModelEvent e) { setModified(true); }
         });
+        allModels.add(model);
         fitColumnOnDoubleClick(table);
         return table;
     }
@@ -312,34 +313,130 @@ public class ExecutableWindow extends JPanel implements EditorTab
     {
         final GameDrivers drivers = currentExecutable.getGameDrivers();
         AbstractTableModel model = new AbstractTableModel() {
-            private final String[] columns = { "No.", "Driver", "Qualifying skill", "Race skill" };
+            // Skill moved to the Teams page, by seat (Hrvoje, 2026-11-15; built 2026-11-23)
+            private final String[] columns = { "No.", "Driver" };
             public int getRowCount() { return 40; }
             public int getColumnCount() { return columns.length; }
             public String getColumnName(int c) { return columns[c]; }
             public Class<?> getColumnClass(int c) { return c == 1 ? String.class : Integer.class; }
             public boolean isCellEditable(int r, int c) { return c > 0; }
             public Object getValueAt(int r, int c) {
-                switch (c) {
-                    case 0: return r + 1;
-                    case 1: return drivers.getDriverName(r);
-                    // Stored as bytes; shown 0-255 rather than as negative numbers
-                    case 2: return drivers.getQualifyingGrip(r) & 0xFF;
-                    default: return drivers.getRaceGrip(r) & 0xFF;
-                }
+                return c == 0 ? (Object) (r + 1) : drivers.getDriverName(r);
             }
             public void setValueAt(Object v, int r, int c) {
-                cfevolution.edit.Message problem = c == 1
-                    ? cfevolution.edit.ExecutableEdits.setDriverName(drivers, r, String.valueOf(v))
-                    : cfevolution.edit.ExecutableEdits.setSkill(drivers, r, c == 3, String.valueOf(v));
+                cfevolution.edit.Message problem = cfevolution.edit.ExecutableEdits.setDriverName(drivers, r, String.valueOf(v));
                 if (problem != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, problem); return; }
                 fireTableCellUpdated(r, c);
             }
         };
-        JTable table = table(model, new int[] { 50, 0, 130, 110 });
+        JTable table = table(model, new int[] { 50, 0 });
         nameModels.add(model);
         return page("Drivers",
-            "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers: 1 is the game's best, and 0, which some editors use, is faster still.",
-            withNameFileButtons(new JScrollPane(table), "drivers"));
+            "Names for all 40 car numbers. Skill is on the Teams page, beside each seat.",
+            withNameFileButtons(new JScrollPane(table), "drivers", moveButtons(table, false)));
+    }
+
+    // --- Moving drivers and teams (Hrvoje, 2026-11-15; built 2026-11-23) ----
+
+    /** Every table's model, told when a move changes values on several pages at once. */
+    private final java.util.List<AbstractTableModel> allModels = new java.util.ArrayList<AbstractTableModel>();
+
+    /** Move Up, Move Down and Swap With... for the Drivers (teams false) or Teams page. */
+    private JComponent moveButtons(final JTable table, final boolean teams)
+    {
+        final String what = teams ? "team" : "driver";
+        JButton up = new JButton("Move Up"), down = new JButton("Move Down"), swap = new JButton("Swap With...");
+        up.setName("move-up " + what);
+        down.setName("move-down " + what);
+        swap.setName("swap " + what);
+        String tip = teams ? cfevolution.edit.LineUpMoves.TEAM_MOVES_TIP : cfevolution.edit.LineUpMoves.DRIVER_MOVES_TIP;
+        for (JButton b : new JButton[] { up, down, swap })
+            b.setToolTipText("<html><div style='width:320px'>" + tip + "</div></html>");
+        up.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { move(table, teams, -1); }
+        });
+        down.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { move(table, teams, 1); }
+        });
+        swap.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent e) { swapWith(table, teams); }
+        });
+        // as on the Pit Lane page: the moves wait for a row to be selected, and stop at either end
+        final JButton[] all = { up, down, swap };
+        final Runnable enable = new Runnable() {
+            public void run() {
+                int r = table.getSelectedRow(), last = table.getRowCount() - 1;
+                all[0].setEnabled(r > 0);
+                all[1].setEnabled(r >= 0 && r < last);
+                all[2].setEnabled(r >= 0);
+            }
+        };
+        table.getSelectionModel().addListSelectionListener(new javax.swing.event.ListSelectionListener() {
+            public void valueChanged(javax.swing.event.ListSelectionEvent e) { enable.run(); }
+        });
+        enable.run();
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        row.add(up);
+        row.add(Box.createHorizontalStrut(8));
+        row.add(down);
+        row.add(Box.createHorizontalStrut(8));
+        row.add(swap);
+        return row;
+    }
+
+    /** One step up (-1) or down (1); the selection follows the driver or team. */
+    private void move(JTable table, boolean teams, int step)
+    {
+        if (table.isEditing())
+            table.getCellEditor().stopCellEditing();
+        int r = table.getSelectedRow();
+        if (r < 0)
+        {
+            JOptionPane.showMessageDialog(this, "Select a " + (teams ? "team" : "driver") + " first.", "Nothing Moved",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        int to = teams ? cfevolution.edit.LineUpMoves.moveTeam(currentExecutable, r, step < 0)
+                       : cfevolution.edit.LineUpMoves.moveDriver(currentExecutable, r, step < 0);
+        if (to != r)
+            moved(table, to);
+    }
+
+    private void swapWith(JTable table, boolean teams)
+    {
+        if (table.isEditing())
+            table.getCellEditor().stopCellEditing();
+        int r = table.getSelectedRow();
+        if (r < 0)
+        {
+            JOptionPane.showMessageDialog(this, "Select a " + (teams ? "team" : "driver") + " first.", "Nothing Moved",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        String[] choices = teams ? cfevolution.edit.LineUpMoves.teamChoices(currentExecutable)
+                                 : cfevolution.edit.LineUpMoves.driverChoices(currentExecutable);
+        Object chosen = JOptionPane.showInputDialog(this, "Swap " + choices[r].trim() + " with:",
+            teams ? "Swap Teams" : "Swap Drivers", JOptionPane.QUESTION_MESSAGE, null, choices, choices[r]);
+        int other = java.util.Arrays.asList(choices).indexOf(chosen);
+        if (other < 0 || other == r)
+            return;
+        if (teams)
+            cfevolution.edit.LineUpMoves.swapTeams(currentExecutable, r, other);
+        else
+            cfevolution.edit.LineUpMoves.swapDrivers(currentExecutable, r, other);
+        moved(table, other);
+    }
+
+    /** After a move: every page shows the new values, and the moved row stays selected. */
+    private void moved(JTable table, int row)
+    {
+        for (AbstractTableModel m : allModels)
+            if (m.getRowCount() > 0)
+                m.fireTableRowsUpdated(0, m.getRowCount() - 1);
+        table.setRowSelectionInterval(row, row);
+        table.scrollRectToVisible(table.getCellRect(row, 0, true));
+        setModified(true);
     }
 
     // --- Teams ------------------------------------------------------------
@@ -356,20 +453,30 @@ public class ExecutableWindow extends JPanel implements EditorTab
     private JComponent teamsPage()
     {
         final GameTeams teams = currentExecutable.getGameTeams();
+        // Skill beside each seat (Hrvoje, 2026-11-15): it stays with the seat when its driver is changed
+        final int[] seatColumn = { 4, 7 };
         final AbstractTableModel model = new AbstractTableModel() {
-            private final String[] columns = { "No.", "Team", "Engine", "Engine power (BHP)", "First car", "Second car" };
+            private final String[] columns = { "No.", "Team", "Engine", "Engine power (BHP)",
+                "First car", "Qualifying skill", "Race skill", "Second car", "Qualifying skill", "Race skill" };
             public int getRowCount() { return 20; }
             public int getColumnCount() { return columns.length; }
             public String getColumnName(int c) { return columns[c]; }
-            public Class<?> getColumnClass(int c) { return c == 0 || c == 3 ? Integer.class : String.class; }
-            public boolean isCellEditable(int r, int c) { return c > 0; }
+            public Class<?> getColumnClass(int c) { return c == 0 || c == 3 || isSkill(c) ? Integer.class : String.class; }
+            private boolean isSkill(int c) { return c == 5 || c == 6 || c == 8 || c == 9; }
+            private int seat(int c) { return c < 7 ? 0 : 1; }
+            public boolean isCellEditable(int r, int c) {
+                return c > 0 && (!isSkill(c) || teams.getTeamCar(r, seat(c)) != 0);
+            }
             public Object getValueAt(int r, int c) {
                 switch (c) {
                     case 0: return r + 1;
                     case 1: return teams.getTeamName(r);
                     case 2: return teams.getEngineName(r);
                     case 3: return teams.getBHPSetting(r);
-                    default: return carLabel(teams.getTeamCar(r, c - 4));
+                    case 4: case 7: return carLabel(teams.getTeamCar(r, seat(c)));
+                    default:
+                        int skill = cfevolution.edit.LineUpMoves.seatSkill(currentExecutable, r, seat(c), c == 6 || c == 9);
+                        return skill < 0 ? (Object) "" : (Object) skill;
                 }
             }
             public void setValueAt(Object v, int r, int c) {
@@ -380,13 +487,19 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     problem = cfevolution.edit.ExecutableEdits.setEngineName(teams, r, String.valueOf(v));
                 else if (c == 3)
                     problem = cfevolution.edit.ExecutableEdits.setPower(teams, r, String.valueOf(v));
+                else if (isSkill(c))
+                    problem = cfevolution.edit.LineUpMoves.setSeatSkill(currentExecutable, r, seat(c), c == 6 || c == 9, String.valueOf(v));
                 else
-                    problem = cfevolution.edit.ExecutableEdits.setTeamCar(teams, r, c - 4, carNumberOf(v));
+                {
+                    if (placeDriver(r, seat(c), carNumberOf(v)))
+                        fireTableDataChanged();     // a swap or a move changes another row too
+                    return;
+                }
                 if (problem != null) { cfevolution.gui.MessageBoxes.show(ExecutableWindow.this, problem); return; }
                 fireTableCellUpdated(r, c);
             }
         };
-        JTable table = table(model, new int[] { 50, 0, 0, 140, 170, 170 });
+        JTable table = table(model, new int[] { 50, 0, 0, 140, 170, 110, 80, 170, 110, 80 });
         final JComboBox<String> cars = new JComboBox<String>();
         javax.swing.table.TableCellEditor carEditor = new DefaultCellEditor(cars) {
             public Component getTableCellEditorComponent(JTable t, Object value, boolean selected, int row, int column) {
@@ -397,14 +510,32 @@ public class ExecutableWindow extends JPanel implements EditorTab
                 return super.getTableCellEditorComponent(t, value, selected, row, column);
             }
         };
-        table.getColumnModel().getColumn(4).setCellEditor(carEditor);
-        table.getColumnModel().getColumn(5).setCellEditor(carEditor);
+        for (int c : seatColumn)
+            table.getColumnModel().getColumn(c).setCellEditor(carEditor);
         nameModels.add(model);
         return page("Teams",
-            "<html>Team and engine names, each team's engine power, and which cars drive for it. "
-          + "Power differences only show with \"1991 Levels\" opposition.<br>"
+            "<html>Team and engine names, each team's engine power, which cars drive for it and their skill. "
+          + "Lower skill numbers are faster drivers: 1 is the game's best, and 0 faster still.<br>"
+          + "Power differences only show with \"1991 Levels\" opposition. "
           + "The game races the first 18 teams. A new line-up takes effect when a new championship is started.</html>",
-            withNameFileButtons(new JScrollPane(table), "teams"));
+            withNameFileButtons(new JScrollPane(table), "teams", moveButtons(table, true)));
+    }
+
+    /** A car chosen for a seat: asks first when it drives in another seat (swap, move or cancel). */
+    private boolean placeDriver(int team, int seat, int car)
+    {
+        if (car < 0)
+            return false;
+        cfevolution.edit.Message question = cfevolution.edit.LineUpMoves.duplicateQuestion(currentExecutable, team, seat, car);
+        String how = cfevolution.edit.LineUpMoves.MOVE;
+        if (question != null)
+        {
+            int choice = cfevolution.gui.MessageBoxes.choose(this, question);
+            if (choice < 0 || choice >= question.options.length)
+                return false;
+            how = question.options[choice];
+        }
+        return cfevolution.edit.LineUpMoves.placeDriver(currentExecutable, team, seat, car, how);
     }
 
     // --- Names from and to a name file (Hrvoje, 2026-11-05) -----------------
@@ -416,7 +547,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
     private final java.util.List<JCheckBox> saveNamesBoxes = new java.util.ArrayList<JCheckBox>();
 
     /** A page's table with the name file buttons beneath it. */
-    private JComponent withNameFileButtons(JComponent table, String page)
+    private JComponent withNameFileButtons(JComponent table, String page, JComponent above)
     {
         JButton load = new JButton("Load Names from a Name File...");
         load.setName("load-names " + page);
@@ -452,6 +583,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         buttons.add(Box.createHorizontalStrut(12));
         buttons.add(intoExe);
         JPanel panel = new JPanel(new BorderLayout());
+        panel.add(above, BorderLayout.NORTH);
         panel.add(table, BorderLayout.CENTER);
         panel.add(buttons, BorderLayout.SOUTH);
         return panel;

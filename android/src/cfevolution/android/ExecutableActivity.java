@@ -268,73 +268,215 @@ public class ExecutableActivity extends Activity
         page.addView(tip);
     }
 
+    /** The driver or team selected on the Drivers or Teams page; a second tap edits it. */
+    private int selectedDriver = -1, selectedTeam = -1;
+
+    /** Move Up, Move Down and Swap With... for the Drivers or Teams page (2026-11-23). */
+    private void moveButtons(final boolean teams)
+    {
+        LinearLayout buttons = new LinearLayout(this);
+        buttons.addView(Ui.button(this, "Move Up", new View.OnClickListener() {
+            public void onClick(View v) { move(teams, true); }
+        }));
+        buttons.addView(Ui.button(this, "Move Down", new View.OnClickListener() {
+            public void onClick(View v) { move(teams, false); }
+        }));
+        buttons.addView(Ui.button(this, "Swap With...", new View.OnClickListener() {
+            public void onClick(View v) { swapWith(teams); }
+        }));
+        page.addView(buttons);
+        TextView tip = Ui.text(this, (teams ? cfevolution.edit.LineUpMoves.TEAM_MOVES_TIP : cfevolution.edit.LineUpMoves.DRIVER_MOVES_TIP)
+            + " Tap a " + (teams ? "team" : "driver") + " to select it, and tap it again to change it.", 13);
+        tip.setTextColor(Color.GRAY);
+        page.addView(tip);
+    }
+
+    private void move(boolean teams, boolean up)
+    {
+        int r = teams ? selectedTeam : selectedDriver;
+        if (r < 0)
+        {
+            Dialogs.show(this, Message.info("Nothing Moved", "Select a " + (teams ? "team" : "driver") + " first."), null);
+            return;
+        }
+        if (teams)
+            selectedTeam = screen.moveTeam(r, up);
+        else
+            selectedDriver = screen.moveDriver(r, up);
+        again();
+    }
+
+    private void swapWith(final boolean teams)
+    {
+        final int r = teams ? selectedTeam : selectedDriver;
+        if (r < 0)
+        {
+            Dialogs.show(this, Message.info("Nothing Moved", "Select a " + (teams ? "team" : "driver") + " first."), null);
+            return;
+        }
+        final String[] choices = teams ? screen.teamChoices() : screen.driverChoices();
+        new AlertDialog.Builder(this).setTitle("Swap " + choices[r].trim() + " with")
+            .setItems(choices, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which)
+                {
+                    if (teams) { screen.swapTeams(r, which); selectedTeam = which; }
+                    else { screen.swapDrivers(r, which); selectedDriver = which; }
+                    again();
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
     private void drivers()
     {
         saveNamesBox();
+        moveButtons(false);
         for (int i = 0; i < 40; i++)
         {
             final int car = i;
-            row((car + 1) + "  " + (screen.driverName(car).trim().length() > 0 ? screen.driverName(car) : "(no name)") + "    qualifying " + screen.skill(car, false)
-                + ", race " + screen.skill(car, true), new Runnable() {
+            TextView t = row((car + 1) + "  " + (screen.driverName(car).trim().length() > 0 ? screen.driverName(car) : "(no name)"), new Runnable() {
                 public void run()
                 {
-                    form("Car " + (car + 1), new String[] { "Driver", "Qualifying skill", "Race skill" },
-                        new String[] { screen.driverName(car), String.valueOf(screen.skill(car, false)), String.valueOf(screen.skill(car, true)) },
-                        new boolean[] { false, true, true }, new Apply() {
-                            public Message apply(String[] v)
-                            {
-                                Message m = screen.setDriverName(car, v[0]);
-                                if (m == null) m = screen.setSkill(car, false, v[1]);
-                                if (m == null) m = screen.setSkill(car, true, v[2]);
-                                return m;
-                            }
+                    if (selectedDriver != car)
+                    {
+                        selectedDriver = car;
+                        again();
+                        return;
+                    }
+                    form("Car " + (car + 1), new String[] { "Driver" }, new String[] { screen.driverName(car) },
+                        new boolean[] { false }, new Apply() {
+                            public Message apply(String[] v) { return screen.setDriverName(car, v[0]); }
                         });
                 }
             });
+            if (car == selectedDriver)
+                t.setBackgroundColor(Color.rgb(0xD0, 0xE4, 0xFF));
         }
     }
 
     // --- Teams --------------------------------------------------------------
 
+    private String seatText(int team, int seat)
+    {
+        int car = screen.teamCar(team, seat);
+        return screen.carLabel(car) + (car == 0 ? "" : " (" + screen.seatSkill(team, seat, false) + ", " + screen.seatSkill(team, seat, true) + ")");
+    }
+
     private void teams()
     {
         saveNamesBox();
+        moveButtons(true);
         for (int i = 0; i < 20; i++)
         {
             final int team = i;
-            row((team + 1) + "  " + screen.teamName(team) + " (" + screen.engineName(team) + ", " + screen.power(team)
-                + " BHP)\n     " + screen.carLabel(screen.teamCar(team, 0)) + "  /  " + screen.carLabel(screen.teamCar(team, 1)),
+            TextView t = row((team + 1) + "  " + screen.teamName(team) + " (" + screen.engineName(team) + ", " + screen.power(team)
+                + " BHP)\n     " + seatText(team, 0) + "  /  " + seatText(team, 1),
                 new Runnable() {
                     public void run()
                     {
-                        String[] cars = new String[41];             // as the desktop's list: None, then 1-40 with the driver
-                        for (int n = 0; n <= 40; n++)
-                            cars[n] = screen.carLabel(n);
-                        form("Team " + (team + 1), new String[] { "Team", "Engine", "Engine power (BHP)", "First car", "Second car" },
-                            new String[] { screen.teamName(team), screen.engineName(team), String.valueOf(screen.power(team)),
-                                           String.valueOf(screen.teamCar(team, 0)), String.valueOf(screen.teamCar(team, 1)) },
-                            new boolean[] { false, false, true, true, true }, new String[][] { null, null, null, cars, cars }, new Apply() {
-                                public Message apply(String[] v)
-                                {
-                                    Message m = screen.setTeamName(team, v[0]);
-                                    if (m == null) m = screen.setEngineName(team, v[1]);
-                                    if (m == null) m = screen.setPower(team, v[2]);
-                                    if (m == null) m = car(team, 0, v[3]);
-                                    if (m == null) m = car(team, 1, v[4]);
-                                    return m;
-                                }
-                            });
+                        if (selectedTeam != team)
+                        {
+                            selectedTeam = team;
+                            again();
+                            return;
+                        }
+                        editTeam(team);
                     }
                 });
+            if (team == selectedTeam)
+                t.setBackgroundColor(Color.rgb(0xD0, 0xE4, 0xFF));
         }
+        TextView note = Ui.text(this, "Skill is shown after each driver: qualifying, then race.", 13);
+        note.setTextColor(Color.GRAY);
+        page.addView(note);
     }
 
-    private Message car(int team, int seat, String typed)
+    private String skillText(int team, int seat, boolean race)
     {
-        int car = cfevolution.edit.ExecutableEdits.carNumber(typed);
-        if (car < 0)
-            return cfevolution.edit.ExecutableEdits.numberProblem("A car number", 0, 40);
-        return screen.setTeamCar(team, seat, car);
+        int skill = screen.seatSkill(team, seat, race);
+        return skill < 0 ? "" : String.valueOf(skill);
+    }
+
+    private void editTeam(final int team)
+    {
+        String[] cars = new String[41];             // as the desktop's list: None, then 1-40 with the driver
+        for (int n = 0; n <= 40; n++)
+            cars[n] = screen.carLabel(n);
+        form("Team " + (team + 1), new String[] { "Team", "Engine", "Engine power (BHP)",
+                "First car", "Qualifying skill", "Race skill", "Second car", "Qualifying skill", "Race skill" },
+            new String[] { screen.teamName(team), screen.engineName(team), String.valueOf(screen.power(team)),
+                           String.valueOf(screen.teamCar(team, 0)), skillText(team, 0, false), skillText(team, 0, true),
+                           String.valueOf(screen.teamCar(team, 1)), skillText(team, 1, false), skillText(team, 1, true) },
+            new boolean[] { false, false, true, true, true, true, true, true, true },
+            new String[][] { null, null, null, cars, null, null, cars, null, null }, new Apply() {
+                public Message apply(String[] v)
+                {
+                    Message m = screen.setTeamName(team, v[0]);
+                    if (m == null) m = screen.setEngineName(team, v[1]);
+                    if (m == null) m = screen.setPower(team, v[2]);
+                    if (m == null) m = skills(team, 0, v[4], v[5]);
+                    if (m == null) m = skills(team, 1, v[7], v[8]);
+                    if (m == null)
+                        seats(team, new int[] { Integer.parseInt(v[3]), Integer.parseInt(v[6]) }, 0);
+                    return m;
+                }
+            });
+    }
+
+    /** The skill typed beside a seat (before its driver changes: the seat keeps it). */
+    private Message skills(int team, int seat, String qualifying, String race)
+    {
+        if (screen.teamCar(team, seat) == 0)
+            return null;
+        Message m = qualifying.equals(skillText(team, seat, false)) ? null : screen.setSeatSkill(team, seat, false, qualifying);
+        if (m == null && !race.equals(skillText(team, seat, true)))
+            m = screen.setSeatSkill(team, seat, true, race);
+        return m;
+    }
+
+    /** The cars chosen for the seats, one at a time: one already in another seat is asked about first. */
+    private void seats(final int team, final int[] cars, final int seat)
+    {
+        if (seat >= cars.length)
+        {
+            again();
+            return;
+        }
+        final Message question = screen.seatQuestion(team, seat, cars[seat]);
+        if (question == null)
+        {
+            screen.placeDriver(team, seat, cars[seat], null);
+            seats(team, cars, seat + 1);
+            return;
+        }
+        final String[] how = { cfevolution.edit.LineUpMoves.CANCEL };
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle(question.title).setMessage(question.text).setCancelable(false);
+        DialogInterface.OnClickListener[] pick = new DialogInterface.OnClickListener[question.options.length];
+        for (int i = 0; i < pick.length; i++)
+        {
+            final String option = question.options[i];
+            pick[i] = new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface d, int which) { how[0] = option; }
+            };
+        }
+        b.setPositiveButton(question.options[0], pick[0]);
+        if (pick.length == 2)
+            b.setNegativeButton(question.options[1], pick[1]);
+        else
+        {
+            b.setNeutralButton(question.options[1], pick[1]);
+            b.setNegativeButton(question.options[2], pick[2]);
+        }
+        AlertDialog d = b.create();
+        d.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            public void onDismiss(DialogInterface di)
+            {
+                screen.placeDriver(team, seat, cars[seat], how[0]);
+                seats(team, cars, seat + 1);
+            }
+        });
+        d.show();
     }
 
     // --- Points -------------------------------------------------------------

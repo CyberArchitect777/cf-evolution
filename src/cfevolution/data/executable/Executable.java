@@ -269,6 +269,17 @@ public class Executable
         return namesInFile != null && !java.util.Arrays.deepEquals(names(), namesInFile);
     }
 
+    // --- Drivers and teams moved since opening (2026-11-23), for Revert Page ---
+
+    /** Each move made on the Drivers or Teams page since the file was opened, in order:
+        {0, a, b} two drivers swapped, {1, a, b} two teams swapped (cfevolution.edit.LineUpMoves). */
+    private final java.util.List<int[]> moves = new java.util.ArrayList<int[]>();
+
+    public java.util.List<int[]> getMoves()
+    {
+        return moves;
+    }
+
     // --- The line-ups as in the file, for the 26-car rule on saving (2026-11-22) ---
 
     private int[] lineUpInFile;

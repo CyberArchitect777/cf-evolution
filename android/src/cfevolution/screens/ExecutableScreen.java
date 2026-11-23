@@ -26,6 +26,7 @@ import cfevolution.data.executable.GameTables;
 import cfevolution.data.executable.GameTeams;
 import java.util.List;
 import cfevolution.edit.ExecutableEdits;
+import cfevolution.edit.LineUpMoves;
 import cfevolution.edit.ExecutableSaving;
 import cfevolution.edit.GameSettingsPage;
 import cfevolution.edit.LapRecordsPage;
@@ -56,8 +57,8 @@ public final class ExecutableScreen
 
     /** The page descriptions the desktop shows (plain text). */
     public static final String[] PAGE_TEXT = {
-        "Names and skill for all 40 car numbers. Lower skill numbers are faster drivers: 1 is the game's best, and 0, which some editors use, is faster still.",
-        "Team and engine names, each team's engine power, and which cars drive for it. Power differences only show with \"1991 Levels\" opposition. The game races the first 18 teams. A new line-up takes effect when a new championship is started.",
+        "Names for all 40 car numbers. Skill is on the Teams page, beside each seat.",
+        "Team and engine names, each team's engine power, which cars drive for it and their skill. Lower skill numbers are faster drivers: 1 is the game's best, and 0 faster still. Power differences only show with \"1991 Levels\" opposition. The game races the first 18 teams. A new line-up takes effect when a new championship is started.",
         "Championship points for each finishing position.",
         LiveriesPage.DESCRIPTION.replace("Click", "Tap"),
         GameSettingsPage.DESCRIPTION,
@@ -157,6 +158,58 @@ public final class ExecutableScreen
     public Message setEngineName(int team, String text) { return edited(ExecutableEdits.setEngineName(teams(), team, text)); }
     public Message setPower(int team, String text)      { return edited(ExecutableEdits.setPower(teams(), team, text)); }
     public Message setTeamCar(int team, int seat, int car) { return edited(ExecutableEdits.setTeamCar(teams(), team, seat, car)); }
+
+    // --- Moving drivers and teams, skill by seat (Hrvoje, 2026-11-15; built 2026-11-23) ---
+
+    /** A driver or team one place up or down; returns where it is now. */
+    public int moveDriver(int car, boolean up)
+    {
+        int to = LineUpMoves.moveDriver(exe, car, up);
+        if (to != car)
+            modified = true;
+        return to;
+    }
+
+    public int moveTeam(int team, boolean up)
+    {
+        int to = LineUpMoves.moveTeam(exe, team, up);
+        if (to != team)
+            modified = true;
+        return to;
+    }
+
+    public void swapDrivers(int a, int b)
+    {
+        if (a != b) { LineUpMoves.swapDrivers(exe, a, b); modified = true; }
+    }
+
+    public void swapTeams(int a, int b)
+    {
+        if (a != b) { LineUpMoves.swapTeams(exe, a, b); modified = true; }
+    }
+
+    public String[] driverChoices() { return LineUpMoves.driverChoices(exe); }
+    public String[] teamChoices()   { return LineUpMoves.teamChoices(exe); }
+
+    /** The skill beside a seat, or -1 when the seat is empty. */
+    public int seatSkill(int team, int seat, boolean race) { return LineUpMoves.seatSkill(exe, team, seat, race); }
+
+    public Message setSeatSkill(int team, int seat, boolean race, String text)
+    {
+        return edited(LineUpMoves.setSeatSkill(exe, team, seat, race, text));
+    }
+
+    /** Asked before a car that drives in another seat is put in this one; null if nothing to ask. */
+    public Message seatQuestion(int team, int seat, int car) { return LineUpMoves.duplicateQuestion(exe, team, seat, car); }
+
+    /** Puts a car in a seat; how is the option chosen from seatQuestion (or null when none was asked). */
+    public boolean placeDriver(int team, int seat, int car, String how)
+    {
+        boolean changed = LineUpMoves.placeDriver(exe, team, seat, car, how == null ? LineUpMoves.MOVE : how);
+        if (changed)
+            modified = true;
+        return changed;
+    }
 
     // --- Points -----------------------------------------------------------
 

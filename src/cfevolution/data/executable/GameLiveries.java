@@ -135,6 +135,23 @@ public class GameLiveries
         return pitCrewColours[team * 16 + slot] & 0xFF;
     }
 
+    /** Swaps two cars' whole colour sets, all 16 colours (moving a team, 2026-11-23). */
+    public void swapCars(int a, int b)      { swap16(carColours, a, b); }
+    /** Swaps two helmets' whole colour sets (moving a driver). */
+    public void swapHelmets(int a, int b)   { swap16(helmetColours, a, b); }
+    /** Swaps two pit crews' whole colour sets (moving a team). */
+    public void swapPitCrews(int a, int b)  { swap16(pitCrewColours, a, b); }
+
+    private static void swap16(byte[] sets, int a, int b)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            byte t = sets[a * 16 + i];
+            sets[a * 16 + i] = sets[b * 16 + i];
+            sets[b * 16 + i] = t;
+        }
+    }
+
     public int saveData(RandomAccessFile binaryAccess, int gameVersion)
     {
         BinaryManager.setDataBytes(gameVersion, binaryAccess, 184116, 184052, 184068, carColours);
