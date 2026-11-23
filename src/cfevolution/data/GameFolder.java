@@ -394,6 +394,29 @@ public class GameFolder
         return null;
     }
 
+    /**
+     * Every file the editor can change here, the same files keepOriginals
+     * copies: GP.EXE, the circuits, F1PREFS.DAT, the picture files,
+     * XSOUND.BIN and the saved files in GPSAVES (Revert Folder, 2026-11-23).
+     */
+    public List<File> changeableFiles()
+    {
+        List<File> files = new ArrayList<File>();
+        if (executable != null)
+            files.add(executable);
+        for (File track : tracks)
+            if (track != null)
+                files.add(track);
+        files.add(fileIgnoringCase(folder, "F1PREFS.DAT"));
+        for (String name : PICTURE_FILES)
+            files.add(fileIgnoringCase(folder, name));
+        files.add(fileIgnoringCase(folder, "XSOUND.BIN"));
+        for (SavedFile s : getSavedFiles())
+            files.add(s.file);
+        while (files.remove(null)) { }
+        return files;
+    }
+
     /** Why the folder cannot be opened, or null if it can. */
     public String getProblem()
     {

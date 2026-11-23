@@ -156,6 +156,22 @@ public class ExecutableWindow extends JPanel implements EditorTab
         top.add(heading, BorderLayout.NORTH);
         top.add(text, BorderLayout.CENTER);
         top.setBorder(BorderFactory.createEmptyBorder(14, 16, 10, 16));
+        // Revert Page (Hrvoje, the owner, 2026-11-23): this page, or the Liveries tab shown, back to when GP.EXE was opened
+        final int pageIndex = java.util.Arrays.asList(PAGES).indexOf(title);
+        if (pageIndex >= 0)
+        {
+            JButton revert = new JButton("Revert Page...");
+            revert.setName("revert-page " + title);
+            revert.setToolTipText(pageIndex == cfevolution.edit.ExecutableRevert.LIVERIES
+                ? "Puts the tab shown (cars, helmets or pit crews) back as it was when GP.EXE was opened"
+                : "Puts this page back as it was when GP.EXE was opened");
+            revert.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) { revertPage(pageIndex); }
+            });
+            JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+            right.add(revert);
+            top.add(right, BorderLayout.EAST);
+        }
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(top, BorderLayout.NORTH);
         JPanel body = new JPanel(new BorderLayout());
@@ -625,6 +641,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         JTabbedPane tabs = new JTabbedPane();
         for (int tab = 0; tab < LiveriesPage.TAB_TITLES.length; tab++)
             tabs.addTab(LiveriesPage.TAB_TITLES[tab], colourTable(page, tab));
+        liveriesTabs = tabs;
         return page(LiveriesPage.TITLE, LiveriesPage.DESCRIPTION, tabs);
     }
 
@@ -2341,6 +2358,38 @@ public class ExecutableWindow extends JPanel implements EditorTab
         }
         setModified(false);
         return true;
+    }
+
+    /** The Liveries page's tabs (cars, helmets, pit crews), for Revert Page. */
+    private JTabbedPane liveriesTabs;
+
+    /** Revert Page: asks, puts the page's values back as they were when GP.EXE was opened, and builds the tab
+        again around them (so every page shows the values), on the same page. */
+    private void revertPage(int pageIndex)
+    {
+        int tab = liveriesTabs == null ? 0 : liveriesTabs.getSelectedIndex();
+        Executable old = cfevolution.edit.ExecutableRevert.whenOpened(new File(fileName));
+        if (old == null)
+        {
+            JOptionPane.showMessageDialog(this, "How GP.EXE was when it was opened is not known, so this page cannot be reverted.",
+                "Not Reverted", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (cfevolution.gui.MessageBoxes.choose(this, cfevolution.edit.Revert.pageQuestion(
+                cfevolution.edit.ExecutableRevert.pageName(PAGES[pageIndex], pageIndex, tab))) != 0)
+            return;
+        cfevolution.edit.ExecutableRevert.page(currentExecutable, old, pageIndex, tab);
+        ExecutableWindow again = new ExecutableWindow(currentExecutable, fileName, appFrame);
+        again.pageList.setSelectedIndex(pageIndex);
+        if (again.liveriesTabs != null)
+            again.liveriesTabs.setSelectedIndex(tab);
+        // still a change from the file on disk, which may hold saves made since it was opened
+        again.modified = true;
+        if (appFrame != null)
+        {
+            appFrame.replaceTab(this, again);
+            appFrame.tabStateChanged(again);
+        }
     }
 
     public boolean saveAs()

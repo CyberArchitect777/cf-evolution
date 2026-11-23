@@ -115,7 +115,14 @@ public class GameWindow extends JPanel implements EditorTab
                         DatasetDialog.importDataset(GameWindow.this.mainWindow, game, new Runnable() { public void run() { fillRows(); } });
                     }
                 });
-                addWide(y++, buttons(exportData, importData), 6);
+                // Revert Folder (Hrvoje, the owner, 2026-11-23): every changed file back to when the folder was opened
+                JButton revertFolder = new JButton("Revert Folder...");
+                revertFolder.setName("revert-folder");
+                revertFolder.setToolTipText("Puts every file the editor has changed in this folder back as it was when the folder was opened");
+                revertFolder.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) { GameWindow.this.mainWindow.revertFolder(GameWindow.this); }
+                });
+                addWide(y++, buttons(exportData, importData, revertFolder), 6);
             }
             else if (row.label.equals(cfevolution.edit.GameFolderList.SAVED_HEADING))
             {
@@ -160,12 +167,15 @@ public class GameWindow extends JPanel implements EditorTab
             mainWindow.openGameFile(row.file, game);
     }
 
-    private static JPanel buttons(JButton a, JButton b)
+    private static JPanel buttons(JButton... all)
     {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        p.add(a);
-        p.add(Box.createHorizontalStrut(8));
-        p.add(b);
+        for (int i = 0; i < all.length; i++)
+        {
+            if (i > 0)
+                p.add(Box.createHorizontalStrut(8));
+            p.add(all[i]);
+        }
         return p;
     }
 

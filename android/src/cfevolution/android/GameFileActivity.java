@@ -107,6 +107,23 @@ public class GameFileActivity extends Activity
         col.addView(Ui.heading(this, page.title()));
         col.addView(hint(page.explanation()));
         col.addView(Ui.button(this, "Save", click(new Runnable() { public void run() { save(null); } })));
+        if (Session.gameFileUri == null && Session.folder != null)      // a name file from outside the folder has no Revert
+            col.addView(Ui.button(this, "Revert File", click(new Runnable() { public void run() {
+                Session.revertFile(GameFileActivity.this, file, new Runnable() {
+                    public void run()
+                    {
+                        Message[] problem = new Message[1];
+                        cfevolution.edit.GameFilePage again = Session.folder.openFile(file, problem);
+                        if (again == null)
+                        {
+                            finish();
+                            return;
+                        }
+                        Session.gameFile = again;
+                        recreate();
+                    }
+                });
+            } })));
         if (page instanceof NameFilePage)
             names((NameFilePage) page);
         else if (page instanceof SetupFilePage)

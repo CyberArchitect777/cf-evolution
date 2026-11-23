@@ -69,11 +69,33 @@ public final class ExecutableScreen
 
     /** The folder GP.EXE is in, where the game's pictures are. */
     private final File folder;
+    /** GP.EXE itself, for Revert File and Revert Page. */
+    public final File file;
 
-    ExecutableScreen(Executable exe, File folder)
+    ExecutableScreen(Executable exe, File file)
     {
         this.exe = exe;
-        this.folder = folder;
+        this.file = file;
+        this.folder = file.getAbsoluteFile().getParentFile();
+    }
+
+    // --- Revert Page (Hrvoje, the owner, 2026-11-23) --------------------------
+
+    /** The question for Revert Page on page n (on Liveries, the tab shown): the first option reverts. */
+    public Message revertPageQuestion(int n, int liveriesTab)
+    {
+        return cfevolution.edit.Revert.pageQuestion(cfevolution.edit.ExecutableRevert.pageName(PAGES[n], n, liveriesTab));
+    }
+
+    /** Puts page n (on Liveries, one tab) back as it was when GP.EXE was opened; the message when it cannot, else null. */
+    public Message revertPage(int n, int liveriesTab)
+    {
+        Executable old = cfevolution.edit.ExecutableRevert.whenOpened(file);
+        if (old == null)
+            return Message.warning("Not Reverted", "How GP.EXE was when it was opened is not known, so this page cannot be reverted.");
+        cfevolution.edit.ExecutableRevert.page(exe, old, n, liveriesTab);
+        modified = true;
+        return null;
     }
 
     public String title()

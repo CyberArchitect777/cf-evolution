@@ -118,6 +118,24 @@ public class TrackActivity extends Activity
 
         LinearLayout tools = new LinearLayout(this);
         tools.addView(Ui.button(this, "Save", click(new Runnable() { public void run() { save(null); } })));
+        tools.addView(Ui.button(this, "Revert File", click(new Runnable() { public void run() {
+            Session.revertFile(TrackActivity.this, screen.file, new Runnable() {
+                public void run()
+                {
+                    Message[] problem = new Message[1];
+                    TrackScreen t = TrackScreen.open(screen.file, problem);
+                    if (t == null)
+                    {
+                        finish();
+                        return;
+                    }
+                    t.circuit = screen.circuit;
+                    cfevolution.edit.Revert.opened(screen.file);
+                    Session.track = t;
+                    recreate();
+                }
+            });
+        } })));
         tools.addView(Ui.button(this, "Segments", click(new Runnable() { public void run() { segments(); } })));
         tools.addView(Ui.button(this, "Check Track", click(new Runnable() { public void run() { checkTrack(); } })));
         tools.addView(Ui.button(this, "Generate Best Line", click(new Runnable() { public void run() { bestLine(); } })));

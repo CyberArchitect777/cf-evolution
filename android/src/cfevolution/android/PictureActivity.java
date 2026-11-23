@@ -93,6 +93,23 @@ public class PictureActivity extends Activity
         col.addView(across);
         LinearLayout buttons = new LinearLayout(this);
         buttons.addView(Ui.button(this, "Save", click(new Runnable() { public void run() { save(null); } })));
+        if (Session.folder != null)
+            buttons.addView(Ui.button(this, "Revert File", click(new Runnable() { public void run() {
+                Session.revertFile(PictureActivity.this, file, new Runnable() {
+                    public void run()
+                    {
+                        Message[] problem = new Message[1];
+                        cfevolution.edit.PictureFilePage again = Session.folder.openPictures(file, problem);
+                        if (again == null)
+                        {
+                            finish();
+                            return;
+                        }
+                        Session.pictureFile = again;
+                        recreate();
+                    }
+                });
+            } })));
         buttons.addView(Ui.button(this, PictureFilePage.EXPORT.replace("...", ""), click(new Runnable() {
             public void run() { Documents.create(PictureActivity.this, EXPORT, page.exportName(picture)); }
         })));

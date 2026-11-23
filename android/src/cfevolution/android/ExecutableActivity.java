@@ -83,6 +83,9 @@ public class ExecutableActivity extends Activity
         tabs.addView(Ui.button(this, "Save", new View.OnClickListener() {
             public void onClick(View v) { save(null); }
         }));
+        tabs.addView(Ui.button(this, "Revert File", new View.OnClickListener() {
+            public void onClick(View v) { revertFile(); }
+        }));
         HorizontalScrollView bar = new HorizontalScrollView(this);
         bar.addView(tabs);
         col.addView(bar);
@@ -141,6 +144,45 @@ public class ExecutableActivity extends Activity
             tables(screen.opposition());
         else
             pitLane();
+        // Revert Page (Hrvoje, the owner, 2026-11-23): this page, or the Liveries tab shown
+        Button revert = Ui.button(this, "Revert This Page", new View.OnClickListener() {
+            public void onClick(View v) { revertPage(); }
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = Ui.dp(this, 20);
+        page.addView(revert, lp);
+    }
+
+    private void revertPage()
+    {
+        final int n = current, tab = liveryTab;
+        Session.choose(this, screen.revertPageQuestion(n, tab), new Runnable() {
+            public void run()
+            {
+                Message m = screen.revertPage(n, tab);
+                again();
+                if (m != null)
+                    Dialogs.show(ExecutableActivity.this, m, null);
+            }
+        });
+    }
+
+    private void revertFile()
+    {
+        Session.revertFile(this, screen.file, new Runnable() {
+            public void run()
+            {
+                Message[] problem = new Message[1];
+                ExecutableScreen e = Session.folder == null ? null : Session.folder.openExecutable(problem);
+                if (e == null)
+                {
+                    finish();
+                    return;
+                }
+                Session.executable = e;
+                recreate();
+            }
+        });
     }
 
     private void again()

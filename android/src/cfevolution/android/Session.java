@@ -100,6 +100,32 @@ final class Session
     }
 
     /** Writes the changed files back to the game folder; then runs after (may be null), or says they were not written. */
+    /** A question whose first option goes ahead (the second cancels). */
+    static void choose(Activity a, Message q, final Runnable first)
+    {
+        new android.app.AlertDialog.Builder(a).setTitle(q.title).setMessage(q.text)
+            .setPositiveButton(q.options[0], new android.content.DialogInterface.OnClickListener() {
+                public void onClick(android.content.DialogInterface d, int w) { first.run(); }
+            })
+            .setNegativeButton(q.options[1], null).show();
+    }
+
+    /** Revert File (2026-11-23): asks, puts the file back as it was when opened, writes that to the game
+        folder, then opens it again (reopen). */
+    static void revertFile(final Activity a, final java.io.File f, final Runnable reopen)
+    {
+        choose(a, cfevolution.edit.Revert.fileQuestion(f), new Runnable() {
+            public void run()
+            {
+                Message failed = cfevolution.edit.Revert.revertFile(f);
+                if (failed != null)
+                    Dialogs.show(a, failed, null);
+                else
+                    writeBack(a, reopen);
+            }
+        });
+    }
+
     static void writeBack(final Activity a, final Runnable after)
     {
         if (mirror == null)

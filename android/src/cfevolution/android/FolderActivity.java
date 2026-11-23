@@ -60,6 +60,32 @@ public class FolderActivity extends Activity
             fill();
     }
 
+    /** Revert Folder (Hrvoje, the owner, 2026-11-23): every file changed since the folder was opened goes back. */
+    private void revertFolder()
+    {
+        final cfevolution.data.GameFolder game = Session.folder.game;
+        java.util.List<java.io.File> changed = cfevolution.edit.Revert.folderChanges(game);
+        if (changed.isEmpty())
+        {
+            Dialogs.show(this, cfevolution.edit.Revert.NOTHING_TO_REVERT, null);
+            return;
+        }
+        Session.choose(this, cfevolution.edit.Revert.folderQuestion(game, changed), new Runnable() {
+            public void run()
+            {
+                final Message failed = cfevolution.edit.Revert.revertFolder(game);
+                Session.writeBack(FolderActivity.this, new Runnable() {
+                    public void run()
+                    {
+                        fill();
+                        if (failed != null)
+                            Dialogs.show(FolderActivity.this, failed, null);
+                    }
+                });
+            }
+        });
+    }
+
     private void fill()
     {
         LinearLayout col = list;
@@ -88,6 +114,9 @@ public class FolderActivity extends Activity
                     }));
                     col.addView(Ui.button(this, cfevolution.edit.DatasetImport.TITLE, new View.OnClickListener() {
                         public void onClick(View v) { Documents.open(FolderActivity.this, IMPORT_DATASET); }
+                    }));
+                    col.addView(Ui.button(this, "Revert Folder", new View.OnClickListener() {
+                        public void onClick(View v) { revertFolder(); }
                     }));
                 }
                 if (row.label.equals(cfevolution.edit.GameFolderList.SAVED_HEADING))

@@ -68,6 +68,8 @@ public class GameTables
         public int getByte(int i) { return data[i] & 0xFF; }
         public void setByte(int i, int v) { data[i] = (byte) v; }
         public int originalByte(int i) { return original[i] & 0xFF; }
+        /** Takes every value from another copy of the same table (Revert Page, 2026-11-23). */
+        public void copyFrom(Table t) { data = t.data.clone(); }
         public int words() { return length / 2; }
     }
 

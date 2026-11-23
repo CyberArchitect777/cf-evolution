@@ -65,10 +65,12 @@ public final class FolderScreen
     {
         try
         {
-            if (cfevolution.data.gamefiles.SoundEffectsFile.isSoundEffects(file))
-                return new cfevolution.edit.SoundEffectsPage(cfevolution.data.gamefiles.SoundEffectsFile.load(file),
-                                                             java.nio.file.Files.readAllBytes(file.toPath()));
-            return GameFilePage.open(file, game);
+            GameFilePage page = cfevolution.data.gamefiles.SoundEffectsFile.isSoundEffects(file)
+                ? new cfevolution.edit.SoundEffectsPage(cfevolution.data.gamefiles.SoundEffectsFile.load(file),
+                                                        java.nio.file.Files.readAllBytes(file.toPath()))
+                : GameFilePage.open(file, game);
+            cfevolution.edit.Revert.opened(file);       // for Revert File (2026-11-23)
+            return page;
         }
         catch (java.io.IOException e)
         {
@@ -113,8 +115,10 @@ public final class FolderScreen
     {
         try
         {
-            return new cfevolution.edit.PictureFilePage(cfevolution.data.gamefiles.MediaContainer.load(file),
-                                                         cfevolution.data.gamefiles.MediaContainer.load(file), file, game);
+            cfevolution.edit.PictureFilePage page = new cfevolution.edit.PictureFilePage(
+                cfevolution.data.gamefiles.MediaContainer.load(file), cfevolution.data.gamefiles.MediaContainer.load(file), file, game);
+            cfevolution.edit.Revert.opened(file);
+            return page;
         }
         catch (IOException e)
         {
@@ -166,7 +170,8 @@ public final class FolderScreen
             problem[0] = m;
             return null;
         }
-        return new ExecutableScreen(exe, game.getExecutable().getAbsoluteFile().getParentFile());
+        cfevolution.edit.Revert.opened(game.getExecutable());
+        return new ExecutableScreen(exe, game.getExecutable());
     }
 
     /** Game folder > Computer Cars at Every Circuit, read afresh from the circuit files. */
@@ -180,7 +185,10 @@ public final class FolderScreen
     {
         TrackScreen t = TrackScreen.open(game.getTrack(slot), problem);
         if (t != null)
+        {
             t.circuit = GameFolder.CIRCUIT_NAMES[slot - 1];
+            cfevolution.edit.Revert.opened(game.getTrack(slot));
+        }
         return t;
     }
 
@@ -286,6 +294,7 @@ public final class FolderScreen
                 return;
             }
             opened = new FolderScreen(game);
+            cfevolution.edit.Revert.folderOpened(game);     // for Revert Folder (2026-11-23)
         }
     }
 

@@ -327,11 +327,16 @@ public class MainGUI extends JFrame
         return index < 0 ? null : tabs.get(index);
     }
 
+    /** Where the next addTab puts its tab (-1: at the end): Revert puts a reopened file back in its place. */
+    private int insertAt = -1;
+    /** How to open each file tab again, for Revert File and Revert Folder (2026-11-23). */
+    private final java.util.Map<EditorTab, Runnable> reopeners = new java.util.HashMap<EditorTab, Runnable>();
+
     private void addTab(EditorTab tab)
     {
-        tabs.add(tab);
-        tabPane.addTab(tab.getTabTitle(), tab.getComponent());
-        int index = tabPane.getTabCount() - 1;
+        int index = insertAt >= 0 && insertAt <= tabs.size() ? insertAt : tabs.size();
+        tabs.add(index, tab);
+        tabPane.insertTab(tab.getTabTitle(), null, tab.getComponent(), null, index);
         tabPane.setTabComponentAt(index, new TabHeader(tab));
         tabPane.setToolTipTextAt(index, tab.getFilePath());
         tabPane.setSelectedIndex(index);
@@ -403,10 +408,121 @@ public class MainGUI extends JFrame
         }
         if (!tab.readyToClose())
             return false;
+        reopeners.remove(tab);
         tabs.remove(index);
         tabPane.removeTabAt(index);
         activeTabChanged();
         return true;
+    }
+
+    /** Revert File: asks, writes the file back as it was when opened and opens it again in its place. */
+    public void revertFile(EditorTab tab)
+    {
+        if (tab == null)
+            return;
+        File f = new File(tab.getFilePath());
+        if (cfevolution.gui.MessageBoxes.choose(this, cfevolution.edit.Revert.fileQuestion(f)) != 0)
+            return;
+        cfevolution.edit.Message failed = cfevolution.edit.Revert.revertFile(f);
+        if (failed != null)
+        {
+            cfevolution.gui.MessageBoxes.show(this, failed);
+            return;
+        }
+        reopenInPlace(tab);
+    }
+
+    /** Closes a file tab without asking and opens the file again where the tab was. */
+    private void reopenInPlace(EditorTab tab)
+    {
+        int index = tabs.indexOf(tab);
+        Runnable again = reopeners.remove(tab);
+        if (index < 0 || again == null)
+            return;
+        tabs.remove(index);
+        tabPane.removeTabAt(index);
+        insertAt = index;
+        try
+        {
+            again.run();
+        }
+        finally
+        {
+            insertAt = -1;
+        }
+        activeTabChanged();
+    }
+
+    /** Puts a new tab in an old one's place (Revert Page builds the executable's tab again). */
+    public void replaceTab(EditorTab old, EditorTab now)
+    {
+        int index = tabs.indexOf(old);
+        if (index < 0)
+            return;
+        Runnable again = reopeners.remove(old);
+        tabs.remove(index);
+        tabPane.removeTabAt(index);
+        if (again != null)
+            reopeners.put(now, again);
+        insertAt = index;
+        try
+        {
+            addTab(now);
+        }
+        finally
+        {
+            insertAt = -1;
+        }
+    }
+
+    /** Revert Folder: asks, closes the folder's open files without saving, writes back every file changed
+        since the folder was opened, and opens the closed files again. */
+    public void revertFolder(GameWindow window)
+    {
+        GameFolder game = window.getGameFolder();
+        java.util.List<File> changed = cfevolution.edit.Revert.folderChanges(game);
+        if (changed.isEmpty())
+        {
+            cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.Revert.NOTHING_TO_REVERT);
+            return;
+        }
+        if (cfevolution.gui.MessageBoxes.choose(this, cfevolution.edit.Revert.folderQuestion(game, changed)) != 0)
+            return;
+        String folder = game.getFolder().getAbsolutePath() + File.separator;
+        java.util.List<Integer> places = new ArrayList<Integer>();
+        java.util.List<Runnable> again = new ArrayList<Runnable>();
+        for (int i = tabs.size() - 1; i >= 0; i--)
+        {
+            EditorTab t = tabs.get(i);
+            if (t instanceof GameWindow || !new File(t.getFilePath()).getAbsolutePath().startsWith(folder))
+                continue;
+            Runnable r = reopeners.remove(t);
+            tabs.remove(i);
+            tabPane.removeTabAt(i);
+            if (r != null)
+            {
+                places.add(0, i);
+                again.add(0, r);
+            }
+        }
+        cfevolution.edit.Message failed = cfevolution.edit.Revert.revertFolder(game);
+        for (int k = 0; k < again.size(); k++)
+        {
+            insertAt = places.get(k);
+            try
+            {
+                again.get(k).run();
+            }
+            finally
+            {
+                insertAt = -1;
+            }
+        }
+        tabPane.setSelectedIndex(tabs.indexOf(window));
+        window.fillRows();
+        activeTabChanged();
+        if (failed != null)
+            cfevolution.gui.MessageBoxes.show(this, failed);
     }
 
     private void activeTabChanged()
@@ -520,6 +636,12 @@ public class MainGUI extends JFrame
         close.setEnabled(tab != null);
         file.add(save);
         file.add(saveAs);
+        // Revert File (2026-11-23): back to how the file was when it was opened, saves since included
+        final EditorTab revertable = tab != null && reopeners.containsKey(tab)
+            && cfevolution.edit.Revert.canRevert(new File(tab.getFilePath())) ? tab : null;
+        JMenuItem revert = menuItem("Revert File...", null, new Runnable() { public void run() { revertFile(revertable); } });
+        revert.setEnabled(revertable != null);
+        file.add(revert);
         if (tab != null)
         {
             JMenuItem[] extra = tab.getFileMenuItems();
@@ -626,7 +748,11 @@ public class MainGUI extends JFrame
         if (currentTrack.load(trackFile))
         {
             updateRecentFileList(fileName);
-            addTab(new TrackWindow(currentTrack, fileName, this));
+            cfevolution.edit.Revert.opened(trackFile);
+            TrackWindow tab = new TrackWindow(currentTrack, fileName, this);
+            final String again = fileName;
+            reopeners.put(tab, new Runnable() { public void run() { openTrackFile(again); } });
+            addTab(tab);
         }
         else
         {
@@ -684,6 +810,7 @@ public class MainGUI extends JFrame
             return false;
         }
         Preferences.userRoot().node("cfevolution").put(PREF_GAME_FOLDER, game.getFolder().getPath());
+        cfevolution.edit.Revert.folderOpened(game);
         addTab(new GameWindow(game, this));
         return true;
     }
@@ -751,6 +878,10 @@ public class MainGUI extends JFrame
                 else
                     tab = new cfevolution.gui.gamefiles.SetupFileTab((cfevolution.edit.SetupFilePage) page, path, this);
             }
+            cfevolution.edit.Revert.opened(file);
+            final File again = file;
+            final GameFolder inFolder = game;
+            reopeners.put(tab, new Runnable() { public void run() { openGameFile(again, inFolder); } });
             addTab(tab);
             return true;
         }
@@ -836,8 +967,14 @@ public class MainGUI extends JFrame
         switch (loadSuccess)
         {
             case 0:
-                addTab(new ExecutableWindow(currentExecutable, fileName, this));
+            {
+                cfevolution.edit.Revert.opened(new File(fileName));
+                ExecutableWindow tab = new ExecutableWindow(currentExecutable, fileName, this);
+                final String again = fileName;
+                reopeners.put(tab, new Runnable() { public void run() { openExecutableFile(again); } });
+                addTab(tab);
                 return true;
+            }
             default:
                 cfevolution.gui.MessageBoxes.show(this, cfevolution.edit.GameFolderOpening.executableProblem(loadSuccess));
                 break;
