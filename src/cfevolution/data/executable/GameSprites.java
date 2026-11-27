@@ -173,6 +173,83 @@ public class GameSprites
         return (d[o] & 0xFF) | ((d[o + 1] & 0xFF) << 8);
     }
 
+    /**
+     * An image as the game stores it, for drawing it scaled the way the game does
+     * (CarModel, since 2026-11-26): the header's size word, rows, half-width and
+     * rows below the anchor, and each row's runs (bottom row first) as
+     * {slot, start, end} with the columns relative to the anchor, end not drawn.
+     */
+    public static final class Raw
+    {
+        public final int index, size, rows, halfWidth, below;
+        public final int[][] runs;
+
+        Raw(int index, int size, int rows, int halfWidth, int below, int[][] runs)
+        {
+            this.index = index;
+            this.size = size;
+            this.rows = rows;
+            this.halfWidth = halfWidth;
+            this.below = below;
+            this.runs = runs;
+        }
+    }
+
+    /** Image {@code index} as stored (following an image that is the same as another), or null. */
+    public Raw raw(int index)
+    {
+        try
+        {
+            for (int hops = 0; hops < 8; hops++)
+            {
+                if (index < 0 || index >= COUNT)
+                    return null;
+                byte[] d = (word(dataA, index * 4 + 2) & 0x8000) != 0 ? dataB : dataA;
+                int o = word(dataA, index * 4);
+                int size = word(d, o);
+                if ((size & 0x8000) != 0)
+                {
+                    if ((size & 0x4000) != 0)
+                        return null;
+                    index = size & 0xFF;
+                    continue;
+                }
+                int rows = word(d, o + 2) / 2;
+                int[][] runs = new int[rows][];
+                for (int r = 0; r < rows; r++)
+                {
+                    java.util.List<Integer> row = new java.util.ArrayList<Integer>();
+                    int p = o + word(d, o + 8 + r * 2);
+                    int control = d[p++] & 0xFF;
+                    if (control != 0)
+                    {
+                        int start = d[p++];
+                        while (true)
+                        {
+                            int end = d[p++];
+                            row.add(((control & 0x7E) - 4) / 2);
+                            row.add(start);
+                            row.add(end);
+                            control = d[p++] & 0xFF;
+                            if (control == 0)
+                                break;
+                            start = (control & 0x80) != 0 ? d[p++] : end;
+                        }
+                    }
+                    runs[r] = new int[row.size()];
+                    for (int i = 0; i < runs[r].length; i++)
+                        runs[r][i] = row.get(i);
+                }
+                return new Raw(index, size, rows, word(d, o + 4), (short) word(d, o + 6), runs);
+            }
+        }
+        catch (ArrayIndexOutOfBoundsException e)
+        {
+            // a damaged file: no picture
+        }
+        return null;
+    }
+
     /** Decodes image {@code index}, or returns null if it is empty or unreadable. */
     public Sprite get(int index)
     {

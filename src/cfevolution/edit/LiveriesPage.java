@@ -465,35 +465,44 @@ public final class LiveriesPage
         return tab == CARS ? new int[] { 44, 36, 0 }[view] : new int[] { 8, 12, 4 }[view];
     }
 
-    // --- The close-up car: the game's 3D model (Hrvoje, 2026-11-21) ---------
+    // --- The car: the game's 3D model at the game's camera (Hrvoje, 2026-11-21 and 11-25) ---
 
-    public static final String CLOSE_UP = "Close-up", DISTANT = "Distant", TILT = "Tilt";
-    public static final String CLOSE_UP_TIP = "The car as the game draws it near the camera, with the first driver's helmet";
-    public static final String DISTANT_TIP = "The game's pictures for cars further away";
+    /**
+     * Since 2026-11-25 the Cars tab has one view: the game's 3D car as its chase
+     * camera and the camera in front see it, from that height, turning all the
+     * way round. Team slot 1 has two designs: the game draws it close up with its
+     * own McLaren-shaped car (one part fewer: no Nose angle) and further away with
+     * the usual car's pictures; a switch shows either.
+     */
+    public static final String CAR_TIP = "The car as the game draws it in the chase view and the view from in front, "
+        + "from the same height, with the first driver's helmet";
+    public static final String MCLAREN_DESIGN = "Close-up Design", USUAL_DESIGN = "Distant Design";
+    public static final String MCLAREN_DESIGN_TIP = "Team slot 1's own car, which the game draws close to the camera: "
+        + "its nose has no Nose angle part";
+    public static final String USUAL_DESIGN_TIP = "Team slot 1 further from the camera, where the game draws it like every other team's car";
     /** Shown on the Cars tab while team slot 1 is selected. */
-    public static final String TEAM_ONE_NOTE = "Team slot 1 has its own car close up: its nose has no Nose angle part, "
-        + "so that colour is not seen there. Further away it looks like every other team's car (Distant).";
-    public static final String[] CLOSE_UP_VIEWS = { "Front", "Side", "Rear", "Angled" };
-    /** Each close-up view's heading (0 behind, 90 the right side with the nose to the right, 180 in front) and tilt. */
-    private static final int[][] CLOSE_UP_VIEW_ANGLES = { { 180, 10 }, { 90, 10 }, { 0, 10 }, { 140, 30 } };
-    /** The close-up car turns in steps of this many degrees. */
+    public static final String TEAM_ONE_NOTE = "Team slot 1 has two designs. Close to the camera the game draws its own car, "
+        + "whose nose has no Nose angle part, so that colour is not seen there. Further away it looks like every other "
+        + "team's car. The buttons show either.";
+    public static final String[] CLOSE_UP_VIEWS = { "Front", "Side", "Rear" };
+    /** Each view's heading: 180 in front, 90 the right side with the nose to the right, 0 behind. */
+    private static final int[] CLOSE_UP_VIEW_HEADINGS = { 180, 90, 0 };
+    /** The car turns in steps of this many degrees. */
     public static final int HEADING_STEP = 5;
     public static final int HEADINGS = 360 / HEADING_STEP;
-    public static final int MAX_TILT = CarModel.MAX_TILT;
-    /** The view shown first: the angle where every part of the car shows at once. */
-    public static final int CLOSE_UP_START_VIEW = 3;
-    /** The model's units per pixel of the drawing: the car fits the desktop's side panel at any angle. */
-    public static final double UNITS_PER_PIXEL = 4.0;
+    /** The heading shown first: in front and to the side, where nearly every part shows. */
+    public static final int START_HEADING = 140 / HEADING_STEP;
+    /**
+     * The car is drawn in the game's own pixels, which the game's 4:3 screen shows 1.2
+     * times as tall as wide; the editor enlarges each one to 2.5 pixels across and 3
+     * down (as the game looks on an 800 x 600 screen), so the car keeps its shape.
+     */
+    private static final int ACROSS_TIMES_2 = 5, DOWN = 3;
 
-    /** Heading step (0 to HEADINGS - 1) of a close-up view. */
+    /** Heading step (0 to HEADINGS - 1) of a view. */
     public static int closeUpHeading(int view)
     {
-        return CLOSE_UP_VIEW_ANGLES[view][0] / HEADING_STEP;
-    }
-
-    public static int closeUpTilt(int view)
-    {
-        return CLOSE_UP_VIEW_ANGLES[view][1];
+        return CLOSE_UP_VIEW_HEADINGS[view] / HEADING_STEP;
     }
 
     /** Whose helmet the close-up car wears: the team's first driver, else its second, else -1 (a plain helmet). */
@@ -508,16 +517,29 @@ public final class LiveriesPage
         return -1;
     }
 
-    /** The close-up car of a team, drawn by the game's 3D model; team slot 1 with its own nose, as the game does. */
-    public static GameSprites.Sprite closeUp(CarModel model, GameSprites sprites, int team, int headingStep, int tilt)
+    /** A team's car, drawn as the game draws its 3D car from the game's camera height, enlarged. Team
+        slot 1 is drawn with its own (McLaren) car unless usualDesign asks for the one the game uses further away. */
+    public static GameSprites.Sprite closeUp(CarModel model, GameSprites sprites, int team, int headingStep, boolean usualDesign)
     {
-        return model.draw(sprites, headingStep * HEADING_STEP, tilt, team == 0, true, UNITS_PER_PIXEL);
+        return enlarged(model.draw(sprites, headingStep * HEADING_STEP, team == 0 && !usualDesign, true));
+    }
+
+    /** A picture in the game's pixels made larger without smoothing, in the game's proportions. */
+    static GameSprites.Sprite enlarged(GameSprites.Sprite game)
+    {
+        int width = game.width * ACROSS_TIMES_2 / 2, height = game.height * DOWN;
+        byte[] slots = new byte[width * height];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                slots[y * width + x] = (byte) game.slotAt(x * 2 / ACROSS_TIMES_2, y / DOWN);
+        return GameSprites.Sprite.of(width, height, slots);
     }
 
     /** The size of every close-up drawing, {width, height}. */
     public static int[] closeUpBox()
     {
-        return CarModel.box(UNITS_PER_PIXEL);
+        int[] box = CarModel.box();
+        return new int[] { box[0] * ACROSS_TIMES_2 / 2, box[1] * DOWN };
     }
 
     /**

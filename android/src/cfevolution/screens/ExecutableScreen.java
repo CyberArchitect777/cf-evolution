@@ -354,9 +354,10 @@ public final class ExecutableScreen
     }
 
     /** The close-up car of a team at a heading step and tilt (null without the game's pictures or the model). */
-    public GameSprites.Sprite closeUp(int team, int headingStep, int tilt)
+    /** A team's car from the game's camera height; usualDesign shows team slot 1 as the game draws it further away. */
+    public GameSprites.Sprite closeUp(int team, int headingStep, boolean usualDesign)
     {
-        return carModel() == null || sprites() == null ? null : LiveriesPage.closeUp(carModel(), sprites(), team, headingStep, tilt);
+        return carModel() == null || sprites() == null ? null : LiveriesPage.closeUp(carModel(), sprites(), team, headingStep, usualDesign);
     }
 
     /** The game's pictures (F1GPDATA.DAT and F1GPDATB.DAT beside GP.EXE), or null if the folder lacks them. */

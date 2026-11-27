@@ -823,27 +823,15 @@ public class ExecutableActivity extends Activity
         return v;
     }
 
-    /** The Cars tab's close-up car (Hrvoje, 2026-11-21): whether it is shown rather than the distant pictures, and its view. */
-    private boolean carCloseUp = true;
-    private int closeUpHeading = LiveriesPage.closeUpHeading(LiveriesPage.CLOSE_UP_START_VIEW),
-                closeUpTilt = LiveriesPage.closeUpTilt(LiveriesPage.CLOSE_UP_START_VIEW);
+    /** The Cars tab's car (Hrvoje, 2026-11-21; one view since 11-25): its heading, and team slot 1's design shown. */
+    private int closeUpHeading = LiveriesPage.START_HEADING;
+    private boolean usualDesign;
 
     private void liveryPicture(final LiveriesPage p, final int tab, final int row)
     {
         if (tab == LiveriesPage.CARS && screen.carModel() != null)
         {
-            LinearLayout modes = new LinearLayout(this);
-            for (final boolean closeUp : new boolean[] { true, false })
-            {
-                Button b = Ui.button(this, closeUp ? LiveriesPage.CLOSE_UP : LiveriesPage.DISTANT, new View.OnClickListener() {
-                    public void onClick(View v) { carCloseUp = closeUp; again(); }
-                });
-                if (closeUp == carCloseUp)
-                    b.setTypeface(Typeface.DEFAULT_BOLD);
-                modes.addView(b);
-            }
-            page.addView(modes);
-            TextView about = Ui.text(this, carCloseUp ? LiveriesPage.CLOSE_UP_TIP + "." : LiveriesPage.DISTANT_TIP + ".", 13);
+            TextView about = Ui.text(this, LiveriesPage.CAR_TIP + ".", 13);
             about.setTextColor(Color.GRAY);
             page.addView(about);
             if (row == 0)
@@ -851,12 +839,20 @@ public class ExecutableActivity extends Activity
                 TextView note = Ui.text(this, LiveriesPage.TEAM_ONE_NOTE, 13);
                 note.setTextColor(0xFF8A5A00);
                 page.addView(note);
+                LinearLayout designs = new LinearLayout(this);
+                for (final boolean usual : new boolean[] { false, true })
+                {
+                    Button b = Ui.button(this, usual ? LiveriesPage.USUAL_DESIGN : LiveriesPage.MCLAREN_DESIGN, new View.OnClickListener() {
+                        public void onClick(View v) { usualDesign = usual; again(); }
+                    });
+                    if (usual == usualDesign)
+                        b.setTypeface(Typeface.DEFAULT_BOLD);
+                    designs.addView(b);
+                }
+                page.addView(designs);
             }
-            if (carCloseUp)
-            {
-                closeUpPicture(p, row);
-                return;
-            }
+            closeUpPicture(p, row);
+            return;
         }
         final LiveryView view = new LiveryView(this, p, screen.sprites(), new LiveryView.Tapped() {
             public void part(int part) { liveryPart[tab] = part; again(); }
@@ -921,51 +917,38 @@ public class ExecutableActivity extends Activity
         page.addView(hint);
     }
 
-    /** The close-up car with Turn and Tilt bars and the usual views. */
+    /** The car with a Turn bar and the Front, Side and Rear views. */
     private void closeUpPicture(final LiveriesPage p, final int row)
     {
         final int tab = LiveriesPage.CARS;
         final LiveryView view = new LiveryView(this, p, screen.sprites(), new LiveryView.Tapped() {
             public void part(int part) { liveryPart[tab] = part; again(); }
         });
-        view.showCloseUp(row, screen.closeUp(row, closeUpHeading, closeUpTilt));
+        view.showCloseUp(row, screen.closeUp(row, closeUpHeading, usualDesign));
         page.addView(view);
-        final android.widget.SeekBar[] bars = new android.widget.SeekBar[2];
-        for (int i = 0; i < 2; i++)
-        {
-            final boolean turning = i == 0;
-            LinearLayout line = new LinearLayout(this);
-            line.setGravity(Gravity.CENTER_VERTICAL);
-            line.addView(Ui.text(this, (turning ? LiveriesPage.TURN : LiveriesPage.TILT) + "  ", 14));
-            android.widget.SeekBar bar = new android.widget.SeekBar(this);
-            bar.setMax(turning ? LiveriesPage.HEADINGS - 1 : LiveriesPage.MAX_TILT);
-            bar.setProgress(turning ? closeUpHeading : closeUpTilt);
-            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                public void onProgressChanged(android.widget.SeekBar s, int v, boolean user)
-                {
-                    if (turning)
-                        closeUpHeading = v;
-                    else
-                        closeUpTilt = v;
-                    view.showCloseUp(row, screen.closeUp(row, closeUpHeading, closeUpTilt));
-                }
-                public void onStartTrackingTouch(android.widget.SeekBar s) { }
-                public void onStopTrackingTouch(android.widget.SeekBar s) { }
-            });
-            bars[i] = bar;
-            line.addView(bar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
-            page.addView(line);
-        }
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+        line.addView(Ui.text(this, LiveriesPage.TURN + "  ", 14));
+        final android.widget.SeekBar bar = new android.widget.SeekBar(this);
+        bar.setMax(LiveriesPage.HEADINGS - 1);
+        bar.setProgress(closeUpHeading);
+        bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            public void onProgressChanged(android.widget.SeekBar s, int v, boolean user)
+            {
+                closeUpHeading = v;
+                view.showCloseUp(row, screen.closeUp(row, closeUpHeading, usualDesign));
+            }
+            public void onStartTrackingTouch(android.widget.SeekBar s) { }
+            public void onStopTrackingTouch(android.widget.SeekBar s) { }
+        });
+        line.addView(bar, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        page.addView(line);
         LinearLayout views = new LinearLayout(this);
         for (int i = 0; i < LiveriesPage.CLOSE_UP_VIEWS.length; i++)
         {
             final int which = i;
             views.addView(Ui.button(this, LiveriesPage.CLOSE_UP_VIEWS[i], new View.OnClickListener() {
-                public void onClick(View v)
-                {
-                    bars[0].setProgress(LiveriesPage.closeUpHeading(which));
-                    bars[1].setProgress(LiveriesPage.closeUpTilt(which));
-                }
+                public void onClick(View v) { bar.setProgress(LiveriesPage.closeUpHeading(which)); }
             }));
         }
         page.addView(views);

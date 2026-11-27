@@ -1233,9 +1233,9 @@ public class ExecutableWindow extends JPanel implements EditorTab
                     picture = turningPicture(tab, colours, shown);
                 else
                     picture = steppedPicture(tab, colours, shown);
-                JPanel body = new JPanel(new BorderLayout(16, 0));       // the palette beside the picture
-                body.add(picture, BorderLayout.CENTER);
-                body.add(palette, BorderLayout.EAST);
+                JPanel body = new JPanel(new SideOrBelow(16));     // the palette beside the picture, or under it when narrow
+                body.add(picture);
+                body.add(palette);
                 panel.add(body, BorderLayout.CENTER);
                 refresh.run();
                 panel.revalidate();
@@ -1262,6 +1262,63 @@ public class ExecutableWindow extends JPanel implements EditorTab
             }
         });
         return scroll;
+    }
+
+    /**
+     * Two components, the first (the picture) and the second (the palette): side by side when the width
+     * allows both, otherwise the second under the first (2026-11-25: the 3D car at the game's camera is
+     * wider than the old pictures, and the side panel can be narrow).
+     */
+    private static final class SideOrBelow implements LayoutManager
+    {
+        private final int gap;
+
+        SideOrBelow(int gap) { this.gap = gap; }
+
+        public void addLayoutComponent(String name, Component c) { }
+        public void removeLayoutComponent(Component c) { }
+
+        private boolean side(Container parent)
+        {
+            Insets in = parent.getInsets();
+            int width = parent.getWidth() - in.left - in.right;
+            Dimension a = parent.getComponent(0).getPreferredSize(), b = parent.getComponent(1).getPreferredSize();
+            return width <= 0 || a.width + gap + b.width <= width;
+        }
+
+        public Dimension preferredLayoutSize(Container parent)
+        {
+            Insets in = parent.getInsets();
+            Dimension a = parent.getComponent(0).getPreferredSize(), b = parent.getComponent(1).getPreferredSize();
+            Dimension d = side(parent) ? new Dimension(a.width + gap + b.width, Math.max(a.height, b.height))
+                                       : new Dimension(Math.max(a.width, b.width), a.height + gap + b.height);
+            d.width += in.left + in.right;
+            d.height += in.top + in.bottom;
+            return d;
+        }
+
+        public Dimension minimumLayoutSize(Container parent)
+        {
+            return preferredLayoutSize(parent);
+        }
+
+        public void layoutContainer(Container parent)
+        {
+            Insets in = parent.getInsets();
+            int width = parent.getWidth() - in.left - in.right;
+            Component first = parent.getComponent(0), second = parent.getComponent(1);
+            Dimension a = first.getPreferredSize(), b = second.getPreferredSize();
+            if (side(parent))
+            {
+                first.setBounds(in.left, in.top, width - gap - b.width, a.height);
+                second.setBounds(in.left + width - b.width, in.top, b.width, b.height);
+            }
+            else
+            {
+                first.setBounds(in.left, in.top, width, a.height);
+                second.setBounds(in.left, in.top + a.height + gap, Math.min(width, b.width), b.height);
+            }
+        }
     }
 
     /** A panel in a scroll pane that is as wide as the pane, so text in it wraps rather than widening it. */
@@ -1423,78 +1480,34 @@ public class ExecutableWindow extends JPanel implements EditorTab
     }
 
     /**
-     * The Cars tab's picture (Hrvoje, 2026-11-21): the close-up car, drawn
-     * from the game's 3D model so it can be turned and tilted and wears the
-     * driver's helmet, or the game's pictures for cars further away.
+     * The Cars tab's picture (Hrvoje, 2026-11-21; one view since 2026-11-25): the
+     * game's 3D car as its chase camera and the camera in front see it, from their
+     * height, turning all the way round, with the driver's helmet. Team slot 1
+     * shows either of its two designs.
      */
     private JComponent closeUpOrDistant(final LiveriesPage page, final JTable table, final LiveryRows rows,
                                         LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown,
                                         java.util.List<Runnable> rowChanged)
     {
-        final CardLayout cards = new CardLayout();
-        final JPanel views = new JPanel(cards);
-        views.add(closeUpPicture(page, table, rows, colours, shown, rowChanged), LiveriesPage.CLOSE_UP);
-        views.add(turningPicture(LiveriesPage.CARS, colours, shown), LiveriesPage.DISTANT);
-
-        JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        ButtonGroup group = new ButtonGroup();
-        for (final String mode : new String[] { LiveriesPage.CLOSE_UP, LiveriesPage.DISTANT })
-        {
-            JToggleButton b = new JToggleButton(mode, mode.equals(LiveriesPage.CLOSE_UP));
-            b.setName("livery " + mode);
-            b.setToolTipText(mode.equals(LiveriesPage.CLOSE_UP) ? LiveriesPage.CLOSE_UP_TIP : LiveriesPage.DISTANT_TIP);
-            b.setMargin(new Insets(2, 10, 2, 10));
-            b.addActionListener(new java.awt.event.ActionListener() {
-                public void actionPerformed(java.awt.event.ActionEvent e) { cards.show(views, mode); }
-            });
-            group.add(b);
-            modes.add(b);
-        }
-
-        // team slot 1's own car close up (a text area, which reads like a note and wraps)
-        final JTextArea note = noteText(LiveriesPage.TEAM_ONE_NOTE, new Color(0x8A5A00));
-        note.setName("teamOneNote");
-        rowChanged.add(new Runnable() {
-            public void run() { note.setVisible(rows.at(Math.max(0, table.getSelectedRow())) == 0); }
-        });
-
-        JPanel top = new JPanel(new BorderLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
-        top.add(modes, BorderLayout.NORTH);
-        top.add(note, BorderLayout.CENTER);
-        JPanel holder = new JPanel(new BorderLayout());
-        holder.add(top, BorderLayout.NORTH);
-        holder.add(views, BorderLayout.CENTER);
-        return holder;
-    }
-
-    /** The close-up car with Turn and Tilt sliders and the usual views. */
-    private JComponent closeUpPicture(final LiveriesPage page, final JTable table, final LiveryRows rows,
-                                      LiveryPicture.Colours colours, java.util.List<LiveryPicture> shown,
-                                      java.util.List<Runnable> rowChanged)
-    {
         final cfevolution.data.executable.CarModel model = currentExecutable.getCarModel();
         final LiveryPicture picture = new LiveryPicture(1, colours);   // drawn at the size it is made
         picture.setName("liveryCloseUp");
+        picture.setToolTipText(LiveriesPage.CAR_TIP);
         shown.add(picture);
         int[] box = LiveriesPage.closeUpBox();
         picture.setBox(box[0], box[1]);
-        int start = LiveriesPage.CLOSE_UP_START_VIEW;
-        final JSlider turn = new JSlider(0, LiveriesPage.HEADINGS - 1, LiveriesPage.closeUpHeading(start));
+        final JSlider turn = new JSlider(0, LiveriesPage.HEADINGS - 1, LiveriesPage.START_HEADING);
         turn.setName("liveryCloseUpTurn");
-        final JSlider tilt = new JSlider(0, LiveriesPage.MAX_TILT, LiveriesPage.closeUpTilt(start));
-        tilt.setName("liveryCloseUpTilt");
+        final boolean[] usualDesign = { false };
         final Runnable show = new Runnable() {
             public void run() {
                 int team = rows.at(Math.max(0, table.getSelectedRow()));
-                picture.setSprite(LiveriesPage.closeUp(model, sprites, team, turn.getValue(), tilt.getValue()), false);
+                picture.setSprite(LiveriesPage.closeUp(model, sprites, team, turn.getValue(), usualDesign[0]), false);
             }
         };
-        javax.swing.event.ChangeListener changed = new javax.swing.event.ChangeListener() {
+        turn.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent e) { show.run(); }
-        };
-        turn.addChangeListener(changed);
-        tilt.addChangeListener(changed);
+        });
         rowChanged.add(show);
         show.run();
         picture.addMouseWheelListener(new java.awt.event.MouseWheelListener() {
@@ -1511,13 +1524,38 @@ public class ExecutableWindow extends JPanel implements EditorTab
             b.setName("liveryCloseUpView " + LiveriesPage.CLOSE_UP_VIEWS[i]);
             b.setMargin(new Insets(2, 8, 2, 8));
             b.addActionListener(new java.awt.event.ActionListener() {
-                public void actionPerformed(java.awt.event.ActionEvent e) {
-                    turn.setValue(LiveriesPage.closeUpHeading(view));
-                    tilt.setValue(LiveriesPage.closeUpTilt(view));
-                }
+                public void actionPerformed(java.awt.event.ActionEvent e) { turn.setValue(LiveriesPage.closeUpHeading(view)); }
             });
             views.add(b);
         }
+
+        // team slot 1: its two designs, and the note saying where the game uses each
+        JPanel designs = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        ButtonGroup group = new ButtonGroup();
+        for (final String design : new String[] { LiveriesPage.MCLAREN_DESIGN, LiveriesPage.USUAL_DESIGN })
+        {
+            final JToggleButton b = new JToggleButton(design, design.equals(LiveriesPage.MCLAREN_DESIGN));
+            b.setName("livery " + design);
+            b.setToolTipText(design.equals(LiveriesPage.MCLAREN_DESIGN) ? LiveriesPage.MCLAREN_DESIGN_TIP : LiveriesPage.USUAL_DESIGN_TIP);
+            b.setMargin(new Insets(2, 10, 2, 10));
+            b.addActionListener(new java.awt.event.ActionListener() {
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    usualDesign[0] = design.equals(LiveriesPage.USUAL_DESIGN);
+                    show.run();
+                }
+            });
+            group.add(b);
+            designs.add(b);
+        }
+        final JTextArea note = noteText(LiveriesPage.TEAM_ONE_NOTE, new Color(0x8A5A00));
+        note.setName("teamOneNote");
+        final JPanel teamOne = new JPanel(new BorderLayout());
+        teamOne.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
+        teamOne.add(note, BorderLayout.NORTH);
+        teamOne.add(designs, BorderLayout.SOUTH);
+        rowChanged.add(new Runnable() {
+            public void run() { teamOne.setVisible(rows.at(Math.max(0, table.getSelectedRow())) == 0); }
+        });
 
         JPanel stage = new JPanel(new BorderLayout());
         stage.setBackground(PICTURE_BACKGROUND);
@@ -1534,15 +1572,6 @@ public class ExecutableWindow extends JPanel implements EditorTab
         c.weightx = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
         sliders.add(turn, c);
-        c.gridy = 1;
-        c.gridx = 0;
-        c.weightx = 0;
-        c.fill = GridBagConstraints.NONE;
-        sliders.add(sliderName(LiveriesPage.TILT), c);
-        c.gridx = 1;
-        c.weightx = 1;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        sliders.add(tilt, c);
 
         JPanel below = new JPanel(new BorderLayout());
         below.add(sliders, BorderLayout.NORTH);
@@ -1552,8 +1581,11 @@ public class ExecutableWindow extends JPanel implements EditorTab
         below.add(under, BorderLayout.SOUTH);
 
         JPanel holder = new JPanel(new BorderLayout());
-        holder.add(pictureBox(stage, below), BorderLayout.NORTH);
-        return holder;
+        holder.add(teamOne, BorderLayout.NORTH);
+        holder.add(pictureBox(stage, below), BorderLayout.CENTER);
+        JPanel top = new JPanel(new BorderLayout());
+        top.add(holder, BorderLayout.NORTH);
+        return top;
     }
 
     /** Wrapped text that reads like a label (not a JLabel, which the 0.4.1 comparison reads). */

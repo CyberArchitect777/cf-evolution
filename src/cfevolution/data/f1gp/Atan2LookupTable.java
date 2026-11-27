@@ -27,6 +27,11 @@ package cfevolution.data.f1gp;
  */
 
 public class Atan2LookupTable {
+	/** Entry i is the angle (10000h a full turn) whose tangent is i / 2048, for i from 0 to 2048 (osArcTanZeroToQuarterPi). */
+	public static int get(int i) {
+		return data[i];
+	}
+
 	static int[] data = {
 		0, 5, 10, 15, 20, 25, 31, 36,
 		41, 46, 51, 56, 61, 66, 71, 76,
