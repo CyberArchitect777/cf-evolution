@@ -32,8 +32,12 @@ import java.util.List;
  * Moving a driver to another car number (Move Up, Move Down, Swap With) takes
  * with him everything GP.EXE keeps by car number: his name, his qualifying and
  * race skill, his helmet colours and his Quick Race setup. He stays in the team
- * seat he had: the line-ups follow the new number. The menu helmet pictures
- * (HELMETS.DAT) and championship saves are other files and are left alone.
+ * seat he had: the line-ups follow the new number. His menu helmet picture
+ * (HELMETS.DAT, which the game shows by car number) goes with him too, written
+ * when GP.EXE is saved (Hrvoje, 2026-11-28: swapping a team's two drivers left
+ * their menu helmets behind). Moving a team, or choosing drivers for seats,
+ * keeps the car numbers, so the menu helmets already followed. Championship
+ * saves are other files and are left alone.
  *
  * Moving a team to another team number takes its name, engine name, engine power,
  * both seats (and so its drivers and their skills), its car and pit crew colours,
@@ -119,6 +123,7 @@ public final class LineUpMoves
             d.setQualifyingGrip(b, q);
             d.setRaceGrip(b, r);
             exe.getGameLiveries().swapHelmets(a, b);
+            exe.swapMenuHelmets(a, b);                 // HELMETS.DAT, written when GP.EXE is saved
             exe.getGameTables().carSetups.swapBlocks(a, b, GameTables.SETUP_SIZE);
             GameTeams t = exe.getGameTeams();          // the driver keeps his seat under his new number
             for (int team = 0; team < ExecutableEdits.TEAMS; team++)
@@ -201,8 +206,8 @@ public final class LineUpMoves
         return c;
     }
 
-    public static final String DRIVER_MOVES_TIP = "Moving a driver to another number takes his name, skill, helmet colours "
-        + "and Quick Race setup with him, and he stays in his team. The menu helmet pictures (HELMETS.DAT) are not changed.";
+    public static final String DRIVER_MOVES_TIP = "Moving a driver to another number takes his name, skill, helmet colours, "
+        + "Quick Race setup and menu helmet picture with him, and he stays in his team.";
     public static final String TEAM_MOVES_TIP = "Moving a team to another number takes its names, engine power, drivers, "
         + "car and pit crew colours and pit box with it.";
 

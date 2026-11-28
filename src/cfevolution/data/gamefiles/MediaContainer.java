@@ -163,6 +163,13 @@ public class MediaContainer
         return rgb;
     }
 
+    /** Swaps two items, each keeping its own size (2026-11-28: a driver moved to another car number takes
+        his menu helmet, HELMETS.DAT, with him). */
+    public void swapItems(int i, int j)
+    {
+        java.util.Collections.swap(items, i, j);
+    }
+
     /** A small picture's pixels (palette indices), row by row. */
     public byte[] getSmallPicture(int i)
     {

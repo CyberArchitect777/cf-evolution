@@ -53,24 +53,6 @@ public final class ExecutableEdits
         return entered;
     }
 
-    /**
-     * Asked before closing GP.EXE when Save Names into the Executable is off and
-     * the names shown are not the ones in GP.EXE (2026-11-22): they would be lost.
-     * The options are the platform's own, the first keeping the names.
-     */
-    public static Message namesNotInExe(String... options)
-    {
-        return Message.choose(Message.Kind.WARNING, "Names Not Saved",
-            "The driver, team or engine names shown here are not in GP.EXE, because Save Names into the "
-          + "Executable is off. They will be lost when GP.EXE is closed.", options);
-    }
-
-    /** On the Drivers and Teams pages, one setting for both (Hrvoje, 2026-11-16/21). */
-    public static final String SAVE_NAMES_INTO_EXE = "Save Names into the Executable";
-    public static final String SAVE_NAMES_INTO_EXE_TIP = "On: saving writes the driver, team and engine names shown here into GP.EXE. "
-        + "Off: GP.EXE keeps its own names, and names typed here or loaded from a name file are only shown in the editor "
-        + "(save them as a name file to keep them).";
-
     private ExecutableEdits()
     {
     }

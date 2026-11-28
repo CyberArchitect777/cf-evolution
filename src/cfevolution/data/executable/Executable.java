@@ -202,13 +202,9 @@ public class Executable
         // Saves data back into a F1GP/WC executable file. Returns a code to indicate the completed saving status
         // Code True - Success, False - Failure
         
+        // The names shown are always written (Hrvoje, 2026-11-28: the Save Names into the Executable
+        // option, 2026-11-21, made things too complicated and was removed)
         String filePath = gameFile.getPath();
-        String[][] shown = null;
-        if (!saveNames && namesInFile != null)
-        {
-            shown = names();        // the executable keeps its own names; those shown stay in the editor
-            putNames(namesInFile);
-        }
         try
         {
             RandomAccessFile binaryAccess = new RandomAccessFile(filePath, "rw");
@@ -223,8 +219,8 @@ public class Executable
             binaryAccess.close();
             if (operationSuccess == 0)
             {
-                namesInFile = names();
                 lineUpInFile = lineUp();
+                saveMenuHelmets();
                 return true;
             }
             else
@@ -237,36 +233,122 @@ public class Executable
             exceptionError.printStackTrace();
             return false;
         }            
-        finally
+    }
+
+    // --- The menu helmets moved with their drivers (Hrvoje, 2026-11-28) ------
+
+    /** Car numbers (0-39) whose menu helmet pictures are to be swapped in HELMETS.DAT, beside this
+        file, when it is next saved: a driver moved to another number takes his menu helmet with him,
+        as the game shows menu helmet n for car number n. */
+    private final java.util.List<int[]> menuHelmetSwaps = new java.util.ArrayList<int[]>();
+
+    public void swapMenuHelmets(int a, int b)
+    {
+        menuHelmetSwaps.add(new int[] { a, b });
+    }
+
+    /** HELMETS.DAT in the executable's folder (any case), or null. */
+    public File menuHelmetsFile()
+    {
+        File folder = gameFile.getAbsoluteFile().getParentFile();
+        String[] names = folder == null ? null : folder.list();
+        if (names != null)
+            for (String n : names)
+                if (n.equalsIgnoreCase("HELMETS.DAT"))
+                    return new File(folder, n);
+        return null;
+    }
+
+    /** Applies the waiting swaps to HELMETS.DAT as it is on disk now (so pictures saved there from
+        its own tab meanwhile are kept), and writes it if that changes it. A missing or unreadable file
+        is left alone. The swaps written are remembered for Revert File (undoWrittenMenuHelmets). */
+    private void saveMenuHelmets()
+    {
+        if (menuHelmetSwaps.isEmpty())
+            return;
+        File file = menuHelmetsFile();
+        if (file != null && swapMenuHelmetsIn(file, menuHelmetSwaps))
+            synchronized (WRITTEN)
+            {
+                java.util.List<int[]> w = WRITTEN.get(key(gameFile));
+                if (w == null)
+                    WRITTEN.put(key(gameFile), w = new java.util.ArrayList<int[]>());
+                w.addAll(menuHelmetSwaps);
+            }
+        menuHelmetSwaps.clear();
+    }
+
+    /** Menu helmet swaps written to HELMETS.DAT by saving each executable since it was opened. */
+    private static final java.util.Map<String, java.util.List<int[]>> WRITTEN = new java.util.HashMap<String, java.util.List<int[]>>();
+
+    private static String key(File f)
+    {
+        return f.getAbsoluteFile().toPath().normalize().toString();
+    }
+
+    /** Swaps menu helmet pictures (by car number, 0-39) in a HELMETS.DAT, in order; true if it read and
+        wrote the file (or nothing changed). */
+    public static boolean swapMenuHelmetsIn(File file, java.util.List<int[]> swaps)
+    {
+        try
         {
-            if (shown != null)
-                putNames(shown);
+            byte[] before = java.nio.file.Files.readAllBytes(file.toPath());
+            cfevolution.data.gamefiles.MediaContainer c = cfevolution.data.gamefiles.MediaContainer.load(before);
+            java.util.List<Integer> helmets = new java.util.ArrayList<Integer>();
+            for (int i = 0; i < c.getItemCount(); i++)
+                if (c.getItem(i).type == cfevolution.data.gamefiles.MediaContainer.SMALL_PICTURE)
+                    helmets.add(i);
+            for (int[] s : swaps)
+                if (s[0] < helmets.size() && s[1] < helmets.size())
+                    c.swapItems(helmets.get(s[0]), helmets.get(s[1]));
+            File temp = File.createTempFile("helmets", ".dat");
+            try
+            {
+                c.save(temp);
+                byte[] after = java.nio.file.Files.readAllBytes(temp.toPath());
+                if (!java.util.Arrays.equals(before, after))
+                    java.nio.file.Files.write(file.toPath(), after);
+            }
+            finally
+            {
+                temp.delete();
+            }
+            return true;
+        }
+        catch (Exception e)
+        {
+            return false;       // not a picture file the editor can read: left as it is
         }
     }
 
-    // --- Save Names into the Executable (Hrvoje, 2026-11-16/21) -----------
-
-    private boolean saveNames = true;
-    /** The driver, team and engine names in the file as last loaded or saved. */
-    private String[][] namesInFile;
-
-    /** Whether saving writes the names shown into the executable (on unless the user turns it off). */
-    public boolean getSaveNames()
+    /** Revert File on an executable: the menu helmet swaps its saves wrote are undone in HELMETS.DAT
+        beside it (newest first), so the menu helmets go back with the drivers. */
+    public static void undoWrittenMenuHelmets(File exe)
     {
-        return saveNames;
+        java.util.List<int[]> w;
+        synchronized (WRITTEN)
+        {
+            w = WRITTEN.remove(key(exe));
+        }
+        if (w == null || w.isEmpty())
+            return;
+        java.util.List<int[]> back = new java.util.ArrayList<int[]>(w);
+        java.util.Collections.reverse(back);
+        File folder = exe.getAbsoluteFile().getParentFile();
+        String[] names = folder == null ? null : folder.list();
+        if (names != null)
+            for (String n : names)
+                if (n.equalsIgnoreCase("HELMETS.DAT"))
+                    swapMenuHelmetsIn(new File(folder, n), back);
     }
 
-    /** Off: saving leaves the executable's own names as they are, whatever names the editor shows (e.g. from a name file). */
-    public void setSaveNames(boolean saveNames)
+    /** The executable was opened again, or its folder reverted: what is on disk now is the starting point. */
+    public static void forgetWrittenMenuHelmets(File exe)
     {
-        this.saveNames = saveNames;
-    }
-
-    /** True when the names shown differ from those in the file (as loaded or last saved): with
-        Save Names into the Executable off, they are only in the editor until written or kept in a name file. */
-    public boolean namesNotInFile()
-    {
-        return namesInFile != null && !java.util.Arrays.deepEquals(names(), namesInFile);
+        synchronized (WRITTEN)
+        {
+            WRITTEN.remove(key(exe));
+        }
     }
 
     // --- Drivers and teams moved since opening (2026-11-23), for Revert Page ---
@@ -300,32 +382,6 @@ public class Executable
         return l;
     }
 
-    /** {drivers, teams, engines} as shown now. */
-    private String[][] names()
-    {
-        int teams = gameTeams.getAllTeamNames().size();
-        String[][] n = { new String[gameDrivers.getAllDriverNames().size()], new String[teams], new String[teams] };
-        for (int i = 0; i < n[0].length; i++)
-            n[0][i] = gameDrivers.getDriverName(i);
-        for (int i = 0; i < teams; i++)
-        {
-            n[1][i] = gameTeams.getTeamName(i);
-            n[2][i] = gameTeams.getEngineName(i);
-        }
-        return n;
-    }
-
-    private void putNames(String[][] n)
-    {
-        for (int i = 0; i < n[0].length; i++)
-            gameDrivers.setDriverName(i, n[0][i]);
-        for (int i = 0; i < n[1].length; i++)
-        {
-            gameTeams.setTeamName(i, n[1][i]);
-            gameTeams.setEngineName(i, n[2][i]);
-        }
-    }
-
     public int loadData()
     {
         // Loads an F1GP/WC executable file. Returns a code to indicate the completed loading status
@@ -357,7 +413,6 @@ public class Executable
                     operationSuccess = operationSuccess + gameTables.loadData(binaryAccess, gameVersion);
                     carModel = CarModel.read(binaryAccess, gameVersion);   // only for showing the liveries, so not needed to open
                     binaryAccess.close();
-                    namesInFile = names();
                     lineUpInFile = lineUp();
                     if (operationSuccess == 0)
                     {

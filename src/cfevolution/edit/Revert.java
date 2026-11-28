@@ -59,6 +59,7 @@ public final class Revert
     {
         if (f == null)
             return;
+        cfevolution.data.executable.Executable.forgetWrittenMenuHelmets(f);
         try
         {
             files.put(key(f), Files.readAllBytes(f.toPath()));
@@ -100,6 +101,8 @@ public final class Revert
         try
         {
             Files.write(f.toPath(), b);
+            // GP.EXE: driver moves saved since took their menu helmets (HELMETS.DAT) with them; put those back too
+            cfevolution.data.executable.Executable.undoWrittenMenuHelmets(f);
             return null;
         }
         catch (IOException e)
@@ -197,6 +200,8 @@ public final class Revert
         if (kept == null)
             return NOTHING_TO_REVERT;
         List<String> failed = new ArrayList<String>();
+        for (File f : game.changeableFiles())
+            cfevolution.data.executable.Executable.forgetWrittenMenuHelmets(f);   // HELMETS.DAT is put back with the rest
         for (File f : folderChanges(game))
         {
             try

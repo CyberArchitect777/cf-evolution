@@ -543,9 +543,6 @@ public class ExecutableWindow extends JPanel implements EditorTab
     /** The Drivers and Teams tables, refreshed when names come in from a name file. */
     private final java.util.List<AbstractTableModel> nameModels = new java.util.ArrayList<AbstractTableModel>();
 
-    /** Save Names into the Executable, on the Drivers and Teams pages alike. */
-    private final java.util.List<JCheckBox> saveNamesBoxes = new java.util.ArrayList<JCheckBox>();
-
     /** A page's table with the name file buttons beneath it. */
     private JComponent withNameFileButtons(JComponent table, String page, JComponent above)
     {
@@ -561,27 +558,11 @@ public class ExecutableWindow extends JPanel implements EditorTab
         save.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent e) { saveNamesToFile(); }
         });
-        final JCheckBox intoExe = new JCheckBox(cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE, currentExecutable.getSaveNames());
-        intoExe.setName("save-names-into-exe " + page);
-        intoExe.setToolTipText("<html><div style='width:320px'>" + cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE_TIP + "</div></html>");
-        saveNamesBoxes.add(intoExe);
-        intoExe.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent e) {
-                currentExecutable.setSaveNames(intoExe.isSelected());
-                for (JCheckBox b : saveNamesBoxes)      // the Drivers and Teams pages share it
-                    b.setSelected(intoExe.isSelected());
-                // ticked with names not yet in GP.EXE: saving now writes them, so there is something to save (2026-11-22)
-                if (intoExe.isSelected() && currentExecutable.namesNotInFile())
-                    setModified(true);
-            }
-        });
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         buttons.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
         buttons.add(load);
         buttons.add(Box.createHorizontalStrut(8));
         buttons.add(save);
-        buttons.add(Box.createHorizontalStrut(12));
-        buttons.add(intoExe);
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(above, BorderLayout.NORTH);
         panel.add(table, BorderLayout.CENTER);
@@ -637,10 +618,7 @@ public class ExecutableWindow extends JPanel implements EditorTab
         ask.add(teams);
         ask.add(engines);
         ask.add(Box.createVerticalStrut(6));
-        ask.add(new JLabel(currentExecutable.getSaveNames()
-            ? "<html><font color='#6A7380'>They replace the names here. Save GP.EXE to keep them.</font></html>"
-            : "<html><font color='#6A7380'>They replace the names here. Save Names into the Executable is off, "
-              + "so GP.EXE keeps its own names when saved.</font></html>"));
+        ask.add(new JLabel("<html><font color='#6A7380'>They replace the names here. Save GP.EXE to keep them.</font></html>"));
         if (JOptionPane.showOptionDialog(this, ask, "Load Names", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE,
                 null, new String[] { "Load", "Cancel" }, "Load") != 0)
             return;
@@ -703,24 +681,6 @@ public class ExecutableWindow extends JPanel implements EditorTab
             JOptionPane.showMessageDialog(this, f.getName() + " could not be saved.", "Name File Not Saved",
                 JOptionPane.ERROR_MESSAGE);
             return false;
-        }
-    }
-
-    /** Names shown with Save Names into the Executable off, not in GP.EXE: offer a name file before they are lost (2026-11-22). */
-    public boolean readyToClose()
-    {
-        if (currentExecutable.getSaveNames() || !currentExecutable.namesNotInFile())
-            return true;
-        while (true)
-        {
-            int choice = cfevolution.gui.MessageBoxes.choose(this, cfevolution.edit.ExecutableEdits.namesNotInExe(
-                "Save Names as a Name File...", "Close Without Them", "Cancel"));
-            if (choice == 1)
-                return true;
-            if (choice != 0)
-                return false;
-            if (saveNamesToFile())
-                return true;
         }
     }
 

@@ -252,22 +252,6 @@ public class ExecutableActivity extends Activity
 
     // --- Drivers ------------------------------------------------------------
 
-    /** Save Names into the Executable, shared by the Drivers and Teams pages. */
-    private void saveNamesBox()
-    {
-        final android.widget.CheckBox box = new android.widget.CheckBox(this);
-        box.setText(cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE);
-        box.setChecked(screen.saveNames());
-        box.setOnCheckedChangeListener(new android.widget.CompoundButton.OnCheckedChangeListener() {
-            public void onCheckedChanged(android.widget.CompoundButton b, boolean on) { screen.setSaveNames(on); }
-        });
-        page.addView(box);
-        TextView tip = Ui.text(this, cfevolution.edit.ExecutableEdits.SAVE_NAMES_INTO_EXE_TIP, 13);
-        tip.setTextColor(Color.GRAY);
-        tip.setPadding(0, 0, 0, Ui.dp(this, 8));
-        page.addView(tip);
-    }
-
     /** The driver or team selected on the Drivers or Teams page; a second tap edits it. */
     private int selectedDriver = -1, selectedTeam = -1;
 
@@ -330,7 +314,6 @@ public class ExecutableActivity extends Activity
 
     private void drivers()
     {
-        saveNamesBox();
         moveButtons(false);
         for (int i = 0; i < 40; i++)
         {
@@ -365,7 +348,6 @@ public class ExecutableActivity extends Activity
 
     private void teams()
     {
-        saveNamesBox();
         moveButtons(true);
         for (int i = 0; i < 20; i++)
         {
@@ -1328,7 +1310,7 @@ public class ExecutableActivity extends Activity
     {
         if (!screen.isModified())
         {
-            leave();
+            finish();
             return;
         }
         new AlertDialog.Builder(this).setTitle("Unsaved Changes")
@@ -1336,35 +1318,10 @@ public class ExecutableActivity extends Activity
             .setPositiveButton("Save", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which)
                 {
-                    save(new Runnable() { public void run() { leave(); } });
-                }
-            })
-            .setNeutralButton("Don't Save", new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int which) { finish(); }
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
-    }
-
-    /** Closes, unless names shown with Save Names into the Executable off would be lost (2026-11-22). */
-    private void leave()
-    {
-        if (!screen.namesOnlyShown())
-        {
-            finish();
-            return;
-        }
-        final String write = "Write Them into GP.EXE", without = "Close Without Them";
-        cfevolution.edit.Message m = cfevolution.edit.ExecutableEdits.namesNotInExe(write, without, "Cancel");
-        new AlertDialog.Builder(this).setTitle(m.title).setMessage(m.text)
-            .setPositiveButton(write, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int which)
-                {
-                    screen.setSaveNames(true);
                     save(new Runnable() { public void run() { finish(); } });
                 }
             })
-            .setNeutralButton(without, new DialogInterface.OnClickListener() {
+            .setNeutralButton("Don't Save", new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface d, int which) { finish(); }
             })
             .setNegativeButton("Cancel", null)
