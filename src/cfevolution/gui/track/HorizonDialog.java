@@ -35,9 +35,11 @@ import javax.swing.*;
  */
 public class HorizonDialog extends JDialog
 {
-    /** Each picture pixel 10 by 12, the shape the game shows it (5 wide to 6 tall on a 4:3 screen;
+    /** Each picture pixel 10 by 12 (unless square pixels are chosen), the shape the game shows it (5 wide to 6 tall on a 4:3 screen;
         HorizonPage.previewHeight); 0.4.1 drew it 2 by 10, four times too tall (owner, 2026-11-20). */
-    private static final int SCALE_X = 10, SCALE_Y = 12;
+    private static final int SCALE_X = 10;
+    /** 12, or 10 with square pixels chosen in the Options (PixelShape, 2026-11-28); read as the dialog opens. */
+    private final int scaleY = cfevolution.edit.PixelShape.square() ? 10 : 12;
     /** The preview: two screen pixels per picture column, so the whole picture is 1024 across. */
     private static final int PREVIEW_WIDTH = TrackHorizon.WIDTH * 2;
     private static final String PREF_FOLDER = "HorizonGameFolder";
@@ -100,18 +102,18 @@ public class HorizonDialog extends JDialog
                     for (int x = 0; x < TrackHorizon.WIDTH; x++)
                     {
                         g.setColor(new java.awt.Color(colours.getPaletteRgb(work[y * TrackHorizon.WIDTH + x] & 0xFF)));
-                        g.fillRect(x * SCALE_X, y * SCALE_Y, SCALE_X, SCALE_Y);
+                        g.fillRect(x * SCALE_X, y * scaleY, SCALE_X, scaleY);
                     }
             }
         };
         canvas.setName("horizonCanvas");
-        canvas.setPreferredSize(new Dimension(TrackHorizon.WIDTH * SCALE_X, TrackHorizon.HEIGHT * SCALE_Y));
+        canvas.setPreferredSize(new Dimension(TrackHorizon.WIDTH * SCALE_X, TrackHorizon.HEIGHT * scaleY));
         canvas.setToolTipText(cfevolution.edit.HorizonPage.CANVAS_TIP);
         MouseAdapter paint = new MouseAdapter() {
             public void mousePressed(MouseEvent e) { at(e); }
             public void mouseDragged(MouseEvent e) { if (!SwingUtilities.isRightMouseButton(e)) at(e); }
             private void at(MouseEvent e) {
-                int x = e.getX() / SCALE_X, y = e.getY() / SCALE_Y;
+                int x = e.getX() / SCALE_X, y = e.getY() / scaleY;
                 if (x < 0 || x >= TrackHorizon.WIDTH || y < 0 || y >= TrackHorizon.HEIGHT)
                     return;
                 if (SwingUtilities.isRightMouseButton(e))
@@ -186,7 +188,7 @@ public class HorizonDialog extends JDialog
         scroll = new JScrollPane(canvas, JScrollPane.VERTICAL_SCROLLBAR_NEVER,
                                              JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         scroll.setPreferredSize(new Dimension(Math.min(1040, TrackHorizon.WIDTH * SCALE_X + 4),
-                                              TrackHorizon.HEIGHT * SCALE_Y + 24));
+                                              TrackHorizon.HEIGHT * scaleY + 24));
         scroll.getViewport().addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent e) { preview.repaint(); }
         });

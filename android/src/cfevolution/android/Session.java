@@ -43,6 +43,8 @@ final class Session
     static cfevolution.edit.PictureFilePage pictureFile;
     /** The chosen folder's files, copied in for the core; written back after each change. */
     static FolderMirror mirror;
+    /** The picked folder the open game folder came from (kept when Options clear the list of folders). */
+    static android.net.Uri openTree;
 
     static final Message NOT_WRITTEN = Message.error("Changes Not Written",
         "The changes could not be written to the game folder. They are kept here: save again to try once more. "

@@ -46,7 +46,7 @@ public class OptionsWindow extends javax.swing.JDialog
         initComponents();
         mainWindow = passedMainWindow;
         ((javax.swing.JComponent) getContentPane()).setBorder(javax.swing.BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        setSize(560,260);
+        setSize(560,300);
         setLocationRelativeTo(passedMainWindow);
         interfaceModeSelector.addItem("CF Evolution");
         interfaceModeSelector.addItem("System Default");
@@ -69,6 +69,10 @@ public class OptionsWindow extends javax.swing.JDialog
         }
         executableLocation.setText(cheqFlagData.get(MainGUI.PREF_GAME_FOLDER, ""));
         legacyOptionsCheckBox.setSelected(cheqFlagData.getBoolean("EnableLegacyOptions", false));
+        for (String choice : cfevolution.edit.PixelShape.CHOICES)
+            pixelShapeSelector.addItem(choice);
+        pixelShapeSelector.setSelectedIndex(cfevolution.edit.PixelShape.squareFromSaved(
+            cheqFlagData.get(cfevolution.edit.PixelShape.PREF_KEY, "")) ? 1 : 0);
 
     }
     
@@ -88,12 +92,15 @@ public class OptionsWindow extends javax.swing.JDialog
         legacyOptionsPanel = new javax.swing.JPanel();
         legacyOptionsLabel = new javax.swing.JLabel();
         legacyOptionsCheckBox = new javax.swing.JCheckBox();
+        pixelShapePanel = new javax.swing.JPanel();
+        pixelShapeLabel = new javax.swing.JLabel();
+        pixelShapeSelector = new javax.swing.JComboBox<>();
         clearRecent = new javax.swing.JButton();
         buttonPanel = new javax.swing.JPanel();
         okButton = new javax.swing.JButton();
         cancelButton = new javax.swing.JButton();
 
-        getContentPane().setLayout(new java.awt.GridLayout(5, 1, 5, 5));
+        getContentPane().setLayout(new java.awt.GridLayout(6, 1, 5, 5));
 
         lookFeelPanel.setLayout(new java.awt.GridLayout(1, 2, 5, 5));
 
@@ -141,6 +148,14 @@ public class OptionsWindow extends javax.swing.JDialog
         legacyOptionsPanel.add(legacyOptionsCheckBox);
 
         getContentPane().add(legacyOptionsPanel);
+
+        pixelShapePanel.setLayout(new java.awt.GridLayout(1, 2, 5, 5));
+        pixelShapeLabel.setText(cfevolution.edit.PixelShape.LABEL);
+        pixelShapePanel.add(pixelShapeLabel);
+        pixelShapeSelector.setName("pixelShape");
+        pixelShapeSelector.setToolTipText(cfevolution.edit.PixelShape.TIP);
+        pixelShapePanel.add(pixelShapeSelector);
+        getContentPane().add(pixelShapePanel);
 
         clearRecent.setText("Clear Recent File List");
         clearRecent.addActionListener(new java.awt.event.ActionListener() {
@@ -222,6 +237,11 @@ public class OptionsWindow extends javax.swing.JDialog
         cheqFlagData.put(MainGUI.PREF_GAME_FOLDER, executableLocation.getText());
         cheqFlagData.putBoolean("EnableLegacyOptions", legacyOptionsCheckBox.isSelected());
         mainWindow.refreshLegacyOptions();
+        boolean square = pixelShapeSelector.getSelectedIndex() == 1;
+        cheqFlagData.put(cfevolution.edit.PixelShape.PREF_KEY, cfevolution.edit.PixelShape.saved(square));
+        cfevolution.edit.PixelShape.setSquare(square);
+        for (java.awt.Window w : java.awt.Window.getWindows())
+            w.repaint();    // the game's pictures take the new shape as they are drawn
         dispose();
            
     }
@@ -240,6 +260,9 @@ public class OptionsWindow extends javax.swing.JDialog
     private javax.swing.JPanel legacyOptionsPanel;
     private javax.swing.JLabel legacyOptionsLabel;
     private javax.swing.JCheckBox legacyOptionsCheckBox;
+    private javax.swing.JPanel pixelShapePanel;
+    private javax.swing.JLabel pixelShapeLabel;
+    private javax.swing.JComboBox<String> pixelShapeSelector;
     private javax.swing.JLabel executableLabel;
     private javax.swing.JPanel executableLabelPanel;
     private javax.swing.JTextField executableLocation;

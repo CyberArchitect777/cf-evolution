@@ -1502,9 +1502,12 @@ public class ExecutableWindow extends JPanel implements EditorTab
         final Runnable show = new Runnable() {
             public void run() {
                 int team = rows.at(Math.max(0, table.getSelectedRow()));
+                int[] shaped = LiveriesPage.closeUpBox();   // the shape chosen in the Options
+                picture.setBox(shaped[0], shaped[1]);
                 picture.setSprite(LiveriesPage.closeUp(model, sprites, team, turn.getValue(), usualDesign[0]), false);
             }
         };
+        picture.setMadeInShape(show);
         turn.addChangeListener(new javax.swing.event.ChangeListener() {
             public void stateChanged(javax.swing.event.ChangeEvent e) { show.run(); }
         });

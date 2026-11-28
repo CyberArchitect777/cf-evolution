@@ -30,8 +30,9 @@ import cfevolution.data.executable.GameSprites;
 import cfevolution.edit.LiveriesPage;
 
 /**
- * One of the game's pictures in a row's colours, enlarged with square pixels
- * (the desktop's LiveryPicture). Tapping a part reports which part it is.
+ * One of the game's pictures in a row's colours, enlarged in the shape chosen
+ * in the Options (PixelShape: 4:3 or square; the desktop's LiveryPicture). The
+ * close-up car comes already enlarged in shape. Tapping a part reports which part it is.
  */
 class LiveryView extends View
 {
@@ -116,7 +117,13 @@ class LiveryView extends View
         if (across == 0)
             across = getResources().getDisplayMetrics().widthPixels - Ui.dp(getContext(), 32);
         int s = Math.max(1, Math.min(maxScale(), (across - Ui.dp(getContext(), 16)) / Math.max(1, box[0])));
-        setMeasuredDimension(across, box[1] * s + Ui.dp(getContext(), 24));
+        setMeasuredDimension(across, top(box[1], s) + Ui.dp(getContext(), 24));
+    }
+
+    /** The screen row where picture row y starts, at enlargement s. */
+    private int top(int y, int s)
+    {
+        return closeUpShown ? y * s : cfevolution.edit.PixelShape.top(y, s);
     }
 
     protected void onDraw(Canvas canvas)
@@ -124,8 +131,10 @@ class LiveryView extends View
         if (bitmap == null)
             return;
         int s = scale();
-        int left = (getWidth() - sprite.width * s) / 2, top = (getHeight() - sprite.height * s) / 2;
-        canvas.drawBitmap(bitmap, null, new Rect(left, top, left + sprite.width * s, top + sprite.height * s), pixels);
+        int left = (getWidth() - sprite.width * s) / 2, top = (getHeight() - top(sprite.height, s)) / 2;
+        for (int y = 0; y < sprite.height; y++)     // row by row, so the rows fall where taps are read
+            canvas.drawBitmap(bitmap, new Rect(0, y, sprite.width, y + 1),
+                              new Rect(left, top + top(y, s), left + sprite.width * s, top + top(y + 1, s)), pixels);
     }
 
     public boolean onTouchEvent(MotionEvent e)
@@ -135,8 +144,10 @@ class LiveryView extends View
         if (e.getAction() == MotionEvent.ACTION_UP)
         {
             int s = scale();
-            int left = (getWidth() - sprite.width * s) / 2, top = (getHeight() - sprite.height * s) / 2;
-            int x = (int) Math.floor((e.getX() - left) / s), y = (int) Math.floor((e.getY() - top) / s);
+            int left = (getWidth() - sprite.width * s) / 2, top = (getHeight() - top(sprite.height, s)) / 2;
+            int x = (int) Math.floor((e.getX() - left) / s);
+            int dy = (int) Math.floor(e.getY() - top);
+            int y = closeUpShown ? Math.floorDiv(dy, s) : cfevolution.edit.PixelShape.rowAt(dy, s);
             int part = LiveriesPage.partAt(tab, sprite, !closeUpShown && LiveriesPage.mirroredAt(tab, position), x, y);
             if (part >= 0)
                 tapped.part(part);

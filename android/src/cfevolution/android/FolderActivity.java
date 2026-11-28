@@ -154,6 +154,9 @@ public class FolderActivity extends Activity
                 label.setEnabled(false);
             col.addView(item);
         }
+        col.addView(Ui.button(this, "Options", new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(FolderActivity.this, OptionsActivity.class)); }
+        }));
     }
 
     // --- datasets --------------------------------------------------------------------

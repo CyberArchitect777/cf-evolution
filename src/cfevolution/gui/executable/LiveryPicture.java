@@ -25,8 +25,9 @@ import java.awt.event.*;
 import javax.swing.*;
 
 /**
- * One of the game's pictures drawn in a colour set, enlarged with square
- * pixels as the game draws it. Hovering names the part under the pointer and
+ * One of the game's pictures drawn in a colour set, enlarged in the shape
+ * chosen in the Options (PixelShape: 4:3, each pixel 1.2 times as tall as
+ * wide, or square). Hovering names the part under the pointer and
  * clicking reports which of the 16 colours of the set was clicked.
  *
  * @author barrie
@@ -49,6 +50,9 @@ public class LiveryPicture extends JComponent
     private final int maxScale;
     private int boxWidth, boxHeight;
     private final Colours colours;
+    /** For a picture made already in shape (the close-up car): redraws it when the shape changes. */
+    private Runnable reshape;
+    private boolean shapeSeen = cfevolution.edit.PixelShape.square();
 
     /**
      * @param maxScale the largest enlargement; the picture is drawn smaller
@@ -83,6 +87,19 @@ public class LiveryPicture extends JComponent
         repaint();
     }
 
+    /** The picture is made already enlarged in shape (the close-up car); reshape makes it again
+        when the Options change the shape. */
+    public void setMadeInShape(Runnable reshape)
+    {
+        this.reshape = reshape;
+    }
+
+    /** The screen row where picture row y starts, at an enlargement. */
+    private int top(int y, int scale)
+    {
+        return reshape != null ? y * scale : cfevolution.edit.PixelShape.top(y, scale);
+    }
+
     public GameSprites.Sprite getSprite()
     {
         return sprite;
@@ -111,12 +128,12 @@ public class LiveryPicture extends JComponent
 
     public Dimension getPreferredSize()
     {
-        return new Dimension(boxWidth() * maxScale, boxHeight() * maxScale);
+        return new Dimension(boxWidth() * maxScale, top(boxHeight(), maxScale));
     }
 
     public Dimension getMinimumSize()
     {
-        return new Dimension(boxWidth(), boxHeight());
+        return new Dimension(boxWidth(), top(boxHeight(), 1));
     }
 
     /** The enlargement that fits the space given, at least 1. */
@@ -124,14 +141,17 @@ public class LiveryPicture extends JComponent
     {
         if (boxWidth() == 0 || boxHeight() == 0)
             return 1;
-        return Math.max(1, Math.min(maxScale, Math.min(getWidth() / boxWidth(), getHeight() / boxHeight())));
+        int scale = Math.max(1, Math.min(maxScale, getWidth() / boxWidth()));
+        while (scale > 1 && top(boxHeight(), scale) > getHeight())
+            scale--;
+        return scale;
     }
 
     /** The picture's top-left corner: centred in whatever room the layout gives. */
     private Point origin()
     {
         int scale = scale();
-        return new Point((getWidth() - sprite.width * scale) / 2, (getHeight() - sprite.height * scale) / 2);
+        return new Point((getWidth() - sprite.width * scale) / 2, (getHeight() - top(sprite.height, scale)) / 2);
     }
 
     /** The slot under a point on screen, or -1 over the background. */
@@ -141,7 +161,8 @@ public class LiveryPicture extends JComponent
             return -1;
         Point o = origin();
         int scale = scale();
-        int x = Math.floorDiv(p.x - o.x, scale), y = Math.floorDiv(p.y - o.y, scale);
+        int x = Math.floorDiv(p.x - o.x, scale);
+        int y = reshape != null ? Math.floorDiv(p.y - o.y, scale) : cfevolution.edit.PixelShape.rowAt(p.y - o.y, scale);
         if (mirrored)
             x = sprite.width - 1 - x;
         return sprite.slotAt(x, y);
@@ -158,6 +179,16 @@ public class LiveryPicture extends JComponent
 
     protected void paintComponent(Graphics g)
     {
+        if (shapeSeen != cfevolution.edit.PixelShape.square())
+        {
+            // the Options changed the shape since this was laid out
+            shapeSeen = cfevolution.edit.PixelShape.square();
+            if (reshape != null)
+                reshape.run();
+            revalidate();
+            repaint();
+            return;
+        }
         if (sprite == null)
             return;
         Point o = origin();
@@ -173,7 +204,8 @@ public class LiveryPicture extends JComponent
                     continue;
                 int sx = mirrored ? sprite.width - 1 - x : x;
                 g.setColor(set[slot]);
-                g.fillRect(o.x + sx * scale, o.y + y * scale, scale, scale);
+                int top = top(y, scale);
+                g.fillRect(o.x + sx * scale, o.y + top, scale, top(y + 1, scale) - top);
             }
     }
 }

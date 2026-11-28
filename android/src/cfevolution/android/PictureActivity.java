@@ -308,14 +308,14 @@ public class PictureActivity extends Activity
                 public boolean onSingleTapUp(MotionEvent e)
                 {
                     int s = scale();
-                    page.paint(picture, (int) (e.getX() / s), (int) (e.getY() / s));
+                    page.paint(picture, (int) (e.getX() / s), cfevolution.edit.PixelShape.rowAt((int) e.getY(), s));
                     changed(null);
                     return true;
                 }
                 public void onLongPress(MotionEvent e)
                 {
                     int s = scale();
-                    page.pick(picture, (int) (e.getX() / s), (int) (e.getY() / s));
+                    page.pick(picture, (int) (e.getX() / s), cfevolution.edit.PixelShape.rowAt((int) e.getY(), s));
                     showColour();
                 }
             });
@@ -329,7 +329,8 @@ public class PictureActivity extends Activity
 
         protected void onMeasure(int w, int h)
         {
-            setMeasuredDimension(page.width(picture) * scale(), page.height(picture) * scale());
+            // each pixel in the shape chosen in the Options (PixelShape: 4:3 or square)
+            setMeasuredDimension(page.width(picture) * scale(), cfevolution.edit.PixelShape.height(page.height(picture), scale()));
         }
 
         protected void onDraw(Canvas canvas)
@@ -337,8 +338,11 @@ public class PictureActivity extends Activity
             int[] rgb = page.rgb(picture);
             for (int i = 0; i < rgb.length; i++)
                 rgb[i] |= 0xFF000000;
-            Bitmap b = Bitmap.createBitmap(rgb, page.width(picture), page.height(picture), Bitmap.Config.ARGB_8888);
-            canvas.drawBitmap(b, null, new Rect(0, 0, getWidth(), getHeight()), paint);
+            int w = page.width(picture), h = page.height(picture), s = scale();
+            Bitmap b = Bitmap.createBitmap(rgb, w, h, Bitmap.Config.ARGB_8888);
+            for (int y = 0; y < h; y++)     // row by row, so the rows fall where taps are read
+                canvas.drawBitmap(b, new Rect(0, y, w, y + 1),
+                                  new Rect(0, cfevolution.edit.PixelShape.top(y, s), w * s, cfevolution.edit.PixelShape.top(y + 1, s)), paint);
         }
 
         public boolean onTouchEvent(MotionEvent e)

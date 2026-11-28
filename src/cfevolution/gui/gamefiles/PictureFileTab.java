@@ -144,8 +144,12 @@ public class PictureFileTab extends JPanel implements EditorTab
             if (picture < 0)
                 return null;
             int w = page.width(picture), h = page.height(picture);
-            int scale = Math.max(1, Math.min(getWidth() / w, getHeight() / h));
-            return new Rectangle((getWidth() - w * scale) / 2, (getHeight() - h * scale) / 2, w * scale, h * scale);
+            // each pixel in the shape chosen in the Options (PixelShape: 4:3 or square)
+            int scale = Math.max(1, getWidth() / w);
+            while (scale > 1 && cfevolution.edit.PixelShape.height(h, scale) > getHeight())
+                scale--;
+            int high = cfevolution.edit.PixelShape.height(h, scale);
+            return new Rectangle((getWidth() - w * scale) / 2, (getHeight() - high) / 2, w * scale, high);
         }
 
         protected void paintComponent(Graphics g)
@@ -154,7 +158,13 @@ public class PictureFileTab extends JPanel implements EditorTab
             Rectangle a = area();
             if (picture < 0 || a == null)
                 return;
-            g.drawImage(image(picture), a.x, a.y, a.width, a.height, null);
+            Image image = image(picture);
+            int w = page.width(picture), h = page.height(picture), scale = a.width / w;
+            for (int y = 0; y < h; y++)     // row by row, so the rows fall where clicks are read
+            {
+                int top = cfevolution.edit.PixelShape.top(y, scale), bottom = cfevolution.edit.PixelShape.top(y + 1, scale);
+                g.drawImage(image, a.x, a.y + top, a.x + a.width, a.y + bottom, 0, y, w, y + 1, null);
+            }
         }
 
         void paintAt(MouseEvent e)
@@ -164,7 +174,7 @@ public class PictureFileTab extends JPanel implements EditorTab
             if (!page.small || picture < 0 || a == null || !a.contains(e.getPoint()))
                 return;
             int scale = a.width / page.width(picture);
-            int x = (e.getX() - a.x) / scale, y = (e.getY() - a.y) / scale;
+            int x = (e.getX() - a.x) / scale, y = cfevolution.edit.PixelShape.rowAt(e.getY() - a.y, scale);
             if (SwingUtilities.isRightMouseButton(e))
             {
                 page.pick(picture, x, y);

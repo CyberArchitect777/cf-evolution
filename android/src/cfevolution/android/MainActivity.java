@@ -53,6 +53,7 @@ public class MainActivity extends Activity
         super.onCreate(state);
         CrashReport.install(this);
         Session.pictures();
+        Settings.load(this);
         setTitle("CF Evolution");
         int pad = Ui.dp(this, 16);
         LinearLayout col = new LinearLayout(this);
@@ -64,6 +65,10 @@ public class MainActivity extends Activity
             + "for example into Documents. CF Evolution can then use that folder and no other.", 15));
         col.addView(Ui.button(this, "Choose Game Folder", new View.OnClickListener() {
             public void onClick(View v) { choose(); }
+        }));
+
+        col.addView(Ui.button(this, "Options", new View.OnClickListener() {
+            public void onClick(View v) { startActivity(new Intent(MainActivity.this, OptionsActivity.class)); }
         }));
 
         col.addView(Ui.heading(this, "Game folders opened before"));
@@ -130,7 +135,7 @@ public class MainActivity extends Activity
             before.addView(Ui.text(this, "None yet.", 14));
     }
 
-    private void open(Uri tree)
+    private void open(final Uri tree)
     {
         final PickedFolder store = new PickedFolder(this, tree);
         final FolderMirror[] mirror = new FolderMirror[1];
@@ -142,13 +147,13 @@ public class MainActivity extends Activity
                 if (failed != null)
                     Dialogs.show(MainActivity.this, NOT_READ, null);
                 else
-                    opened(mirror[0]);
+                    opened(mirror[0], tree);
             }
         });
     }
 
     /** The files are in: open the folder as the desktop does, then write back what opening changed. */
-    private void opened(final FolderMirror mirror)
+    private void opened(final FolderMirror mirror, final Uri tree)
     {
         Session.mirror = mirror;
         final FolderScreen.Opening opening = FolderScreen.open(mirror.folder());
@@ -162,6 +167,7 @@ public class MainActivity extends Activity
                         if (opening.opened() == null)
                             return;
                         Session.folder = opening.opened();
+                        Session.openTree = tree;
                         startActivity(new Intent(MainActivity.this, FolderActivity.class));
                     }
                 });

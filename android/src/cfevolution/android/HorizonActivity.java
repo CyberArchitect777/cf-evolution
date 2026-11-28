@@ -253,7 +253,9 @@ public class HorizonActivity extends Activity
     {
         // 5 wide to 6 tall, as the game shows a pixel on a 4:3 screen (owner, 2026-11-20; square from
         // 2026-11-18, 4 by 24 before that)
-        private final int cellW = Ui.dp(HorizonActivity.this, 15), cellH = Ui.dp(HorizonActivity.this, 18);
+        // (15 by 15 with square pixels chosen in the Options: PixelShape, 2026-11-28)
+        private final int cellW = Ui.dp(HorizonActivity.this, 15),
+                          cellH = Ui.dp(HorizonActivity.this, cfevolution.edit.PixelShape.square() ? 15 : 18);
         private final Paint paint = new Paint();
         private final GestureDetector gestures;
 

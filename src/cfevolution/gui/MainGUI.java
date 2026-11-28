@@ -67,6 +67,9 @@ public class MainGUI extends JFrame
     public MainGUI()
     {
         super("CF Evolution");
+        // how the game's pictures are shown, as last chosen in the Options (4:3 unless square was saved)
+        cfevolution.edit.PixelShape.setSquare(cfevolution.edit.PixelShape.squareFromSaved(
+            Preferences.userRoot().node("cfevolution").get(cfevolution.edit.PixelShape.PREF_KEY, "")));
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) { quitCFEvolution(); }

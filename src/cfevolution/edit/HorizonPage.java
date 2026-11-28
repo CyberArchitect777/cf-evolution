@@ -95,11 +95,11 @@ public final class HorizonPage
 
     /** The height of a preview showing the whole picture across width pixels, at the shape the
         game draws it: one screen pixel per picture pixel each way, on a 320 by 200 screen shown
-        4:3, so a picture pixel is 5 wide to 6 tall (2026-11-20). */
+        4:3, so a picture pixel is 5 wide to 6 tall (2026-11-20); square when chosen (PixelShape, 2026-11-28). */
     public static int previewHeight(int width)
     {
-        int across = TrackHorizon.WIDTH * 5;
-        return Math.max(1, (width * TrackHorizon.HEIGHT * 6 + across / 2) / across);
+        int down = PixelShape.square() ? 5 : 6, across = TrackHorizon.WIDTH * 5;
+        return Math.max(1, (width * TrackHorizon.HEIGHT * down + across / 2) / across);
     }
 
     /** The picture's column under x in a preview width pixels across. */

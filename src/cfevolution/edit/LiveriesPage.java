@@ -496,6 +496,7 @@ public final class LiveriesPage
      * The car is drawn in the game's own pixels, which the game's 4:3 screen shows 1.2
      * times as tall as wide; the editor enlarges each one to 2.5 pixels across and 3
      * down (as the game looks on an 800 x 600 screen), so the car keeps its shape.
+     * With square pixels chosen in the Options (PixelShape, 2026-11-28) each is 2.5 by 2.5.
      */
     private static final int ACROSS_TIMES_2 = 5, DOWN = 3;
 
@@ -524,22 +525,29 @@ public final class LiveriesPage
         return enlarged(model.draw(sprites, headingStep * HEADING_STEP, team == 0 && !usualDesign, true));
     }
 
-    /** A picture in the game's pixels made larger without smoothing, in the game's proportions. */
+    /** A picture in the game's pixels made larger without smoothing, in the shape chosen (PixelShape). */
     static GameSprites.Sprite enlarged(GameSprites.Sprite game)
     {
-        int width = game.width * ACROSS_TIMES_2 / 2, height = game.height * DOWN;
+        boolean square = PixelShape.square();
+        int width = game.width * ACROSS_TIMES_2 / 2, height = tall(game.height, square);
         byte[] slots = new byte[width * height];
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
-                slots[y * width + x] = (byte) game.slotAt(x * 2 / ACROSS_TIMES_2, y / DOWN);
+                slots[y * width + x] = (byte) game.slotAt(x * 2 / ACROSS_TIMES_2, square ? y * 2 / ACROSS_TIMES_2 : y / DOWN);
         return GameSprites.Sprite.of(width, height, slots);
     }
 
-    /** The size of every close-up drawing, {width, height}. */
+    /** How tall game rows are once enlarged: 3 each in 4:3, 2.5 each when square. */
+    private static int tall(int rows, boolean square)
+    {
+        return square ? rows * ACROSS_TIMES_2 / 2 : rows * DOWN;
+    }
+
+    /** The size of every close-up drawing, {width, height}, in the shape chosen. */
     public static int[] closeUpBox()
     {
         int[] box = CarModel.box();
-        return new int[] { box[0] * ACROSS_TIMES_2 / 2, box[1] * DOWN };
+        return new int[] { box[0] * ACROSS_TIMES_2 / 2, tall(box[1], PixelShape.square()) };
     }
 
     /**
